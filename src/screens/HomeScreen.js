@@ -329,7 +329,7 @@ export default function HomeScreen({ navigation }) {
 
       {/* ===== Forecast Detail Modal ===== */}
       <Modal visible={forecastDetail !== null} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={() => setForecastDetail(null)}>
+        <View style={styles.modalOverlay}>
           {forecastDetail && (() => {
             const weather = getWeatherDescription(forecastDetail.weatherCode);
             const windDir = forecastDetail.windDirection != null ? getWindDirectionLabel(forecastDetail.windDirection) : '--';
@@ -339,7 +339,6 @@ export default function HomeScreen({ navigation }) {
               return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
             };
             return (
-              <Pressable onPress={(e) => e.stopPropagation()}>
                 <ScrollView
                   style={[styles.forecastModal, { backgroundColor: isDark ? '#151D2E' : '#FFFFFF' }]}
                   contentContainerStyle={styles.forecastModalContent}
@@ -436,10 +435,9 @@ export default function HomeScreen({ navigation }) {
                     <Text style={styles.forecastCloseBtnText}>Close</Text>
                   </TouchableOpacity>
                 </ScrollView>
-              </Pressable>
             );
           })()}
-        </Pressable>
+        </View>
       </Modal>
     </SafeAreaView>
   );
