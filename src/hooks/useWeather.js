@@ -58,7 +58,7 @@ function getFallback(lat, lon) {
 }
 
 function buildUrl(lat, lon) {
-  return `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,apparent_temperature&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=Asia/Karachi&forecast_days=7`;
+  return `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,apparent_temperature,wind_gusts_10m&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,uv_index_max,sunrise,sunset,apparent_temperature_max,apparent_temperature_min,relative_humidity_2m_max,relative_humidity_2m_min,wind_direction_10m_dominant&timezone=Asia/Karachi&forecast_days=7`;
 }
 
 function parseResponse(json) {
@@ -70,11 +70,24 @@ function parseResponse(json) {
     weatherCode: json.current.weather_code,
   };
 
-  const daily = json.daily.time.map((date, i) => ({
+  const d = json.daily;
+  const daily = d.time.map((date, i) => ({
     date,
-    maxTemp: json.daily.temperature_2m_max[i],
-    minTemp: json.daily.temperature_2m_min[i],
-    weatherCode: json.daily.weather_code[i],
+    maxTemp: d.temperature_2m_max[i],
+    minTemp: d.temperature_2m_min[i],
+    weatherCode: d.weather_code[i],
+    precipitation: d.precipitation_sum?.[i] ?? null,
+    precipProbability: d.precipitation_probability_max?.[i] ?? null,
+    windSpeed: d.wind_speed_10m_max?.[i] ?? null,
+    windGusts: d.wind_gusts_10m_max?.[i] ?? null,
+    windDirection: d.wind_direction_10m_dominant?.[i] ?? null,
+    uvIndex: d.uv_index_max?.[i] ?? null,
+    sunrise: d.sunrise?.[i] ?? null,
+    sunset: d.sunset?.[i] ?? null,
+    feelsLikeMax: d.apparent_temperature_max?.[i] ?? null,
+    feelsLikeMin: d.apparent_temperature_min?.[i] ?? null,
+    humidityMax: d.relative_humidity_2m_max?.[i] ?? null,
+    humidityMin: d.relative_humidity_2m_min?.[i] ?? null,
   }));
 
   return { current, daily };

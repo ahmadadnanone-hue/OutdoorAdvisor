@@ -21,9 +21,23 @@ import { getAqiColor } from '../theme/colors';
 import { CITIES } from '../data/cities';
 import AQIHeroCard from '../components/AQIHeroCard';
 import ForecastStrip from '../components/ForecastStrip';
+import AnimatedWeatherIcon from '../components/AnimatedWeatherIcon';
 import ActivityCard from '../components/ActivityCard';
 import CacheIndicator from '../components/CacheIndicator';
 import ThemeToggle from '../components/ThemeToggle';
+
+function getWindDirectionLabel(deg) {
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return dirs[Math.round(deg / 45) % 8];
+}
+
+function getUvLabel(uv) {
+  if (uv <= 2) return 'Low';
+  if (uv <= 5) return 'Moderate';
+  if (uv <= 7) return 'High';
+  if (uv <= 10) return 'Very High';
+  return 'Extreme';
+}
 
 const ACTIVITIES = [
   { name: 'Running', icon: '🏃' },
@@ -316,36 +330,115 @@ export default function HomeScreen({ navigation }) {
       {/* ===== Forecast Detail Modal ===== */}
       <Modal visible={forecastDetail !== null} transparent animationType="fade">
         <Pressable style={styles.modalOverlay} onPress={() => setForecastDetail(null)}>
-          {forecastDetail && (
-            <View style={[styles.forecastModal, { backgroundColor: isDark ? '#151D2E' : '#FFFFFF' }]}>
-              <Text style={[styles.forecastModalDay, { color: colors.text }]}>
-                {new Date(forecastDetail.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-              </Text>
-              <Text style={{ fontSize: 48, textAlign: 'center', marginVertical: 12 }}>
-                {getWeatherDescription(forecastDetail.weatherCode).icon}
-              </Text>
-              <Text style={[styles.forecastModalDesc, { color: colors.textSecondary }]}>
-                {getWeatherDescription(forecastDetail.weatherCode).description}
-              </Text>
-              <View style={styles.forecastModalTemps}>
-                <View style={styles.forecastTempCol}>
-                  <Text style={[styles.forecastTempLabel, { color: colors.textSecondary }]}>High</Text>
-                  <Text style={[styles.forecastTempValue, { color: colors.text }]}>{Math.round(forecastDetail.maxTemp)}°</Text>
-                </View>
-                <View style={[styles.forecastTempDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]} />
-                <View style={styles.forecastTempCol}>
-                  <Text style={[styles.forecastTempLabel, { color: colors.textSecondary }]}>Low</Text>
-                  <Text style={[styles.forecastTempValue, { color: colors.textSecondary }]}>{Math.round(forecastDetail.minTemp)}°</Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                style={[styles.forecastCloseBtn, { backgroundColor: colors.primary }]}
-                onPress={() => setForecastDetail(null)}
-              >
-                <Text style={styles.forecastCloseBtnText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          {forecastDetail && (() => {
+            const weather = getWeatherDescription(forecastDetail.weatherCode);
+            const windDir = forecastDetail.windDirection != null ? getWindDirectionLabel(forecastDetail.windDirection) : '--';
+            const formatTime = (iso) => {
+              if (!iso) return '--';
+              const d = new Date(iso);
+              return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            };
+            return (
+              <Pressable onPress={(e) => e.stopPropagation()}>
+                <ScrollView
+                  style={[styles.forecastModal, { backgroundColor: isDark ? '#151D2E' : '#FFFFFF' }]}
+                  contentContainerStyle={styles.forecastModalContent}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {/* Header */}
+                  <Text style={[styles.forecastModalDay, { color: colors.text }]}>
+                    {new Date(forecastDetail.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                  </Text>
+                  <View style={{ marginVertical: 12, alignItems: 'center' }}>
+                    <AnimatedWeatherIcon weatherCode={forecastDetail.weatherCode} emoji={weather.icon} size={56} />
+                  </View>
+                  <Text style={[styles.forecastModalDesc, { color: colors.textSecondary }]}>
+                    {weather.description}
+                  </Text>
+
+                  {/* Temperature */}
+                  <View style={styles.forecastModalTemps}>
+                    <View style={styles.forecastTempCol}>
+                      <Text style={[styles.forecastTempLabel, { color: colors.textSecondary }]}>High</Text>
+                      <Text style={[styles.forecastTempValue, { color: colors.text }]}>{Math.round(forecastDetail.maxTemp)}°</Text>
+                    </View>
+                    <View style={[styles.forecastTempDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]} />
+                    <View style={styles.forecastTempCol}>
+                      <Text style={[styles.forecastTempLabel, { color: colors.textSecondary }]}>Low</Text>
+                      <Text style={[styles.forecastTempValue, { color: colors.textSecondary }]}>{Math.round(forecastDetail.minTemp)}°</Text>
+                    </View>
+                  </View>
+
+                  {/* Detail Grid */}
+                  <View style={styles.fdGrid}>
+                    <View style={[styles.fdCell, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)' }]}>
+                      <Text style={styles.fdCellIcon}>🌡️</Text>
+                      <Text style={[styles.fdCellLabel, { color: colors.textSecondary }]}>Feels Like</Text>
+                      <Text style={[styles.fdCellValue, { color: colors.text }]}>
+                        {forecastDetail.feelsLikeMax != null ? `${Math.round(forecastDetail.feelsLikeMax)}°` : '--'} / {forecastDetail.feelsLikeMin != null ? `${Math.round(forecastDetail.feelsLikeMin)}°` : '--'}
+                      </Text>
+                    </View>
+                    <View style={[styles.fdCell, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)' }]}>
+                      <Text style={styles.fdCellIcon}>💧</Text>
+                      <Text style={[styles.fdCellLabel, { color: colors.textSecondary }]}>Rain Chance</Text>
+                      <Text style={[styles.fdCellValue, { color: colors.text }]}>
+                        {forecastDetail.precipProbability != null ? `${forecastDetail.precipProbability}%` : '--'}
+                      </Text>
+                    </View>
+                    <View style={[styles.fdCell, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)' }]}>
+                      <Text style={styles.fdCellIcon}>🌧️</Text>
+                      <Text style={[styles.fdCellLabel, { color: colors.textSecondary }]}>Precipitation</Text>
+                      <Text style={[styles.fdCellValue, { color: colors.text }]}>
+                        {forecastDetail.precipitation != null ? `${forecastDetail.precipitation} mm` : '--'}
+                      </Text>
+                    </View>
+                    <View style={[styles.fdCell, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)' }]}>
+                      <Text style={styles.fdCellIcon}>💨</Text>
+                      <Text style={[styles.fdCellLabel, { color: colors.textSecondary }]}>Humidity</Text>
+                      <Text style={[styles.fdCellValue, { color: colors.text }]}>
+                        {forecastDetail.humidityMax != null ? `${forecastDetail.humidityMin}–${forecastDetail.humidityMax}%` : '--'}
+                      </Text>
+                    </View>
+                    <View style={[styles.fdCell, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)' }]}>
+                      <Text style={styles.fdCellIcon}>🌬️</Text>
+                      <Text style={[styles.fdCellLabel, { color: colors.textSecondary }]}>Wind</Text>
+                      <Text style={[styles.fdCellValue, { color: colors.text }]}>
+                        {forecastDetail.windSpeed != null ? `${Math.round(forecastDetail.windSpeed)} km/h ${windDir}` : '--'}
+                      </Text>
+                    </View>
+                    <View style={[styles.fdCell, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)' }]}>
+                      <Text style={styles.fdCellIcon}>💥</Text>
+                      <Text style={[styles.fdCellLabel, { color: colors.textSecondary }]}>Gusts</Text>
+                      <Text style={[styles.fdCellValue, { color: colors.text }]}>
+                        {forecastDetail.windGusts != null ? `${Math.round(forecastDetail.windGusts)} km/h` : '--'}
+                      </Text>
+                    </View>
+                    <View style={[styles.fdCell, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)' }]}>
+                      <Text style={styles.fdCellIcon}>☀️</Text>
+                      <Text style={[styles.fdCellLabel, { color: colors.textSecondary }]}>UV Index</Text>
+                      <Text style={[styles.fdCellValue, { color: colors.text }]}>
+                        {forecastDetail.uvIndex != null ? `${forecastDetail.uvIndex} ${getUvLabel(forecastDetail.uvIndex)}` : '--'}
+                      </Text>
+                    </View>
+                    <View style={[styles.fdCell, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)' }]}>
+                      <Text style={styles.fdCellIcon}>🌅</Text>
+                      <Text style={[styles.fdCellLabel, { color: colors.textSecondary }]}>Sun</Text>
+                      <Text style={[styles.fdCellValue, { color: colors.text }]}>
+                        {formatTime(forecastDetail.sunrise)} - {formatTime(forecastDetail.sunset)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.forecastCloseBtn, { backgroundColor: colors.primary }]}
+                    onPress={() => setForecastDetail(null)}
+                  >
+                    <Text style={styles.forecastCloseBtnText}>Close</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </Pressable>
+            );
+          })()}
         </Pressable>
       </Modal>
     </SafeAreaView>
@@ -578,11 +671,14 @@ const styles = StyleSheet.create({
   /* ---- Forecast Detail Modal ---- */
   forecastModal: {
     position: 'absolute',
-    top: '25%',
-    left: 24,
-    right: 24,
+    top: '8%',
+    left: 20,
+    right: 20,
+    maxHeight: '80%',
     borderRadius: 24,
-    padding: 28,
+  },
+  forecastModalContent: {
+    padding: 24,
     alignItems: 'center',
   },
   forecastModalDay: {
@@ -592,12 +688,12 @@ const styles = StyleSheet.create({
   forecastModalDesc: {
     fontSize: 16,
     fontWeight: '500',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   forecastModalTemps: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
     gap: 30,
   },
   forecastTempCol: {
@@ -615,6 +711,35 @@ const styles = StyleSheet.create({
   forecastTempDivider: {
     width: 1,
     height: 40,
+  },
+  fdGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    width: '100%',
+    marginBottom: 20,
+  },
+  fdCell: {
+    width: '47%',
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+  },
+  fdCellIcon: {
+    fontSize: 20,
+    marginBottom: 4,
+  },
+  fdCellLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  fdCellValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   forecastCloseBtn: {
     paddingVertical: 12,

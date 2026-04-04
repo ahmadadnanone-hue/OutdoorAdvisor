@@ -2,16 +2,19 @@ import React from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { getWeatherDescription } from '../utils/weatherCodes';
+import AnimatedWeatherIcon from './AnimatedWeatherIcon';
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-function getDayName(dateString) {
+function getDayName(dateString, index) {
+  if (index === 0) return 'Today';
   const date = new Date(dateString);
   return DAY_NAMES[date.getDay()];
 }
 
-function ForecastItem({ item, colors, isDark, isLast, onPress }) {
+function ForecastItem({ item, index, colors, isDark, isLast, onPress }) {
   const weather = getWeatherDescription(item.weatherCode);
+  const isToday = index === 0;
 
   return (
     <TouchableOpacity
@@ -20,23 +23,32 @@ function ForecastItem({ item, colors, isDark, isLast, onPress }) {
       style={[
         styles.item,
         {
-          backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+          backgroundColor: isToday
+            ? (isDark ? 'rgba(79,142,247,0.12)' : 'rgba(79,142,247,0.08)')
+            : (isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'),
+          borderColor: isToday ? (isDark ? 'rgba(79,142,247,0.3)' : 'rgba(79,142,247,0.2)') : 'transparent',
+          borderWidth: isToday ? 1 : 0,
         },
-        !isLast && {
-          marginRight: 10,
-        },
+        !isLast && { marginRight: 10 },
       ]}
     >
-      <Text style={[styles.dayName, { color: colors.text }]}>
-        {getDayName(item.date)}
+      <Text style={[styles.dayName, { color: isToday ? '#4F8EF7' : colors.text }]}>
+        {getDayName(item.date, index)}
       </Text>
-      <Text style={styles.icon}>{weather.icon}</Text>
+      <View style={styles.iconWrap}>
+        <AnimatedWeatherIcon weatherCode={item.weatherCode} emoji={weather.icon} size={26} />
+      </View>
       <Text style={[styles.highTemp, { color: colors.text }]}>
         {Math.round(item.maxTemp)}°
       </Text>
       <Text style={[styles.lowTemp, { color: colors.textSecondary }]}>
         {Math.round(item.minTemp)}°
       </Text>
+      {item.precipProbability != null && item.precipProbability > 0 && (
+        <Text style={styles.rainChance}>
+          💧{item.precipProbability}%
+        </Text>
+      )}
     </TouchableOpacity>
   );
 }
@@ -84,6 +96,7 @@ export default function ForecastStrip({ daily, loading, onDayPress }) {
         renderItem={({ item, index }) => (
           <ForecastItem
             item={item}
+            index={index}
             colors={colors}
             isDark={isDark}
             isLast={daily && index === daily.length - 1}
@@ -116,12 +129,16 @@ const styles = StyleSheet.create({
     width: 76,
   },
   dayName: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  icon: {
-    fontSize: 24,
+  iconWrap: {
+    height: 34,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 8,
   },
   highTemp: {
@@ -132,5 +149,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '400',
     marginTop: 3,
+  },
+  rainChance: {
+    fontSize: 10,
+    color: '#38BDF8',
+    marginTop: 4,
+    fontWeight: '600',
   },
 });
