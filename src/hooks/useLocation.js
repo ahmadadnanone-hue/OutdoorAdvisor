@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as Location from 'expo-location';
 import { CITIES } from '../data/cities';
+import { reverseGeocode } from '../config/googleApi';
 
 const DEFAULT_CITY = CITIES.find((c) => c.name === 'Lahore');
 
@@ -47,14 +48,23 @@ export default function useLocation() {
       }
 
       const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
+        accuracy: Location.Accuracy.High,
       });
 
       const { latitude, longitude } = position.coords;
-      const nearest = findNearestCity(latitude, longitude);
 
+      // Set coords immediately so AQI/weather can start fetching at the precise point
       setLocation({ lat: latitude, lon: longitude });
-      setCity(nearest.name);
+
+      // Try Google reverse-geocoding for a friendly "Area, City" label.
+      // Fall back to nearest known city if it fails.
+      const friendly = await reverseGeocode(latitude, longitude);
+      if (friendly) {
+        setCity(friendly);
+      } else {
+        const nearest = findNearestCity(latitude, longitude);
+        setCity(nearest.name);
+      }
     } catch (err) {
       setLocation({ lat: DEFAULT_CITY.lat, lon: DEFAULT_CITY.lon });
       setCity(DEFAULT_CITY.name);
@@ -76,5 +86,12 @@ export default function useLocation() {
     }
   }, []);
 
-  return { location, city, loading, error, refresh: fetchLocation, selectCity };
+  // Accept any place { name, lat, lon } (e.g. from Google Places Autocomplete)
+  const selectPlace = useCallback(({ name, lat, lon }) => {
+    if (lat == null || lon == null) return;
+    setCity(name || 'Selected');
+    setLocation({ lat, lon });
+  }, []);
+
+  return { location, city, loading, error, refresh: fetchLocation, selectCity, selectPlace };
 }

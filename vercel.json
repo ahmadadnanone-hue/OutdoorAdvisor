@@ -3,6 +3,9 @@
   "functions": {
     "api/nhmp.js": {
       "maxDuration": 30
+    },
+    "api/pmd.js": {
+      "maxDuration": 30
     }
   }
 }

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import { useSettings } from '../context/SettingsContext';
 import { getWeatherDescription } from '../utils/weatherCodes';
 import AnimatedWeatherIcon from './AnimatedWeatherIcon';
 
@@ -12,7 +13,7 @@ function getDayName(dateString, index) {
   return DAY_NAMES[date.getDay()];
 }
 
-function ForecastItem({ item, index, colors, isDark, isLast, onPress }) {
+function ForecastItem({ item, index, colors, isDark, isLast, onPress, formatTempShort }) {
   const weather = getWeatherDescription(item.weatherCode);
   const isToday = index === 0;
 
@@ -39,10 +40,10 @@ function ForecastItem({ item, index, colors, isDark, isLast, onPress }) {
         <AnimatedWeatherIcon weatherCode={item.weatherCode} emoji={weather.icon} size={26} />
       </View>
       <Text style={[styles.highTemp, { color: colors.text }]}>
-        {Math.round(item.maxTemp)}°
+        {formatTempShort(item.maxTemp)}
       </Text>
       <Text style={[styles.lowTemp, { color: colors.textSecondary }]}>
-        {Math.round(item.minTemp)}°
+        {formatTempShort(item.minTemp)}
       </Text>
       {item.precipProbability != null && item.precipProbability > 0 && (
         <Text style={styles.rainChance}>
@@ -55,6 +56,7 @@ function ForecastItem({ item, index, colors, isDark, isLast, onPress }) {
 
 export default function ForecastStrip({ daily, loading, onDayPress }) {
   const { isDark, colors } = useTheme();
+  const { formatTempShort } = useSettings();
 
   const cardShadow = !isDark
     ? {
@@ -101,6 +103,7 @@ export default function ForecastStrip({ daily, loading, onDayPress }) {
             isDark={isDark}
             isLast={daily && index === daily.length - 1}
             onPress={onDayPress}
+            formatTempShort={formatTempShort}
           />
         )}
       />

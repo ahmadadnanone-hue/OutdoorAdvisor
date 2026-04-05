@@ -13,6 +13,7 @@ import {
   Pressable,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import { useSettings } from '../context/SettingsContext';
 import useLocation from '../hooks/useLocation';
 import useAQI from '../hooks/useAQI';
 import useWeather from '../hooks/useWeather';
@@ -25,6 +26,7 @@ import AnimatedWeatherIcon from '../components/AnimatedWeatherIcon';
 import ActivityCard from '../components/ActivityCard';
 import CacheIndicator from '../components/CacheIndicator';
 import ThemeToggle from '../components/ThemeToggle';
+import PlacesAutocomplete from '../components/PlacesAutocomplete';
 
 function getWindDirectionLabel(deg) {
   const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
@@ -57,7 +59,8 @@ function getGreeting() {
 
 export default function HomeScreen({ navigation }) {
   const { colors, isDark } = useTheme();
-  const { location, city, loading: locationLoading, refresh: refreshLocation, selectCity } = useLocation();
+  const settings = useSettings();
+  const { location, city, loading: locationLoading, refresh: refreshLocation, selectCity, selectPlace } = useLocation();
   const {
     aqi,
     pm25,
@@ -65,7 +68,7 @@ export default function HomeScreen({ navigation }) {
     loading: aqiLoading,
     isUsingCache: aqiCached,
     refresh: refreshAqi,
-  } = useAQI(city);
+  } = useAQI(location.lat, location.lon);
   const {
     current: weatherCurrent,
     daily,
@@ -170,7 +173,7 @@ export default function HomeScreen({ navigation }) {
             <View style={styles.headerWeather}>
               <Text style={styles.weatherEmoji}>{weather.icon}</Text>
               <Text style={[styles.headerTemp, { color: colors.text }]}>
-                {weatherCurrent?.temp != null ? `${Math.round(weatherCurrent.temp)}°` : '--'}
+                {settings.formatTempShort(weatherCurrent?.temp)}
               </Text>
             </View>
             <ThemeToggle />
@@ -180,115 +183,111 @@ export default function HomeScreen({ navigation }) {
         {/* Cache Indicator */}
         <CacheIndicator visible={aqiCached || weatherCached} />
 
-        {/* ===== 2. AQI Hero Card ===== */}
-        <View style={styles.section}>
-          <AQIHeroCard aqi={aqi} pm25={pm25} pm10={pm10} humidity={weatherCurrent?.humidity} loading={aqiLoading} />
-        </View>
-
-        {/* ===== 3. Wind Section ===== */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Wind</Text>
-          <View
-            style={[
-              styles.windCard,
-              { backgroundColor: colors.card },
-              cardShadow,
-              cardBorder,
-            ]}
-          >
-            <View style={styles.windColumns}>
-              <View style={styles.windColumn}>
-                <Text style={[styles.windValue, { color: colors.text }]}>
-                  {weatherCurrent?.windSpeed != null
-                    ? `${Math.round(weatherCurrent.windSpeed)}`
-                    : '--'}
-                </Text>
-                <Text style={[styles.windUnit, { color: colors.textSecondary }]}>km/h</Text>
-                <Text style={[styles.windLabel, { color: colors.textSecondary }]}>Speed</Text>
-              </View>
-              <View
-                style={[
-                  styles.windDivider,
-                  { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' },
-                ]}
-              />
-              <View style={styles.windColumn}>
-                <Text style={[styles.windValue, { color: colors.text }]}>--</Text>
-                <Text style={[styles.windUnit, { color: colors.textSecondary }]}>km/h</Text>
-                <Text style={[styles.windLabel, { color: colors.textSecondary }]}>Gusts</Text>
-              </View>
-              <View
-                style={[
-                  styles.windDivider,
-                  { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' },
-                ]}
-              />
-              <View style={styles.windColumn}>
-                <Text style={[styles.windValue, { color: colors.text }]}>--</Text>
-                <Text style={[styles.windUnit, { color: colors.textSecondary }]}>{' '}</Text>
-                <Text style={[styles.windLabel, { color: colors.textSecondary }]}>Direction</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* ===== 4. Current Details Section ===== */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Current Details</Text>
-          <View style={styles.detailsGrid}>
-            <View style={[styles.detailCard, { backgroundColor: colors.card }, cardShadow, cardBorder]}>
-              <Text style={styles.detailIcon}>🌡️</Text>
-              <Text style={[styles.detailValue, { color: feelsLikeColor }]}>
-                {feelsLikeTemp != null ? `${Math.round(feelsLikeTemp)}°` : '--'}
-              </Text>
-              <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Feels Like</Text>
-            </View>
-            <View style={[styles.detailCard, { backgroundColor: colors.card }, cardShadow, cardBorder]}>
-              <Text style={styles.detailIcon}>💨</Text>
-              <Text style={[styles.detailValue, { color: '#F97316' }]}>
-                {weatherCurrent?.windSpeed != null ? `${Math.round(weatherCurrent.windSpeed)}` : '--'}
-              </Text>
-              <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Wind km/h</Text>
-            </View>
-            <View style={[styles.detailCard, { backgroundColor: colors.card }, cardShadow, cardBorder]}>
-              <Text style={styles.detailIcon}>🌫️</Text>
-              <Text style={[styles.detailValue, { color: pm25Color }]}>
-                {pm25 != null ? pm25 : '--'}
-              </Text>
-              <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>PM2.5</Text>
-            </View>
-            <View style={[styles.detailCard, { backgroundColor: colors.card }, cardShadow, cardBorder]}>
-              <Text style={styles.detailIcon}>🌤️</Text>
-              <Text style={[styles.detailValue, { color: colors.primary }]}>
-                {weatherCurrent?.temp != null ? `${Math.round(weatherCurrent.temp)}°` : '--'}
-              </Text>
-              <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Temp</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ===== 5. 7-Day Forecast ===== */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>7-Day Forecast</Text>
-          <ForecastStrip daily={daily} loading={weatherLoading} onDayPress={(day) => setForecastDetail(day)} />
-        </View>
-
-        {/* ===== 6. Activity Advisory ===== */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Activity Advisory</Text>
-          <View style={styles.activityGrid}>
-            {ACTIVITIES.map((activity) => (
-              <View key={activity.name} style={styles.activityItem}>
-                <ActivityCard
-                  name={activity.name}
-                  icon={activity.icon}
-                  aqi={aqi}
-                  onPress={() => handleActivityPress(activity)}
-                />
-              </View>
-            ))}
-          </View>
-        </View>
+        {/* ===== Customizable Sections ===== */}
+        {settings.homeSections.map((key) => {
+          switch (key) {
+            case 'aqi':
+              return (
+                <View key="aqi" style={styles.section}>
+                  <AQIHeroCard aqi={aqi} pm25={pm25} pm10={pm10} humidity={weatherCurrent?.humidity} loading={aqiLoading} />
+                </View>
+              );
+            case 'wind':
+              return (
+                <View key="wind" style={styles.section}>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>Wind</Text>
+                  <View style={[styles.windCard, { backgroundColor: colors.card }, cardShadow, cardBorder]}>
+                    <View style={styles.windColumns}>
+                      <View style={styles.windColumn}>
+                        <Text style={[styles.windValue, { color: colors.text }]}>
+                          {weatherCurrent?.windSpeed != null
+                            ? `${Math.round(settings.convertWind(weatherCurrent.windSpeed))}`
+                            : '--'}
+                        </Text>
+                        <Text style={[styles.windUnit, { color: colors.textSecondary }]}>{settings.windUnitLabel}</Text>
+                        <Text style={[styles.windLabel, { color: colors.textSecondary }]}>Speed</Text>
+                      </View>
+                      <View style={[styles.windDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]} />
+                      <View style={styles.windColumn}>
+                        <Text style={[styles.windValue, { color: colors.text }]}>--</Text>
+                        <Text style={[styles.windUnit, { color: colors.textSecondary }]}>{settings.windUnitLabel}</Text>
+                        <Text style={[styles.windLabel, { color: colors.textSecondary }]}>Gusts</Text>
+                      </View>
+                      <View style={[styles.windDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]} />
+                      <View style={styles.windColumn}>
+                        <Text style={[styles.windValue, { color: colors.text }]}>--</Text>
+                        <Text style={[styles.windUnit, { color: colors.textSecondary }]}>{' '}</Text>
+                        <Text style={[styles.windLabel, { color: colors.textSecondary }]}>Direction</Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              );
+            case 'details':
+              return (
+                <View key="details" style={styles.section}>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>Current Details</Text>
+                  <View style={styles.detailsGrid}>
+                    <View style={[styles.detailCard, { backgroundColor: colors.card }, cardShadow, cardBorder]}>
+                      <Text style={styles.detailIcon}>🌡️</Text>
+                      <Text style={[styles.detailValue, { color: feelsLikeColor }]}>
+                        {settings.formatTempShort(feelsLikeTemp)}
+                      </Text>
+                      <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Feels Like</Text>
+                    </View>
+                    <View style={[styles.detailCard, { backgroundColor: colors.card }, cardShadow, cardBorder]}>
+                      <Text style={styles.detailIcon}>💨</Text>
+                      <Text style={[styles.detailValue, { color: '#F97316' }]}>
+                        {weatherCurrent?.windSpeed != null ? `${Math.round(settings.convertWind(weatherCurrent.windSpeed))}` : '--'}
+                      </Text>
+                      <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Wind {settings.windUnitLabel}</Text>
+                    </View>
+                    <View style={[styles.detailCard, { backgroundColor: colors.card }, cardShadow, cardBorder]}>
+                      <Text style={styles.detailIcon}>🌫️</Text>
+                      <Text style={[styles.detailValue, { color: pm25Color }]}>
+                        {pm25 != null ? pm25 : '--'}
+                      </Text>
+                      <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>PM2.5</Text>
+                    </View>
+                    <View style={[styles.detailCard, { backgroundColor: colors.card }, cardShadow, cardBorder]}>
+                      <Text style={styles.detailIcon}>🌤️</Text>
+                      <Text style={[styles.detailValue, { color: colors.primary }]}>
+                        {settings.formatTempShort(weatherCurrent?.temp)}
+                      </Text>
+                      <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Temp</Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            case 'forecast':
+              return (
+                <View key="forecast" style={styles.section}>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>7-Day Forecast</Text>
+                  <ForecastStrip daily={daily} loading={weatherLoading} onDayPress={(day) => setForecastDetail(day)} />
+                </View>
+              );
+            case 'activities':
+              return (
+                <View key="activities" style={styles.section}>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>Activity Advisory</Text>
+                  <View style={styles.activityGrid}>
+                    {ACTIVITIES.map((activity) => (
+                      <View key={activity.name} style={styles.activityItem}>
+                        <ActivityCard
+                          name={activity.name}
+                          icon={activity.icon}
+                          aqi={aqi}
+                          onPress={() => handleActivityPress(activity)}
+                        />
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              );
+            default:
+              return null;
+          }
+        })}
 
         {/* ===== 7. Last Updated ===== */}
         <Text style={[styles.lastUpdated, { color: colors.textSecondary }]}>
@@ -299,9 +298,19 @@ export default function HomeScreen({ navigation }) {
       {/* ===== City Picker Modal ===== */}
       <Modal visible={cityPickerVisible} transparent animationType="slide">
         <Pressable style={styles.modalOverlay} onPress={() => setCityPickerVisible(false)}>
-          <View style={[styles.modalContent, { backgroundColor: isDark ? '#151D2E' : '#FFFFFF' }]}>
+          <Pressable style={[styles.modalContent, { backgroundColor: isDark ? '#151D2E' : '#FFFFFF' }]} onPress={(e) => e.stopPropagation && e.stopPropagation()}>
             <View style={styles.modalHandle} />
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Select City</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Search City</Text>
+            <View style={{ marginBottom: 14 }}>
+              <PlacesAutocomplete
+                onPlaceSelect={(place) => {
+                  selectPlace(place);
+                  setCityPickerVisible(false);
+                }}
+                placeholder="Search any city in Pakistan..."
+              />
+            </View>
+            <Text style={[styles.cityOptionText, { color: colors.textSecondary, fontSize: 12, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }]}>Popular Cities</Text>
             <FlatList
               data={CITIES}
               keyExtractor={(item) => item.name}
@@ -323,7 +332,7 @@ export default function HomeScreen({ navigation }) {
                 </TouchableOpacity>
               )}
             />
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
 
@@ -359,12 +368,12 @@ export default function HomeScreen({ navigation }) {
                   <View style={styles.forecastModalTemps}>
                     <View style={styles.forecastTempCol}>
                       <Text style={[styles.forecastTempLabel, { color: colors.textSecondary }]}>High</Text>
-                      <Text style={[styles.forecastTempValue, { color: colors.text }]}>{Math.round(forecastDetail.maxTemp)}°</Text>
+                      <Text style={[styles.forecastTempValue, { color: colors.text }]}>{settings.formatTempShort(forecastDetail.maxTemp)}</Text>
                     </View>
                     <View style={[styles.forecastTempDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]} />
                     <View style={styles.forecastTempCol}>
                       <Text style={[styles.forecastTempLabel, { color: colors.textSecondary }]}>Low</Text>
-                      <Text style={[styles.forecastTempValue, { color: colors.textSecondary }]}>{Math.round(forecastDetail.minTemp)}°</Text>
+                      <Text style={[styles.forecastTempValue, { color: colors.textSecondary }]}>{settings.formatTempShort(forecastDetail.minTemp)}</Text>
                     </View>
                   </View>
 
@@ -374,7 +383,7 @@ export default function HomeScreen({ navigation }) {
                       <Text style={styles.fdCellIcon}>🌡️</Text>
                       <Text style={[styles.fdCellLabel, { color: colors.textSecondary }]}>Feels Like</Text>
                       <Text style={[styles.fdCellValue, { color: colors.text }]}>
-                        {forecastDetail.feelsLikeMax != null ? `${Math.round(forecastDetail.feelsLikeMax)}°` : '--'} / {forecastDetail.feelsLikeMin != null ? `${Math.round(forecastDetail.feelsLikeMin)}°` : '--'}
+                        {settings.formatTempShort(forecastDetail.feelsLikeMax)} / {settings.formatTempShort(forecastDetail.feelsLikeMin)}
                       </Text>
                     </View>
                     <View style={[styles.fdCell, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)' }]}>
@@ -388,7 +397,7 @@ export default function HomeScreen({ navigation }) {
                       <Text style={styles.fdCellIcon}>🌧️</Text>
                       <Text style={[styles.fdCellLabel, { color: colors.textSecondary }]}>Precipitation</Text>
                       <Text style={[styles.fdCellValue, { color: colors.text }]}>
-                        {forecastDetail.precipitation != null ? `${forecastDetail.precipitation} mm` : '--'}
+                        {settings.formatPrecip(forecastDetail.precipitation)}
                       </Text>
                     </View>
                     <View style={[styles.fdCell, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)' }]}>
@@ -402,14 +411,14 @@ export default function HomeScreen({ navigation }) {
                       <Text style={styles.fdCellIcon}>🌬️</Text>
                       <Text style={[styles.fdCellLabel, { color: colors.textSecondary }]}>Wind</Text>
                       <Text style={[styles.fdCellValue, { color: colors.text }]}>
-                        {forecastDetail.windSpeed != null ? `${Math.round(forecastDetail.windSpeed)} km/h ${windDir}` : '--'}
+                        {forecastDetail.windSpeed != null ? `${settings.formatWind(forecastDetail.windSpeed)} ${windDir}` : '--'}
                       </Text>
                     </View>
                     <View style={[styles.fdCell, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)' }]}>
                       <Text style={styles.fdCellIcon}>💥</Text>
                       <Text style={[styles.fdCellLabel, { color: colors.textSecondary }]}>Gusts</Text>
                       <Text style={[styles.fdCellValue, { color: colors.text }]}>
-                        {forecastDetail.windGusts != null ? `${Math.round(forecastDetail.windGusts)} km/h` : '--'}
+                        {settings.formatWind(forecastDetail.windGusts)}
                       </Text>
                     </View>
                     <View style={[styles.fdCell, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)' }]}>

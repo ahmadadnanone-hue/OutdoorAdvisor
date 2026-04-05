@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, View, StyleSheet, Platform } from 'react-native';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { SettingsProvider } from './src/context/SettingsContext';
 
 const WEB_FONT_STACK =
   'system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"';
@@ -118,9 +119,11 @@ function AppNavigator() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AppNavigator />
-    </ThemeProvider>
+    <SettingsProvider>
+      <ThemeProvider>
+        <AppNavigator />
+      </ThemeProvider>
+    </SettingsProvider>
   );
 }
 

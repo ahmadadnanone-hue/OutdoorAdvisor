@@ -12,9 +12,19 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
+import { useSettings } from '../context/SettingsContext';
 import typography from '../theme/typography';
 
-const TABS = ['Thresholds', 'Notifications', 'About'];
+const TABS = ['Thresholds', 'Notifications', 'Customize', 'About'];
+
+const SECTION_META = {
+  aqi: { label: 'AQI Hero Card', icon: '🌬️', desc: 'Air Quality Index with scale bar' },
+  wind: { label: 'Wind', icon: '💨', desc: 'Wind speed, gusts & direction' },
+  details: { label: 'Current Details', icon: '📊', desc: 'Feels like, PM2.5, temp grid' },
+  forecast: { label: '7-Day Forecast', icon: '📅', desc: 'Weekly weather outlook' },
+  activities: { label: 'Activity Advisory', icon: '🏃', desc: 'Outdoor activity recommendations' },
+};
+const ALL_SECTION_KEYS = Object.keys(SECTION_META);
 
 const THRESHOLDS_KEY = 'outdooradvisor_thresholds';
 const NOTIFICATIONS_KEY = 'outdooradvisor_notifications';
@@ -127,6 +137,7 @@ const sliderStyles = StyleSheet.create({
 export default function AlertsScreen() {
   const themeCtx = useTheme();
   const { colors } = themeCtx;
+  const settings = useSettings();
   const [activeTab, setActiveTab] = useState(0);
 
   // Thresholds state
@@ -343,6 +354,142 @@ export default function AlertsScreen() {
     );
   };
 
+  /* ---------- Customize Tab ---------- */
+  const renderCustomize = () => {
+    const { units, windUnit, homeSections, setUnits, setWindUnit, moveSection, toggleSection } = settings;
+
+    const unitOptions = [
+      { key: 'metric', label: 'Metric', desc: '°C, mm' },
+      { key: 'imperial', label: 'Imperial', desc: '°F, in' },
+    ];
+    const windOptions = [
+      { key: 'kmh', label: 'km/h' },
+      { key: 'mph', label: 'mph' },
+      { key: 'ms', label: 'm/s' },
+      { key: 'knots', label: 'knots' },
+    ];
+
+    const enabledKeys = homeSections;
+    const disabledKeys = ALL_SECTION_KEYS.filter((k) => !enabledKeys.includes(k));
+
+    return (
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Units */}
+        <Text style={[styles.sectionLabel, { color: colors.text }]}>Measurement Units</Text>
+        <Text style={[styles.sectionDesc, { color: colors.textSecondary }]}>
+          Choose how temperature and precipitation are shown across the app.
+        </Text>
+        <View style={[styles.themePicker, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {unitOptions.map((u) => {
+            const isActive = units === u.key;
+            return (
+              <TouchableOpacity
+                key={u.key}
+                style={[
+                  styles.themeOption,
+                  isActive && { backgroundColor: colors.primary + '1A', borderColor: colors.primary, borderWidth: 1.5 },
+                ]}
+                onPress={() => setUnits(u.key)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.themeLabel, { color: isActive ? colors.primary : colors.text }]}>{u.label}</Text>
+                <Text style={[styles.themeDesc, { color: colors.textSecondary }]}>{u.desc}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Wind Unit */}
+        <Text style={[styles.sectionLabel, { color: colors.text, marginTop: 24 }]}>Wind Speed Unit</Text>
+        <View style={[styles.windUnitRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {windOptions.map((w) => {
+            const isActive = windUnit === w.key;
+            return (
+              <TouchableOpacity
+                key={w.key}
+                style={[
+                  styles.windUnitBtn,
+                  isActive && { backgroundColor: colors.primary + '1A', borderColor: colors.primary, borderWidth: 1.5 },
+                ]}
+                onPress={() => setWindUnit(w.key)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.windUnitText, { color: isActive ? colors.primary : colors.text }]}>{w.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Home Layout */}
+        <Text style={[styles.sectionLabel, { color: colors.text, marginTop: 28 }]}>Home Screen Layout</Text>
+        <Text style={[styles.sectionDesc, { color: colors.textSecondary }]}>
+          Reorder sections or hide them. Use the arrows to move a section up or down.
+        </Text>
+
+        {enabledKeys.map((key, i) => {
+          const meta = SECTION_META[key];
+          const isFirst = i === 0;
+          const isLast = i === enabledKeys.length - 1;
+          return (
+            <View key={key} style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={styles.sectionCardIcon}>{meta.icon}</Text>
+              <View style={styles.sectionCardInfo}>
+                <Text style={[styles.sectionCardLabel, { color: colors.text }]}>{meta.label}</Text>
+                <Text style={[styles.sectionCardDesc, { color: colors.textSecondary }]}>{meta.desc}</Text>
+              </View>
+              <View style={styles.sectionCardActions}>
+                <TouchableOpacity
+                  style={[styles.orderBtn, { backgroundColor: isFirst ? colors.border + '55' : colors.primary + '22', opacity: isFirst ? 0.4 : 1 }]}
+                  disabled={isFirst}
+                  onPress={() => moveSection(i, i - 1)}
+                >
+                  <Text style={[styles.orderBtnText, { color: colors.primary }]}>▲</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.orderBtn, { backgroundColor: isLast ? colors.border + '55' : colors.primary + '22', opacity: isLast ? 0.4 : 1 }]}
+                  disabled={isLast}
+                  onPress={() => moveSection(i, i + 1)}
+                >
+                  <Text style={[styles.orderBtnText, { color: colors.primary }]}>▼</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.orderBtn, { backgroundColor: '#EF4444' + '22' }]}
+                  onPress={() => toggleSection(key)}
+                >
+                  <Text style={[styles.orderBtnText, { color: '#EF4444' }]}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          );
+        })}
+
+        {disabledKeys.length > 0 && (
+          <>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginTop: 16, fontSize: 13 }]}>HIDDEN SECTIONS</Text>
+            {disabledKeys.map((key) => {
+              const meta = SECTION_META[key];
+              return (
+                <View key={key} style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border, opacity: 0.6 }]}>
+                  <Text style={styles.sectionCardIcon}>{meta.icon}</Text>
+                  <View style={styles.sectionCardInfo}>
+                    <Text style={[styles.sectionCardLabel, { color: colors.text }]}>{meta.label}</Text>
+                    <Text style={[styles.sectionCardDesc, { color: colors.textSecondary }]}>{meta.desc}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.addBtn, { backgroundColor: colors.primary }]}
+                    onPress={() => toggleSection(key)}
+                  >
+                    <Text style={styles.addBtnText}>+ Add</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </>
+        )}
+      </ScrollView>
+    );
+  };
+
   /* ---------- About Tab ---------- */
   const renderAbout = () => {
     const sdkVersion = '55';
@@ -394,7 +541,7 @@ export default function AlertsScreen() {
   };
 
   /* ---------- Render ---------- */
-  const tabContent = [renderThresholds, renderNotifications, renderAbout];
+  const tabContent = [renderThresholds, renderNotifications, renderCustomize, renderAbout];
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -503,6 +650,78 @@ const styles = StyleSheet.create({
   themeDesc: {
     fontSize: 10,
     textAlign: 'center',
+  },
+
+  /* Customize - Wind unit picker */
+  windUnitRow: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 8,
+    gap: 6,
+  },
+  windUnitBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  windUnitText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  /* Customize - Section cards */
+  sectionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+  },
+  sectionCardIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  sectionCardInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  sectionCardLabel: {
+    fontSize: typography.body,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  sectionCardDesc: {
+    fontSize: typography.caption,
+  },
+  sectionCardActions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  orderBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  orderBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  addBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  addBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 
   /* Notifications */

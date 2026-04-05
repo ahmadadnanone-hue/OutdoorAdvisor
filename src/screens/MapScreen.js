@@ -11,171 +11,154 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { getAqiColor, getAqiCategory } from '../theme/colors';
 import typography from '../theme/typography';
-import { CITIES } from '../data/cities';
-import { fetchAqiForCity } from '../hooks/useAQI';
+import { CITIES, ALL_AQI_POINTS } from '../data/cities';
+import { fetchAqiForLocation } from '../hooks/useAQI';
+import { loadGoogleMaps } from '../config/googleApi';
 
-function WebMap({ cities, cityAqiData, colors, onCitySelect }) {
+// Google Maps dark style (subtle, to match app dark theme)
+const DARK_MAP_STYLES = [
+  { elementType: 'geometry', stylers: [{ color: '#1d2c4d' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#1a3646' }] },
+  { featureType: 'administrative.country', elementType: 'geometry.stroke', stylers: [{ color: '#4b6878' }] },
+  { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#2c3e50' }] },
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#304a7d' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#98a5be' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1626' }] },
+  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#4e6d70' }] },
+];
+
+function markerSvg(aqi, color, major) {
+  const label = aqi != null ? String(aqi) : '--';
+  // Sub-area balloons are smaller so major cities stand out
+  const size = major ? 44 : 34;
+  const fontSize = major ? 13 : 11;
+  const r = major ? 18 : 14;
+  const stroke = major ? 3 : 2;
+  const center = size / 2;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${center}" cy="${center}" r="${r}" fill="${color}" stroke="white" stroke-width="${stroke}"/>
+    <text x="${center}" y="${center + fontSize / 3 + 1}" font-family="system-ui, -apple-system, sans-serif" font-size="${fontSize}" font-weight="700" fill="white" text-anchor="middle">${label}</text>
+  </svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function GoogleMapView({ points, aqiData, isDark, onReady }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
-  const markersRef = useRef([]);
+  const markersRef = useRef({});
+  const infoWindowRef = useRef(null);
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
+    loadGoogleMaps().then((maps) => {
+      if (!maps || !mapRef.current || mapInstanceRef.current) return;
 
-    // Inject Leaflet CSS
-    if (!document.getElementById('leaflet-css')) {
-      const link = document.createElement('link');
-      link.id = 'leaflet-css';
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(link);
-    }
-
-    // Load Leaflet JS
-    const loadLeaflet = () => {
-      return new Promise((resolve) => {
-        if (window.L) {
-          resolve(window.L);
-          return;
-        }
-        const script = document.createElement('script');
-        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-        script.onload = () => resolve(window.L);
-        document.head.appendChild(script);
+      const map = new maps.Map(mapRef.current, {
+        center: { lat: 30.3753, lng: 69.3451 },
+        zoom: 5,
+        disableDefaultUI: false,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+        styles: isDark ? DARK_MAP_STYLES : undefined,
       });
-    };
-
-    loadLeaflet().then((L) => {
-      if (!mapRef.current || mapInstanceRef.current) return;
-
-      const map = L.map(mapRef.current, {
-        zoomControl: true,
-        scrollWheelZoom: true,
-      }).setView([30.3753, 69.3451], 5);
-
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap',
-        maxZoom: 18,
-      }).addTo(map);
-
       mapInstanceRef.current = map;
+      infoWindowRef.current = new maps.InfoWindow();
 
-      // Add markers for each city
-      cities.forEach((city) => {
-        const data = cityAqiData[city.name];
-        const aqi = data?.aqi;
-        const color = aqi != null ? getAqiColor(aqi) : '#9CA3AF';
-        const category = aqi != null ? getAqiCategory(aqi) : 'N/A';
-        const pm25 = data?.pm25 != null ? data.pm25 : 'N/A';
-
-        const icon = L.divIcon({
-          className: 'custom-aqi-marker',
-          html: `<div style="
-            background-color: ${color};
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 700;
-            font-size: 13px;
-            border: 3px solid white;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.35);
-            font-family: system-ui, sans-serif;
-          ">${aqi != null ? aqi : '--'}</div>`,
-          iconSize: [40, 40],
-          iconAnchor: [20, 20],
-        });
-
-        const marker = L.marker([city.lat, city.lon], { icon }).addTo(map);
-
-        marker.bindPopup(`
-          <div style="font-family: system-ui, sans-serif; min-width: 140px;">
-            <div style="font-weight: 700; font-size: 15px; margin-bottom: 4px;">${city.name}</div>
-            <div style="font-size: 13px; color: #555;">AQI: <strong style="color: ${color}">${aqi != null ? aqi : 'N/A'}</strong></div>
-            <div style="font-size: 13px; color: #555;">${category}</div>
-            <div style="font-size: 13px; color: #555;">PM2.5: ${pm25}</div>
-          </div>
-        `);
-
-        markersRef.current.push({ name: city.name, marker });
-      });
-
-      // Fix tile rendering after mount
-      setTimeout(() => map.invalidateSize(), 100);
+      if (onReady) onReady({ map, maps, markers: markersRef, infoWindow: infoWindowRef });
     });
 
     return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-        markersRef.current = [];
-      }
+      Object.values(markersRef.current).forEach((m) => m.setMap && m.setMap(null));
+      markersRef.current = {};
+      mapInstanceRef.current = null;
     };
-  }, [cityAqiData]);
+  }, [isDark]);
 
-  const flyToCity = useCallback((cityName) => {
-    if (!mapInstanceRef.current) return;
-    const city = cities.find((c) => c.name === cityName);
-    if (city) {
-      mapInstanceRef.current.flyTo([city.lat, city.lon], 10, { duration: 0.8 });
-      const found = markersRef.current.find((m) => m.name === cityName);
-      if (found) found.marker.openPopup();
-    }
-  }, [cities]);
-
-  // Expose flyToCity to parent
+  // (Re)build markers when AQI data changes
   useEffect(() => {
-    if (onCitySelect) {
-      onCitySelect.current = flyToCity;
-    }
-  }, [flyToCity, onCitySelect]);
+    const map = mapInstanceRef.current;
+    if (!map || typeof window === 'undefined' || !window.google) return;
+    const maps = window.google.maps;
+
+    // Clear existing
+    Object.values(markersRef.current).forEach((m) => m.setMap(null));
+    markersRef.current = {};
+
+    points.forEach((point) => {
+      const data = aqiData[point.key];
+      const aqi = data?.aqi;
+      const color = aqi != null ? getAqiColor(aqi) : '#9CA3AF';
+      const category = aqi != null ? getAqiCategory(aqi) : 'N/A';
+      const pm25 = data?.pm25 != null ? data.pm25 : 'N/A';
+      const size = point.isMajor ? 44 : 34;
+      const half = size / 2;
+
+      const marker = new maps.Marker({
+        position: { lat: point.lat, lng: point.lon },
+        map,
+        title: point.sub ? `${point.label}, ${point.sub}` : point.label,
+        // Major cities sit on top so they're never covered by sub-areas
+        zIndex: point.isMajor ? 1000 : 100,
+        icon: {
+          url: markerSvg(aqi, color, point.isMajor),
+          scaledSize: new maps.Size(size, size),
+          anchor: new maps.Point(half, half),
+        },
+      });
+
+      marker.addListener('click', () => {
+        const title = point.sub ? `${point.label}<span style="color:#666;font-weight:500"> · ${point.sub}</span>` : point.label;
+        infoWindowRef.current.setContent(`
+          <div style="font-family: system-ui, sans-serif; min-width: 160px; color:#111;">
+            <div style="font-weight: 700; font-size: 15px; margin-bottom: 4px;">${title}</div>
+            <div style="font-size: 13px;">AQI: <strong style="color:${color}">${aqi != null ? aqi : 'N/A'}</strong></div>
+            <div style="font-size: 13px;">${category}</div>
+            <div style="font-size: 13px;">PM2.5: ${pm25}</div>
+          </div>
+        `);
+        infoWindowRef.current.open({ anchor: marker, map });
+      });
+
+      markersRef.current[point.key] = marker;
+    });
+  }, [aqiData, points]);
 
   if (Platform.OS !== 'web') {
     return (
-      <View style={[webStyles.fallback, { backgroundColor: colors.card }]}>
-        <Text style={{ color: colors.textSecondary }}>Map requires web platform.</Text>
+      <View style={webStyles.fallback}>
+        <Text>Map requires web platform.</Text>
       </View>
     );
   }
 
-  return (
-    <div
-      ref={mapRef}
-      style={{
-        width: '100%',
-        height: '100%',
-        borderRadius: 0,
-      }}
-    />
-  );
+  return <div ref={mapRef} style={{ width: '100%', height: '100%' }} />;
 }
 
 const webStyles = {
-  fallback: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  fallback: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 };
 
 export default function MapScreen() {
-  const { colors } = useTheme();
-  const [cityAqiData, setCityAqiData] = useState({});
+  const { colors, isDark } = useTheme();
+  const [aqiData, setAqiData] = useState({});
   const [loading, setLoading] = useState(true);
-  const flyToCityRef = useRef(null);
+  const mapCtxRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
 
     async function fetchAll() {
       setLoading(true);
+      // Fetch every point (major cities + sub-areas) in parallel.
+      // Google Air Quality API is hyperlocal so each point returns a distinct reading.
       const results = await Promise.allSettled(
-        CITIES.map(async (city) => {
-          const data = await fetchAqiForCity(city.waqiName);
-          return { name: city.name, data };
+        ALL_AQI_POINTS.map(async (point) => {
+          const data = await fetchAqiForLocation(point.lat, point.lon);
+          return { key: point.key, data };
         })
       );
 
@@ -184,11 +167,11 @@ export default function MapScreen() {
       const aqiMap = {};
       results.forEach((result) => {
         if (result.status === 'fulfilled') {
-          aqiMap[result.value.name] = result.value.data;
+          aqiMap[result.value.key] = result.value.data;
         }
       });
 
-      setCityAqiData(aqiMap);
+      setAqiData(aqiMap);
       setLoading(false);
     }
 
@@ -199,14 +182,20 @@ export default function MapScreen() {
   }, []);
 
   const handleCityPress = useCallback((city) => {
-    if (flyToCityRef.current) {
-      flyToCityRef.current(city.name);
+    const ctx = mapCtxRef.current;
+    if (!ctx) return;
+    ctx.map.panTo({ lat: city.lat, lng: city.lon });
+    ctx.map.setZoom(11);
+    const marker = ctx.markers.current[city.name];
+    if (marker) {
+      // Trigger the click handler so the InfoWindow content gets built
+      window.google?.maps?.event?.trigger(marker, 'click');
     }
   }, []);
 
   const renderCityRow = useCallback(
     ({ item }) => {
-      const data = cityAqiData[item.name];
+      const data = aqiData[item.name];
       const aqi = data?.aqi;
       const dotColor = aqi != null ? getAqiColor(aqi) : colors.textSecondary;
       const category = aqi != null ? getAqiCategory(aqi) : 'N/A';
@@ -228,17 +217,19 @@ export default function MapScreen() {
         </TouchableOpacity>
       );
     },
-    [cityAqiData, colors, handleCityPress]
+    [aqiData, colors, handleCityPress]
   );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.mapContainer}>
-        <WebMap
-          cities={CITIES}
-          cityAqiData={cityAqiData}
-          colors={colors}
-          onCitySelect={flyToCityRef}
+        <GoogleMapView
+          points={ALL_AQI_POINTS}
+          aqiData={aqiData}
+          isDark={isDark}
+          onReady={(ctx) => {
+            mapCtxRef.current = ctx;
+          }}
         />
         {loading && (
           <View style={styles.loadingOverlay}>

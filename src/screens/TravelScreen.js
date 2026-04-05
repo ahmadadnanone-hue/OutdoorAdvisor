@@ -12,6 +12,7 @@ import {
   Linking,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import { useSettings } from '../context/SettingsContext';
 import { MOTORWAYS, CITIES } from '../data/cities';
 import { fetchWeatherForLocation } from '../hooks/useWeather';
 import { fetchAqiForCity } from '../hooks/useAQI';
@@ -29,6 +30,15 @@ const CITY_AQI_MAP = {};
 CITIES.forEach((c) => {
   CITY_AQI_MAP[c.name.toLowerCase()] = c.waqiName;
 });
+
+const PMD_SEVERITY_MAP = {
+  severe: { icon: '⛈️', color: '#EF4444', bg: 'rgba(239,68,68,0.12)' },
+  rain: { icon: '🌧️', color: '#3B82F6', bg: 'rgba(59,130,246,0.12)' },
+  fog: { icon: '🌫️', color: '#F97316', bg: 'rgba(249,115,22,0.12)' },
+  cloudy: { icon: '☁️', color: '#94A3B8', bg: 'rgba(148,163,184,0.12)' },
+  clear: { icon: '☀️', color: '#22C55E', bg: 'rgba(34,197,94,0.12)' },
+  other: { icon: '🌤️', color: '#6B7280', bg: 'rgba(107,114,128,0.12)' },
+};
 
 const SEVERITY_CONFIG = {
   closed: { icon: '🚫', color: '#EF4444', bg: 'rgba(239,68,68,0.12)', label: 'CLOSED' },
@@ -69,7 +79,7 @@ function NHMPAdvisory({ advisory, colors, isDark }) {
 }
 
 /* ===== Weather Stop Row ===== */
-function StopRow({ stop, colors }) {
+function StopRow({ stop, colors, formatTempShort }) {
   const { description, icon } = getWeatherDescription(stop.weatherCode);
   const hasFog = isFog(stop.weatherCode);
   const hasSmog = stop.aqi != null && stop.aqi > 150;
@@ -80,7 +90,7 @@ function StopRow({ stop, colors }) {
     <View style={[styles.stopRow, { borderBottomColor: colors.border }]}>
       <View style={styles.stopHeader}>
         <Text style={[styles.stopName, { color: colors.text }]}>{stop.name}</Text>
-        <Text style={[styles.stopTemp, { color: colors.primary }]}>{Math.round(stop.temp)}°C</Text>
+        <Text style={[styles.stopTemp, { color: colors.primary }]}>{formatTempShort(stop.temp)}</Text>
       </View>
       <Text style={[styles.stopWeather, { color: colors.textSecondary }]}>{icon} {description}</Text>
       {stop.aqi != null && (
@@ -100,6 +110,7 @@ function StopRow({ stop, colors }) {
 /* ===== Main Screen ===== */
 export default function TravelScreen() {
   const { colors, isDark } = useTheme();
+  const { formatTempShort } = useSettings();
   const [expandedMotorway, setExpandedMotorway] = useState(null);
   const [stopData, setStopData] = useState({});
   const fetchingRef = useRef({});
@@ -110,8 +121,17 @@ export default function TravelScreen() {
   const [nhmpTime, setNhmpTime] = useState(null);
   const [nhmpError, setNhmpError] = useState(false);
 
+  // PMD data
+  const [pmdCities, setPmdCities] = useState([]);
+  const [pmdAlerts, setPmdAlerts] = useState([]);
+  const [pmdLoading, setPmdLoading] = useState(true);
+  const [pmdTime, setPmdTime] = useState(null);
+  const [pmdBlocked, setPmdBlocked] = useState(false);
+  const [expandedPmdCity, setExpandedPmdCity] = useState(null);
+
   useEffect(() => {
     let cancelled = false;
+    // Fetch NHMP
     (async () => {
       try {
         const resp = await fetch('/api/nhmp');
@@ -126,6 +146,24 @@ export default function TravelScreen() {
         if (!cancelled) setNhmpError(true);
       } finally {
         if (!cancelled) setNhmpLoading(false);
+      }
+    })();
+    // Fetch PMD
+    (async () => {
+      try {
+        const resp = await fetch('/api/pmd');
+        const json = await resp.json();
+        if (!cancelled && json.success && json.cities && json.cities.length > 0) {
+          setPmdCities(json.cities);
+          setPmdAlerts(json.alerts || []);
+          setPmdTime(json.timestamp);
+        } else if (!cancelled) {
+          setPmdBlocked(true);
+        }
+      } catch {
+        if (!cancelled) setPmdBlocked(true);
+      } finally {
+        if (!cancelled) setPmdLoading(false);
       }
     })();
     return () => { cancelled = true; };
@@ -231,6 +269,124 @@ export default function TravelScreen() {
         )}
       </View>
 
+      {/* PMD Official Forecast */}
+      <View style={[styles.nhmpSection, { marginTop: 24 }]}>
+        <View style={styles.nhmpTitleRow}>
+          <Text style={[styles.title, { color: colors.text }]}>PMD 3-Day Forecast</Text>
+          <TouchableOpacity
+            onPress={() => Linking.openURL('https://nwfc.pmd.gov.pk/new/3-days-forecast.php')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.nhmpLink, { color: colors.primary }]}>View Full</Text>
+          </TouchableOpacity>
+        </View>
+        {pmdTime && (
+          <Text style={[styles.nhmpTimestamp, { color: colors.textSecondary }]}>
+            Updated: {new Date(pmdTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+          </Text>
+        )}
+
+        {pmdLoading ? (
+          <View style={styles.nhmpLoadingWrap}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading PMD data...</Text>
+          </View>
+        ) : pmdBlocked ? (
+          <View style={[styles.nhmpCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
+            <Text style={[styles.pmdBlockedTitle, { color: colors.text }]}>
+              Official PMD Forecasts
+            </Text>
+            <Text style={[styles.nhmpStatus, { color: colors.textSecondary }]}>
+              Live data temporarily unavailable. Tap links below to view directly.
+            </Text>
+            <View style={styles.pmdLinksRow}>
+              <TouchableOpacity
+                style={[styles.pmdLinkBtn, { backgroundColor: colors.primary + '15' }]}
+                onPress={() => Linking.openURL('https://nwfc.pmd.gov.pk/new/3-days-forecast.php')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.pmdLinkText, { color: colors.primary }]}>3-Day Forecast</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.pmdLinkBtn, { backgroundColor: '#EF4444' + '15' }]}
+                onPress={() => Linking.openURL('https://nwfc.pmd.gov.pk/new/daily-forecast-en.php')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.pmdLinkText, { color: '#EF4444' }]}>Weather Alerts</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <>
+            {pmdAlerts.length > 0 && (
+              <View style={[styles.pmdAlertBanner, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' }]}>
+                <Text style={styles.pmdAlertIcon}>🚨</Text>
+                <View style={styles.pmdAlertContent}>
+                  <Text style={[styles.pmdAlertTitle, { color: '#EF4444' }]}>Weather Alert</Text>
+                  {pmdAlerts.slice(0, 3).map((alert, i) => (
+                    <Text key={i} style={[styles.pmdAlertText, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>
+                      {alert}
+                    </Text>
+                  ))}
+                </View>
+              </View>
+            )}
+            <View style={styles.pmdCityGrid}>
+              {pmdCities.map((city, i) => {
+                const isExpanded = expandedPmdCity === i;
+                const today = city.forecast[0];
+                const severityConf = PMD_SEVERITY_MAP[today?.severity] || PMD_SEVERITY_MAP.other;
+                return (
+                  <TouchableOpacity
+                    key={city.city}
+                    style={[styles.pmdCityCard, {
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
+                      borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                    }]}
+                    onPress={() => {
+                      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                      setExpandedPmdCity(isExpanded ? null : i);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.pmdCityHeader}>
+                      <Text style={[styles.pmdCityName, { color: colors.text }]}>{city.city}</Text>
+                      <View style={[styles.pmdTempBadge, { backgroundColor: severityConf.bg }]}>
+                        <Text style={[styles.pmdTempText, { color: severityConf.color }]}>
+                          {today ? `${today.minTemp}°-${today.maxTemp}°` : '--'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.pmdCondition, { color: colors.textSecondary }]}>
+                      {severityConf.icon} {today?.condition || 'N/A'}
+                    </Text>
+                    {city.humidity && (
+                      <Text style={[styles.pmdHumidity, { color: colors.textSecondary }]}>
+                        Humidity: {city.humidity}
+                      </Text>
+                    )}
+                    {isExpanded && city.forecast.length > 1 && (
+                      <View style={[styles.pmdForecastDays, { borderTopColor: colors.border }]}>
+                        {city.forecast.map((day, di) => {
+                          const daySev = PMD_SEVERITY_MAP[day.severity] || PMD_SEVERITY_MAP.other;
+                          return (
+                            <View key={di} style={styles.pmdDayRow}>
+                              <Text style={[styles.pmdDayLabel, { color: colors.textSecondary }]}>{day.date}</Text>
+                              <Text style={[styles.pmdDayCondition, { color: colors.text }]}>{daySev.icon} {day.condition}</Text>
+                              <Text style={[styles.pmdDayTemp, { color: daySev.color }]}>{day.minTemp}°-{day.maxTemp}°</Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </>
+        )}
+      </View>
+
       {/* Weather-Based Motorway Conditions */}
       <Text style={[styles.title, { color: colors.text, marginTop: 24 }]}>
         Weather Along Motorways
@@ -266,7 +422,7 @@ export default function TravelScreen() {
                   </View>
                 ) : stopData[index] && stopData[index].length > 0 ? (
                   stopData[index].map((stop, i) => (
-                    <StopRow key={`${motorway.id}-${i}`} stop={stop} colors={colors} />
+                    <StopRow key={`${motorway.id}-${i}`} stop={stop} colors={colors} formatTempShort={formatTempShort} />
                   ))
                 ) : (
                   <Text style={[styles.noDataText, { color: colors.textSecondary }]}>
@@ -310,6 +466,30 @@ const styles = StyleSheet.create({
   allClearBanner: { borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 8 },
   allClearText: { fontSize: 15, fontWeight: '600', color: '#22C55E' },
   clearCount: { fontSize: 12, marginTop: 6, textAlign: 'center' },
+
+  /* PMD Section */
+  pmdBlockedTitle: { fontSize: 15, fontWeight: '700', marginBottom: 6 },
+  pmdLinksRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  pmdLinkBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
+  pmdLinkText: { fontSize: 13, fontWeight: '700' },
+  pmdAlertBanner: { borderWidth: 1, borderRadius: 14, padding: 14, flexDirection: 'row', marginBottom: 12 },
+  pmdAlertIcon: { fontSize: 20, marginRight: 10, marginTop: 2 },
+  pmdAlertContent: { flex: 1 },
+  pmdAlertTitle: { fontSize: 14, fontWeight: '800', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
+  pmdAlertText: { fontSize: 13, lineHeight: 18, marginBottom: 4 },
+  pmdCityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 8 },
+  pmdCityCard: { borderWidth: 1, borderRadius: 14, padding: 12, width: '48%', minWidth: 150 },
+  pmdCityHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  pmdCityName: { fontSize: 14, fontWeight: '700', flexShrink: 1 },
+  pmdTempBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  pmdTempText: { fontSize: 12, fontWeight: '700' },
+  pmdCondition: { fontSize: 12, marginBottom: 2 },
+  pmdHumidity: { fontSize: 11 },
+  pmdForecastDays: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 8, paddingTop: 8 },
+  pmdDayRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+  pmdDayLabel: { fontSize: 11, flex: 1 },
+  pmdDayCondition: { fontSize: 11, flex: 2, textAlign: 'center' },
+  pmdDayTemp: { fontSize: 12, fontWeight: '700', flex: 1, textAlign: 'right' },
 
   /* Motorway Cards */
   card: { borderRadius: 12, borderWidth: 1, marginBottom: 12, overflow: 'hidden' },

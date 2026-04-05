@@ -1,134 +1,136 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { mockAqiData } from '../data/mockData';
+import { GOOGLE_MAPS_API_KEY } from '../config/googleApi';
+import * as persistentCache from '../utils/persistentCache';
 
-const WAQI_TOKEN = 'fa217d84d875678ab48bcbad199fdd0a059c4aa7';
 const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+const CACHE_NS = 'aqi';
 
-const cache = {};
-
-function getCached(cityName) {
-  const entry = cache[cityName];
-  if (entry && Date.now() - entry.timestamp < CACHE_TTL) {
-    return entry.data;
-  }
-  return null;
+function cacheKey(lat, lon) {
+  return `${lat.toFixed(3)},${lon.toFixed(3)}`;
 }
 
-function setCache(cityName, data) {
-  cache[cityName] = { data, timestamp: Date.now() };
+function getCached(key) {
+  return persistentCache.get(CACHE_NS, key, CACHE_TTL);
 }
 
-function getFallback(cityName) {
-  const key = Object.keys(mockAqiData).find(
-    (k) => k.toLowerCase() === cityName.toLowerCase()
-  );
-  if (key) {
-    const mock = mockAqiData[key];
-    return { aqi: mock.aqi, pm25: mock.pm25, pm10: mock.pm10 };
-  }
-  return { aqi: null, pm25: null, pm10: null };
+function setCache(key, data) {
+  persistentCache.set(CACHE_NS, key, data);
 }
 
-export async function fetchAqiForCity(cityName) {
-  const cached = getCached(cityName);
+/**
+ * Fetch AQI for a location via Google Air Quality API.
+ * Returns { aqi, pm25, pm10, category, dominantPollutant }
+ */
+export async function fetchAqiForLocation(lat, lon) {
+  if (lat == null || lon == null) return { aqi: null, pm25: null, pm10: null };
+
+  const key = cacheKey(lat, lon);
+  const cached = getCached(key);
   if (cached) return cached;
 
   try {
     const response = await fetch(
-      `https://api.waqi.info/feed/${cityName}/?token=${WAQI_TOKEN}`
+      `https://airquality.googleapis.com/v1/currentConditions:lookup?key=${GOOGLE_MAPS_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: { latitude: lat, longitude: lon },
+          extraComputations: ['LOCAL_AQI', 'POLLUTANT_CONCENTRATION', 'DOMINANT_POLLUTANT_CONCENTRATION'],
+          languageCode: 'en',
+        }),
+      }
     );
+
     const json = await response.json();
+    if (json.error) throw new Error(json.error.message || 'Google AQI error');
 
-    if (json.status !== 'ok') {
-      throw new Error(json.data || 'API returned error');
-    }
+    // Prefer USA EPA AQI (matches Pakistan context), fall back to Universal AQI
+    const indexes = json.indexes || [];
+    const usaEpa = indexes.find((i) => i.code === 'usa_epa');
+    const uaqi = indexes.find((i) => i.code === 'uaqi');
+    const primary = usaEpa || uaqi || indexes[0];
 
-    const result = {
-      aqi: json.data.aqi,
-      pm25: json.data.iaqi?.pm25?.v ?? null,
-      pm10: json.data.iaqi?.pm10?.v ?? null,
+    const pollutants = json.pollutants || [];
+    const getPollutant = (code) => {
+      const p = pollutants.find((x) => x.code === code);
+      if (!p || !p.concentration) return null;
+      return Math.round(p.concentration.value);
     };
 
-    setCache(cityName, result);
+    const result = {
+      aqi: primary?.aqi ?? null,
+      pm25: getPollutant('pm25'),
+      pm10: getPollutant('pm10'),
+      category: primary?.category ?? null,
+      dominantPollutant: primary?.dominantPollutant ?? null,
+    };
+
+    setCache(key, result);
     return result;
   } catch (err) {
-    const fallback = getFallback(cityName);
-    return fallback;
+    return { aqi: null, pm25: null, pm10: null, error: err.message };
   }
 }
 
-export default function useAQI(cityName = 'lahore') {
+/**
+ * Backwards-compat helper for callers passing a city object with lat/lon.
+ */
+export async function fetchAqiForCity(cityOrName) {
+  if (cityOrName && typeof cityOrName === 'object' && cityOrName.lat != null) {
+    return fetchAqiForLocation(cityOrName.lat, cityOrName.lon);
+  }
+  return { aqi: null, pm25: null, pm10: null };
+}
+
+export default function useAQI(lat, lon) {
   const [aqi, setAqi] = useState(null);
   const [pm25, setPm25] = useState(null);
   const [pm10, setPm10] = useState(null);
+  const [category, setCategory] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isUsingCache, setIsUsingCache] = useState(false);
-  const currentCity = useRef(cityName);
+  const currentCoords = useRef({ lat, lon });
 
-  const fetchData = useCallback(async (city) => {
+  const fetchData = useCallback(async (la, lo) => {
+    if (la == null || lo == null) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     setIsUsingCache(false);
 
-    const cached = getCached(city);
+    const key = cacheKey(la, lo);
+    const cached = getCached(key);
     if (cached) {
       setAqi(cached.aqi);
       setPm25(cached.pm25);
       setPm10(cached.pm10);
+      setCategory(cached.category);
       setIsUsingCache(true);
       setLoading(false);
       return;
     }
 
-    try {
-      const response = await fetch(
-        `https://api.waqi.info/feed/${city}/?token=${WAQI_TOKEN}`
-      );
-      const json = await response.json();
-
-      if (json.status !== 'ok') {
-        throw new Error(json.data || 'API returned error');
-      }
-
-      const result = {
-        aqi: json.data.aqi,
-        pm25: json.data.iaqi?.pm25?.v ?? null,
-        pm10: json.data.iaqi?.pm10?.v ?? null,
-      };
-
-      setCache(city, result);
-      setAqi(result.aqi);
-      setPm25(result.pm25);
-      setPm10(result.pm10);
-    } catch (err) {
-      const fallback = getFallback(city);
-      setAqi(fallback.aqi);
-      setPm25(fallback.pm25);
-      setPm10(fallback.pm10);
-      setError(err.message || 'Failed to fetch AQI data');
-      setIsUsingCache(true);
-    } finally {
-      setLoading(false);
-    }
+    const result = await fetchAqiForLocation(la, lo);
+    setAqi(result.aqi);
+    setPm25(result.pm25);
+    setPm10(result.pm10);
+    setCategory(result.category);
+    if (result.error) setError(result.error);
+    setLoading(false);
   }, []);
 
   const refresh = useCallback(() => {
-    fetchData(currentCity.current);
+    fetchData(currentCoords.current.lat, currentCoords.current.lon);
   }, [fetchData]);
 
-  const fetchCityAqi = useCallback(
-    (city) => {
-      currentCity.current = city;
-      fetchData(city);
-    },
-    [fetchData]
-  );
-
   useEffect(() => {
-    currentCity.current = cityName;
-    fetchData(cityName);
-  }, [cityName, fetchData]);
+    currentCoords.current = { lat, lon };
+    fetchData(lat, lon);
+  }, [lat, lon, fetchData]);
 
-  return { aqi, pm25, pm10, loading, error, isUsingCache, refresh, fetchCityAqi };
+  return { aqi, pm25, pm10, category, loading, error, isUsingCache, refresh };
 }
