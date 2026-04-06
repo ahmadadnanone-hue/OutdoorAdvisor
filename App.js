@@ -41,7 +41,7 @@ const TAB_ICONS = {
   Home: { icon: '🏠', label: 'Home' },
   Travel: { icon: '🛣️', label: 'Travel' },
   Activities: { icon: '🏃', label: 'Activities' },
-  Alerts: { icon: '⚙️', label: 'Alerts' },
+  Settings: { icon: '⚙️', label: 'Settings' },
 };
 
 function TabIcon({ name, focused, color }) {
@@ -107,7 +107,7 @@ function AppNavigator() {
           <Tab.Screen name="Home" component={HomeScreen} />
           <Tab.Screen name="Travel" component={TravelScreen} />
           <Tab.Screen name="Activities" component={ActivitiesScreen} />
-          <Tab.Screen name="Alerts" component={AlertsScreen} />
+          <Tab.Screen name="Settings" component={AlertsScreen} />
         </Tab.Navigator>
       </NavigationContainer>
     </>
