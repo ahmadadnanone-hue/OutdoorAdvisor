@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { mockWeatherData } from '../data/mockData';
 import { CITIES } from '../data/cities';
 
-const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 const cache = {};
 

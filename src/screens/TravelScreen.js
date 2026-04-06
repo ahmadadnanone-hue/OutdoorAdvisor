@@ -45,6 +45,48 @@ const SEVERITY_CONFIG = {
   clear: { icon: '✅', color: '#22C55E', bg: 'rgba(34,197,94,0.12)', label: 'CLEAR' },
 };
 
+const ROUTE_ALERT_KEYWORDS = {
+  E35: ['hazara', 'mansehra', 'abbottabad', 'haripur', 'burhan'],
+  KKH: ['karakoram', 'gilgit', 'chilas', 'besham', 'mansehra', 'abbottabad'],
+  N15: ['naran', 'kaghan', 'balakot', 'babusar', 'mansehra'],
+  MURREE: ['murree', 'bhurban', 'patriata', 'kohala'],
+  SWAT: ['swat', 'mingora', 'kalam', 'malakand', 'mardan'],
+};
+
+function findNhmpRouteMatch(route, advisories) {
+  const routeId = route.id.toLowerCase();
+  const routeName = route.name.toLowerCase();
+
+  return advisories.find((advisory) => {
+    const haystack = `${advisory.route || ''} ${advisory.sector || ''} ${advisory.status || ''}`.toLowerCase();
+    return haystack.includes(routeId) || haystack.includes(routeName);
+  }) || null;
+}
+
+function findRelevantPmdAlerts(route, alerts) {
+  const staticKeywords = ROUTE_ALERT_KEYWORDS[route.id] || [];
+  const dynamicKeywords = route.stops.map((stop) => stop.name.toLowerCase());
+  const keywords = [...new Set([...staticKeywords, ...dynamicKeywords, route.name.toLowerCase()])];
+
+  return alerts.filter((alert) => {
+    const text = String(alert || '').toLowerCase();
+    return keywords.some((keyword) => text.includes(keyword));
+  });
+}
+
+function getRouteSourceSummary(route, advisory, matchedAlerts) {
+  if (route.kind === 'motorway') {
+    if (advisory) return 'Source: NHMP advisory first, then live stop weather/AQI and PMD weather context.';
+    return 'Source: live stop weather/AQI with PMD weather context. NHMP did not publish a route-specific entry in the latest feed.';
+  }
+
+  if (matchedAlerts.length > 0) {
+    return 'Source: live stop weather/AQI plus PMD regional alerts for this corridor.';
+  }
+
+  return 'Source: live stop weather/AQI along route stops. PMD currently has no route-specific alert in the latest feed.';
+}
+
 function isFog(weatherCode) { return weatherCode === 45 || weatherCode === 48; }
 function isRain(weatherCode) { return weatherCode >= 61 && weatherCode <= 82; }
 
@@ -400,6 +442,20 @@ export default function TravelScreen() {
 
       {TRAVEL_ROUTES.map((motorway, index) => {
         const isExpanded = expandedMotorway === index;
+        const matchedAdvisory = motorway.kind === 'motorway' ? findNhmpRouteMatch(motorway, nhmpData) : null;
+        const matchedPmdAlerts = findRelevantPmdAlerts(motorway, pmdAlerts);
+        const sourceSummary = getRouteSourceSummary(motorway, matchedAdvisory, matchedPmdAlerts);
+        const sourceBadge =
+          motorway.kind === 'motorway'
+            ? matchedAdvisory
+              ? matchedAdvisory.severity === 'clear'
+                ? { label: 'NHMP Clear', color: '#22C55E', bg: 'rgba(34,197,94,0.14)' }
+                : { label: 'NHMP Alert', color: '#EF4444', bg: 'rgba(239,68,68,0.14)' }
+              : { label: 'Live Scan', color: colors.primary, bg: colors.primary + '15' }
+            : matchedPmdAlerts.length > 0
+            ? { label: 'PMD Alert', color: '#EF4444', bg: 'rgba(239,68,68,0.14)' }
+            : { label: 'Live Scan', color: colors.primary, bg: colors.primary + '15' };
+
         return (
           <View
             key={motorway.id}
@@ -414,11 +470,27 @@ export default function TravelScreen() {
                 <Text style={styles.roadEmoji}>{motorway.emoji || '🛣️'}</Text>
                 <View style={styles.routeTitleWrap}>
                   <Text style={[styles.motorwayName, { color: colors.text }]}>{motorway.name}</Text>
-                  <View style={[styles.routeKindBadge, { backgroundColor: colors.primary + '15' }]}>
-                    <Text style={[styles.routeKindText, { color: colors.primary }]}>
-                      {motorway.kind || 'route'}
-                    </Text>
+                  <View style={styles.routeBadgeRow}>
+                    <View style={[styles.routeKindBadge, { backgroundColor: colors.primary + '15' }]}>
+                      <Text style={[styles.routeKindText, { color: colors.primary }]}>
+                        {motorway.kind || 'route'}
+                      </Text>
+                    </View>
+                    <View style={[styles.routeKindBadge, { backgroundColor: sourceBadge.bg }]}>
+                      <Text style={[styles.routeKindText, { color: sourceBadge.color }]}>
+                        {sourceBadge.label}
+                      </Text>
+                    </View>
                   </View>
+                  {matchedAdvisory?.status ? (
+                    <Text style={[styles.routeMetaText, { color: matchedAdvisory.severity === 'clear' ? colors.textSecondary : '#EF4444' }]} numberOfLines={2}>
+                      {matchedAdvisory.status}
+                    </Text>
+                  ) : matchedPmdAlerts[0] ? (
+                    <Text style={[styles.routeMetaText, { color: colors.textSecondary }]} numberOfLines={2}>
+                      PMD: {matchedPmdAlerts[0]}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
               <Text style={[styles.chevron, { color: colors.textSecondary }]}>
@@ -428,6 +500,19 @@ export default function TravelScreen() {
 
             {isExpanded && (
               <View style={styles.expandedContent}>
+                <Text style={[styles.routeSourceText, { color: colors.textSecondary }]}>
+                  {sourceSummary}
+                </Text>
+                {matchedPmdAlerts.length > 0 && (
+                  <View style={[styles.routeAlertNote, { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.18)' }]}>
+                    <Text style={[styles.routeAlertTitle, { color: '#EF4444' }]}>PMD note</Text>
+                    {matchedPmdAlerts.slice(0, 2).map((alert, alertIndex) => (
+                      <Text key={`${motorway.id}-alert-${alertIndex}`} style={[styles.routeAlertBody, { color: colors.textSecondary }]}>
+                        {alert}
+                      </Text>
+                    ))}
+                  </View>
+                )}
                 {isLoading(index) ? (
                   <View style={styles.loadingContainer}>
                     <ActivityIndicator size="small" color={colors.primary} />
@@ -513,10 +598,16 @@ const styles = StyleSheet.create({
   roadEmoji: { fontSize: 22, marginRight: 10 },
   routeTitleWrap: { flex: 1 },
   motorwayName: { fontSize: typography.subtitle, fontWeight: '600', flexShrink: 1 },
+  routeBadgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
   routeKindBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, marginTop: 6 },
   routeKindText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  routeMetaText: { fontSize: 12, marginTop: 8, lineHeight: 18 },
   chevron: { fontSize: 14, marginLeft: 8 },
   expandedContent: { paddingHorizontal: 16, paddingBottom: 12 },
+  routeSourceText: { fontSize: 12, lineHeight: 18, marginBottom: 10 },
+  routeAlertNote: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
+  routeAlertTitle: { fontSize: 11, fontWeight: '800', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
+  routeAlertBody: { fontSize: 12, lineHeight: 18, marginBottom: 4 },
   loadingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 20 },
   loadingText: { fontSize: typography.body, marginLeft: 10 },
   noDataText: { fontSize: typography.body, textAlign: 'center', paddingVertical: 16 },

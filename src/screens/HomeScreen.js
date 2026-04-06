@@ -11,6 +11,7 @@ import {
   Modal,
   FlatList,
   Pressable,
+  Platform,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
@@ -201,9 +202,9 @@ export default function HomeScreen({ navigation }) {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        refreshControl={
+        refreshControl={Platform.OS !== 'web' ? (
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-        }
+        ) : undefined}
       >
         {/* ===== 1. Premium Header ===== */}
         <View style={styles.headerBar}>
@@ -225,6 +226,15 @@ export default function HomeScreen({ navigation }) {
             </View>
           </View>
           <View style={styles.headerRight}>
+            {Platform.OS === 'web' && (
+              <TouchableOpacity
+                style={[styles.webRefreshBtn, { backgroundColor: colors.primary + '14' }]}
+                onPress={onRefresh}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.webRefreshBtnText, { color: colors.primary }]}>Refresh</Text>
+              </TouchableOpacity>
+            )}
             <View style={styles.headerWeather}>
               <Text style={styles.weatherEmoji}>{weather.icon}</Text>
               <Text style={[styles.headerTemp, { color: colors.text }]}>
@@ -237,6 +247,11 @@ export default function HomeScreen({ navigation }) {
 
         {/* Cache Indicator */}
         <CacheIndicator visible={aqiCached || weatherCached} />
+        {Platform.OS === 'web' && (
+          <Text style={[styles.webRefreshHint, { color: colors.textSecondary }]}>
+            Use the Refresh button above on web. Browser pull-to-refresh is not reliable here.
+          </Text>
+        )}
 
         {/* ===== Customizable Sections ===== */}
         {settings.homeSections.map((key) => {
@@ -418,6 +433,33 @@ export default function HomeScreen({ navigation }) {
           <Pressable style={[styles.modalContent, { backgroundColor: isDark ? '#151D2E' : '#FFFFFF' }]} onPress={(e) => e.stopPropagation && e.stopPropagation()}>
             <View style={styles.modalHandle} />
             <Text style={[styles.modalTitle, { color: colors.text }]}>Search City</Text>
+            <TouchableOpacity
+              style={[
+                styles.currentLocationCta,
+                {
+                  backgroundColor: isDark ? 'rgba(79,142,247,0.14)' : 'rgba(79,142,247,0.08)',
+                  borderColor: colors.primary + '33',
+                },
+              ]}
+              activeOpacity={0.8}
+              onPress={async () => {
+                const nextLocation = await refreshLocation(true);
+                if (nextLocation?.lat != null && nextLocation?.lon != null) {
+                  refreshAqi(nextLocation.lat, nextLocation.lon);
+                  refreshWeather(nextLocation.lat, nextLocation.lon);
+                  refreshPollen(nextLocation.lat, nextLocation.lon);
+                }
+                setCityPickerVisible(false);
+              }}
+            >
+              <Text style={styles.currentLocationIcon}>📍</Text>
+              <View style={styles.currentLocationTextWrap}>
+                <Text style={[styles.currentLocationTitle, { color: colors.text }]}>Use Current Location</Text>
+                <Text style={[styles.currentLocationBody, { color: colors.textSecondary }]}>
+                  Switch back from searched cities to your live device location.
+                </Text>
+              </View>
+            </TouchableOpacity>
             <View style={{ marginBottom: 14 }}>
               <PlacesAutocomplete
                 onPlaceSelect={(place) => {
@@ -657,6 +699,22 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingTop: 4,
   },
+  webRefreshBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  webRefreshBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  webRefreshHint: {
+    fontSize: 11,
+    textAlign: 'center',
+    marginBottom: 10,
+    opacity: 0.75,
+  },
   headerWeather: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -809,6 +867,31 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 12,
     paddingHorizontal: 20,
+  },
+  currentLocationCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    marginHorizontal: 20,
+    marginBottom: 14,
+    borderRadius: 16,
+    padding: 14,
+  },
+  currentLocationIcon: {
+    fontSize: 18,
+    marginRight: 12,
+  },
+  currentLocationTextWrap: {
+    flex: 1,
+  },
+  currentLocationTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  currentLocationBody: {
+    fontSize: 12,
+    lineHeight: 18,
   },
   cityOption: {
     flexDirection: 'row',

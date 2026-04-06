@@ -13,11 +13,26 @@ function fullKey(namespace, key) {
 }
 
 export function get(namespace, key, ttlMs) {
+  const entry = getEntry(namespace, key);
+  if (entry && Date.now() - entry.timestamp < ttlMs) return entry.data;
+  if (entry) {
+    const full = fullKey(namespace, key);
+    delete memory[full];
+    if (isWeb) {
+      try {
+        window.localStorage.removeItem(full);
+      } catch {}
+    }
+  }
+  return null;
+}
+
+export function getEntry(namespace, key) {
   const full = fullKey(namespace, key);
 
   // 1. In-memory (fastest)
   const mem = memory[full];
-  if (mem && Date.now() - mem.timestamp < ttlMs) return mem.data;
+  if (mem && typeof mem.timestamp === 'number') return mem;
 
   // 2. localStorage fallback (survives reloads)
   if (isWeb) {
@@ -26,12 +41,8 @@ export function get(namespace, key, ttlMs) {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed.timestamp === 'number') {
-          if (Date.now() - parsed.timestamp < ttlMs) {
-            memory[full] = parsed; // promote into memory for future reads
-            return parsed.data;
-          }
-          // Expired — clean it up
-          window.localStorage.removeItem(full);
+          memory[full] = parsed; // promote into memory for future reads
+          return parsed;
         }
       }
     } catch {

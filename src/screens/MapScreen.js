@@ -14,6 +14,11 @@ import typography from '../theme/typography';
 import { CITIES, ALL_AQI_POINTS } from '../data/cities';
 import { fetchAqiForLocation } from '../hooks/useAQI';
 import { loadGoogleMaps } from '../config/googleApi';
+import * as persistentCache from '../utils/persistentCache';
+
+const MAP_CACHE_NS = 'aqi_map';
+const MAP_CACHE_KEY = 'all_points_v1';
+const MAP_CACHE_TTL = 30 * 60 * 1000;
 
 // Google Maps dark style (subtle, to match app dark theme)
 const DARK_MAP_STYLES = [
@@ -157,6 +162,13 @@ export default function MapScreen() {
     let cancelled = false;
 
     async function fetchAll() {
+      const cached = persistentCache.get(MAP_CACHE_NS, MAP_CACHE_KEY, MAP_CACHE_TTL);
+      if (cached && !cancelled) {
+        setAqiData(cached);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       // Fetch every point (major cities + sub-areas) in parallel.
       // Google Air Quality API is hyperlocal so each point returns a distinct reading.
@@ -177,6 +189,7 @@ export default function MapScreen() {
       });
 
       setAqiData(aqiMap);
+      persistentCache.set(MAP_CACHE_NS, MAP_CACHE_KEY, aqiMap);
       setLoading(false);
     }
 

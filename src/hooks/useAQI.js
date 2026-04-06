@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchApiJson } from '../config/api';
 import * as persistentCache from '../utils/persistentCache';
 
-const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 const CACHE_NS = 'aqi';
 
 function cacheKey(lat, lon) {
