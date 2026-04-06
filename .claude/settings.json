@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /Users/ahmedadnan/OutdoorAdvisor && git pull --rebase 2>/dev/null || true",
+            "timeout": 30,
+            "statusMessage": "Pulling latest changes..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /Users/ahmedadnan/OutdoorAdvisor && git add -A && git diff --cached --quiet || git commit -m \"auto-sync: $(date '+%Y-%m-%d %H:%M:%S')\" && git push 2>/dev/null || true",
+            "timeout": 60,
+            "statusMessage": "Auto-syncing to GitHub..."
+          }
+        ]
+      }
+    ]
+  }
+}

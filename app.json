@@ -3,6 +3,7 @@
     "name": "OutdoorAdvisor",
     "slug": "OutdoorAdvisor",
     "version": "1.0.0",
+    "_test": "auto-sync hook test",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
