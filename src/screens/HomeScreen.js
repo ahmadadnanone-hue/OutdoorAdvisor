@@ -441,13 +441,12 @@ export default function HomeScreen({ navigation }) {
             <Text style={[styles.modalTitle, { color: colors.text }]}>Search City</Text>
             <TouchableOpacity
               style={[
-                styles.currentLocationCta,
+                styles.currentLocationRow,
                 {
-                  backgroundColor: isDark ? 'rgba(79,142,247,0.14)' : 'rgba(79,142,247,0.08)',
-                  borderColor: colors.primary + '33',
+                  borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
                 },
               ]}
-              activeOpacity={0.8}
+              activeOpacity={0.75}
               onPress={async () => {
                 const nextLocation = await refreshLocation(true);
                 if (nextLocation?.lat != null && nextLocation?.lon != null) {
@@ -458,13 +457,10 @@ export default function HomeScreen({ navigation }) {
                 setCityPickerVisible(false);
               }}
             >
-              <Text style={styles.currentLocationIcon}>📍</Text>
-              <View style={styles.currentLocationTextWrap}>
-                <Text style={[styles.currentLocationTitle, { color: colors.text }]}>Use Current Location</Text>
-                <Text style={[styles.currentLocationBody, { color: colors.textSecondary }]}>
-                  Switch back from searched cities to your live device location.
-                </Text>
-              </View>
+              <Text style={styles.currentLocationRowIcon}>📍</Text>
+              <Text style={[styles.currentLocationRowText, { color: colors.text }]}>
+                Current Location
+              </Text>
             </TouchableOpacity>
             <View style={{ marginBottom: 14 }}>
               <PlacesAutocomplete
@@ -874,30 +870,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     paddingHorizontal: 20,
   },
-  currentLocationCta: {
+  currentLocationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
     marginHorizontal: 20,
     marginBottom: 14,
-    borderRadius: 16,
-    padding: 14,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
   },
-  currentLocationIcon: {
-    fontSize: 18,
-    marginRight: 12,
+  currentLocationRowIcon: {
+    fontSize: 16,
+    marginRight: 10,
   },
-  currentLocationTextWrap: {
-    flex: 1,
-  },
-  currentLocationTitle: {
+  currentLocationRowText: {
     fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  currentLocationBody: {
-    fontSize: 12,
-    lineHeight: 18,
+    fontWeight: '600',
   },
   cityOption: {
     flexDirection: 'row',
