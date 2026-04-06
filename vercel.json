@@ -18,6 +18,9 @@
     "api/google/geocode.js": {
       "maxDuration": 30
     },
+    "api/google/pollen.js": {
+      "maxDuration": 30
+    },
     "api/google/weather.js": {
       "maxDuration": 30
     }

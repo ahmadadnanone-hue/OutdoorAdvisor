@@ -20,7 +20,7 @@ const TABS = ['Thresholds', 'Notifications', 'Customize', 'About'];
 const SECTION_META = {
   aqi: { label: 'AQI Hero Card', icon: '🌬️', desc: 'Air Quality Index with scale bar' },
   wind: { label: 'Wind', icon: '💨', desc: 'Wind speed, gusts & direction' },
-  details: { label: 'Current Details', icon: '📊', desc: 'Feels like, PM2.5, temp grid' },
+  details: { label: 'Current Details', icon: '📊', desc: 'Feels like, PM2.5, temp, and pollen' },
   forecast: { label: '7-Day Forecast', icon: '📅', desc: 'Weekly weather outlook' },
   activities: { label: 'Activity Advisory', icon: '🏃', desc: 'Outdoor activity recommendations' },
 };
@@ -513,6 +513,10 @@ export default function AlertsScreen() {
           <View style={styles.aboutRow}>
             <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
             <Text style={[styles.aboutRowText, { color: colors.text }]}>Google Weather API for current conditions and 7-day forecasts</Text>
+          </View>
+          <View style={styles.aboutRow}>
+            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
+            <Text style={[styles.aboutRowText, { color: colors.text }]}>Google Pollen API for localized pollen outlook and seasonal sensitivity signals</Text>
           </View>
           <View style={styles.aboutRow}>
             <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>

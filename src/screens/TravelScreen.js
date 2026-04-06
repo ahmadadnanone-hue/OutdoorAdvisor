@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
-import { MOTORWAYS } from '../data/cities';
+import { TRAVEL_ROUTES } from '../data/cities';
 import { fetchWeatherForLocation } from '../hooks/useWeather';
 import { fetchAqiForLocation } from '../hooks/useAQI';
 import { getWeatherDescription } from '../utils/weatherCodes';
@@ -170,7 +170,7 @@ export default function TravelScreen() {
       setExpandedMotorway(index);
       if (stopData[index] || fetchingRef.current[index]) return;
       fetchingRef.current[index] = true;
-      const motorway = MOTORWAYS[index];
+      const motorway = TRAVEL_ROUTES[index];
       try {
         const results = await Promise.all(
           motorway.stops.map(async (stop) => {
@@ -380,12 +380,15 @@ export default function TravelScreen() {
         )}
       </View>
 
-      {/* Weather-Based Motorway Conditions */}
+      {/* Weather-Based Route Conditions */}
       <Text style={[styles.title, { color: colors.text, marginTop: 24 }]}>
-        Weather Along Motorways
+        Weather Along Major Routes
+      </Text>
+      <Text style={[styles.routeSubtitle, { color: colors.textSecondary }]}>
+        Includes motorways, northern highways, and mountain access corridors.
       </Text>
 
-      {MOTORWAYS.map((motorway, index) => {
+      {TRAVEL_ROUTES.map((motorway, index) => {
         const isExpanded = expandedMotorway === index;
         return (
           <View
@@ -398,8 +401,15 @@ export default function TravelScreen() {
               activeOpacity={0.7}
             >
               <View style={styles.cardHeaderLeft}>
-                <Text style={styles.roadEmoji}>🛣️</Text>
-                <Text style={[styles.motorwayName, { color: colors.text }]}>{motorway.name}</Text>
+                <Text style={styles.roadEmoji}>{motorway.emoji || '🛣️'}</Text>
+                <View style={styles.routeTitleWrap}>
+                  <Text style={[styles.motorwayName, { color: colors.text }]}>{motorway.name}</Text>
+                  <View style={[styles.routeKindBadge, { backgroundColor: colors.primary + '15' }]}>
+                    <Text style={[styles.routeKindText, { color: colors.primary }]}>
+                      {motorway.kind || 'route'}
+                    </Text>
+                  </View>
+                </View>
               </View>
               <Text style={[styles.chevron, { color: colors.textSecondary }]}>
                 {isExpanded ? '▲' : '▼'}
@@ -486,10 +496,14 @@ const styles = StyleSheet.create({
 
   /* Motorway Cards */
   card: { borderRadius: 12, borderWidth: 1, marginBottom: 12, overflow: 'hidden' },
+  routeSubtitle: { fontSize: 13, marginBottom: 12, lineHeight: 18 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
   cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   roadEmoji: { fontSize: 22, marginRight: 10 },
+  routeTitleWrap: { flex: 1 },
   motorwayName: { fontSize: typography.subtitle, fontWeight: '600', flexShrink: 1 },
+  routeKindBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, marginTop: 6 },
+  routeKindText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   chevron: { fontSize: 14, marginLeft: 8 },
   expandedContent: { paddingHorizontal: 16, paddingBottom: 12 },
   loadingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 20 },

@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Linking, Platform } from 'react-native';
 import { loadGoogleMaps } from '../config/googleApi';
+import { fetchAqiForLocation } from '../hooks/useAQI';
 import * as persistentCache from '../utils/persistentCache';
 import typography from '../theme/typography';
+import { getAqiColor, getAqiCategory } from '../theme/colors';
 
 // 24-hour cache — places don't move
 const PLACES_CACHE_TTL = 24 * 60 * 60 * 1000;
@@ -64,14 +66,14 @@ export default function NearbyPlaces({ lat, lon, keyword, type, colors, title = 
           type: type || undefined,
         };
 
-        service.nearbySearch(request, (results, status) => {
+        service.nearbySearch(request, async (results, status) => {
           if (cancelled) return;
           if (status !== maps.places.PlacesServiceStatus.OK || !results) {
             setPlaces([]);
             return;
           }
 
-          const enriched = results
+          const basePlaces = results
             .filter((r) => r.geometry?.location)
             .map((r) => {
               const pLat = r.geometry.location.lat();
@@ -91,8 +93,25 @@ export default function NearbyPlaces({ lat, lon, keyword, type, colors, title = 
             .sort((a, b) => a.distanceKm - b.distanceKm)
             .slice(0, 6);
 
-          persistentCache.set(PLACES_CACHE_NS, cacheKey, enriched);
-          setPlaces(enriched);
+          try {
+            const enriched = await Promise.all(
+              basePlaces.map(async (place) => {
+                const aqiData = await fetchAqiForLocation(place.lat, place.lon);
+                return {
+                  ...place,
+                  aqi: aqiData?.aqi ?? null,
+                };
+              })
+            );
+
+            if (cancelled) return;
+            persistentCache.set(PLACES_CACHE_NS, cacheKey, enriched);
+            setPlaces(enriched);
+          } catch {
+            if (cancelled) return;
+            persistentCache.set(PLACES_CACHE_NS, cacheKey, basePlaces);
+            setPlaces(basePlaces);
+          }
         });
       } catch (e) {
         if (!cancelled) {
@@ -167,6 +186,11 @@ export default function NearbyPlaces({ lat, lon, keyword, type, colors, title = 
                 )}
                 {p.open === false && (
                   <Text style={[styles.metaText, { color: '#EF4444' }]}>Closed</Text>
+                )}
+                {p.aqi != null && (
+                  <Text style={[styles.metaText, { color: getAqiColor(p.aqi) }]}>
+                    AQI {p.aqi} · {getAqiCategory(p.aqi)}
+                  </Text>
                 )}
               </View>
             </View>

@@ -17,6 +17,7 @@ import { useSettings } from '../context/SettingsContext';
 import useLocation from '../hooks/useLocation';
 import useAQI from '../hooks/useAQI';
 import useWeather from '../hooks/useWeather';
+import usePollen from '../hooks/usePollen';
 import { getWeatherDescription } from '../utils/weatherCodes';
 import { getAqiColor } from '../theme/colors';
 import { CITIES } from '../data/cities';
@@ -76,6 +77,7 @@ export default function HomeScreen({ navigation }) {
     isUsingCache: weatherCached,
     refresh: refreshWeather,
   } = useWeather(location.lat, location.lon);
+  const { primary: pollenPrimary, refresh: refreshPollen } = usePollen(location.lat, location.lon);
 
   const [refreshing, setRefreshing] = useState(false);
   const [cityPickerVisible, setCityPickerVisible] = useState(false);
@@ -87,9 +89,10 @@ export default function HomeScreen({ navigation }) {
     if (nextLocation?.lat != null && nextLocation?.lon != null) {
       refreshAqi(nextLocation.lat, nextLocation.lon);
       refreshWeather(nextLocation.lat, nextLocation.lon);
+      refreshPollen(nextLocation.lat, nextLocation.lon);
     }
     setRefreshing(false);
-  }, [refreshLocation, refreshAqi, refreshWeather]);
+  }, [refreshLocation, refreshAqi, refreshWeather, refreshPollen]);
 
   const handleActivityPress = (activity) => {
     navigation.navigate('Activities');
@@ -134,6 +137,10 @@ export default function HomeScreen({ navigation }) {
 
   // AQI color for pm2.5 metric card
   const pm25Color = pm25 != null ? getAqiColor(pm25) : '#7A8BA7';
+  const pollenValue = pollenPrimary?.value;
+  const pollenDisplayName = pollenPrimary?.displayName || 'Pollen';
+  const pollenCategory = pollenPrimary?.indexDisplayName || pollenPrimary?.category || '--';
+  const pollenColor = pollenValue != null ? getAqiColor((pollenValue + 1) * 50) : '#7A8BA7';
 
   // Loading screen while location is being determined
   if (locationLoading) {
@@ -266,6 +273,15 @@ export default function HomeScreen({ navigation }) {
                         {settings.formatTempShort(weatherCurrent?.temp)}
                       </Text>
                       <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Temp</Text>
+                    </View>
+                    <View style={[styles.detailCard, { backgroundColor: colors.card }, cardShadow, cardBorder]}>
+                      <Text style={styles.detailIcon}>🌼</Text>
+                      <Text style={[styles.detailValue, { color: pollenColor }]}>
+                        {pollenValue != null ? pollenValue : '--'}
+                      </Text>
+                      <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
+                        {pollenDisplayName}: {pollenCategory}
+                      </Text>
                     </View>
                   </View>
                 </View>

@@ -83,9 +83,11 @@ export const ALL_AQI_POINTS = [
   ...AREAS.map((a) => ({ key: `${a.city}:${a.name}`, label: a.name, sub: a.city, lat: a.lat, lon: a.lon, isMajor: false })),
 ];
 
-export const MOTORWAYS = [
+export const TRAVEL_ROUTES = [
   {
     id: 'M1',
+    kind: 'motorway',
+    emoji: '🛣️',
     name: 'M1 Peshawar-Islamabad',
     stops: [
       { name: 'Peshawar', lat: 34.0151, lon: 71.5249 },
@@ -96,6 +98,8 @@ export const MOTORWAYS = [
   },
   {
     id: 'M2',
+    kind: 'motorway',
+    emoji: '🛣️',
     name: 'M2 Islamabad-Lahore',
     stops: [
       { name: 'Islamabad', lat: 33.6844, lon: 73.0479 },
@@ -109,6 +113,8 @@ export const MOTORWAYS = [
   },
   {
     id: 'M3',
+    kind: 'motorway',
+    emoji: '🛣️',
     name: 'M3 Lahore-Abdul Hakam',
     stops: [
       { name: 'Lahore', lat: 31.5204, lon: 74.3587 },
@@ -119,6 +125,8 @@ export const MOTORWAYS = [
   },
   {
     id: 'M4',
+    kind: 'motorway',
+    emoji: '🛣️',
     name: 'M4 Abdul Hakam-Multan',
     stops: [
       { name: 'Abdul Hakam', lat: 30.7500, lon: 72.1167 },
@@ -128,10 +136,79 @@ export const MOTORWAYS = [
   },
   {
     id: 'M9',
+    kind: 'motorway',
+    emoji: '🛣️',
     name: 'M9 Karachi-Hyderabad',
     stops: [
       { name: 'Karachi', lat: 24.8607, lon: 67.0011 },
       { name: 'Hyderabad', lat: 25.3960, lon: 68.3578 },
     ],
   },
+  {
+    id: 'E35',
+    kind: 'expressway',
+    emoji: '🚧',
+    name: 'Hazara Expressway (Islamabad-Mansehra)',
+    stops: [
+      { name: 'Islamabad', lat: 33.6844, lon: 73.0479 },
+      { name: 'Burhan', lat: 33.9990, lon: 72.5030 },
+      { name: 'Haripur', lat: 33.9946, lon: 72.9331 },
+      { name: 'Abbottabad', lat: 34.1688, lon: 73.2215 },
+      { name: 'Mansehra', lat: 34.3339, lon: 73.2004 },
+    ],
+  },
+  {
+    id: 'KKH',
+    kind: 'highway',
+    emoji: '🏔️',
+    name: 'Karakoram Highway (Abbottabad-Gilgit)',
+    stops: [
+      { name: 'Abbottabad', lat: 34.1688, lon: 73.2215 },
+      { name: 'Mansehra', lat: 34.3339, lon: 73.2004 },
+      { name: 'Besham', lat: 34.9428, lon: 72.8785 },
+      { name: 'Chilas', lat: 35.4215, lon: 74.0942 },
+      { name: 'Gilgit', lat: 35.9208, lon: 74.3140 },
+    ],
+  },
+  {
+    id: 'N15',
+    kind: 'mountain',
+    emoji: '🏞️',
+    name: 'N-15 Kaghan-Naran Corridor',
+    stops: [
+      { name: 'Mansehra', lat: 34.3339, lon: 73.2004 },
+      { name: 'Balakot', lat: 34.5498, lon: 73.3518 },
+      { name: 'Kaghan', lat: 34.7930, lon: 73.5792 },
+      { name: 'Naran', lat: 34.9070, lon: 73.6490 },
+      { name: 'Babusar Top', lat: 35.1453, lon: 74.1007 },
+    ],
+  },
+  {
+    id: 'MURREE',
+    kind: 'mountain',
+    emoji: '🌲',
+    name: 'Islamabad-Murree-Kohala Route',
+    stops: [
+      { name: 'Islamabad', lat: 33.6844, lon: 73.0479 },
+      { name: 'Bhurban', lat: 33.9623, lon: 73.4513 },
+      { name: 'Murree', lat: 33.9070, lon: 73.3943 },
+      { name: 'Patriata', lat: 33.8485, lon: 73.4757 },
+      { name: 'Kohala', lat: 34.0199, lon: 73.5052 },
+    ],
+  },
+  {
+    id: 'SWAT',
+    kind: 'mountain',
+    emoji: '⛰️',
+    name: 'Islamabad-Swat Corridor',
+    stops: [
+      { name: 'Islamabad', lat: 33.6844, lon: 73.0479 },
+      { name: 'Mardan', lat: 34.1989, lon: 72.0401 },
+      { name: 'Malakand', lat: 34.5652, lon: 71.9304 },
+      { name: 'Mingora', lat: 34.7795, lon: 72.3629 },
+      { name: 'Kalam', lat: 35.4907, lon: 72.5808 },
+    ],
+  },
 ];
+
+export const MOTORWAYS = TRAVEL_ROUTES.filter((route) => route.kind === 'motorway');
