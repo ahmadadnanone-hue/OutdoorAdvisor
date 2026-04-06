@@ -4,12 +4,30 @@ import { DEFAULT_ENABLED_ACTIVITY_IDS } from '../data/activities';
 
 const STORAGE_KEY = 'outdooradvisor_settings';
 
+const DEFAULT_HOME_SECTIONS = [
+  'decision',
+  'travel',
+  'aqi',
+  'forecast',
+  'activities',
+  'details',
+  'wind',
+];
+
 const DEFAULT_SETTINGS = {
   units: 'metric', // 'metric' | 'imperial'
   windUnit: 'kmh', // 'kmh' | 'mph' | 'ms' | 'knots'
-  homeSections: ['aqi', 'wind', 'details', 'forecast', 'activities'],
+  homeSections: DEFAULT_HOME_SECTIONS,
   enabledActivities: DEFAULT_ENABLED_ACTIVITY_IDS,
 };
+
+function normalizeHomeSections(homeSections) {
+  const incoming = Array.isArray(homeSections) ? homeSections : [];
+  const known = new Set(DEFAULT_HOME_SECTIONS);
+  const cleaned = incoming.filter((key) => known.has(key));
+  const missingDefaults = DEFAULT_HOME_SECTIONS.filter((key) => !cleaned.includes(key));
+  return [...cleaned, ...missingDefaults];
+}
 
 const SettingsContext = createContext();
 
@@ -23,7 +41,11 @@ export function SettingsProvider({ children }) {
         const saved = await AsyncStorage.getItem(STORAGE_KEY);
         if (saved) {
           const parsed = JSON.parse(saved);
-          setSettings({ ...DEFAULT_SETTINGS, ...parsed });
+          setSettings({
+            ...DEFAULT_SETTINGS,
+            ...parsed,
+            homeSections: normalizeHomeSections(parsed.homeSections),
+          });
         }
       } catch {}
       setLoaded(true);
@@ -51,6 +73,10 @@ export function SettingsProvider({ children }) {
       return next;
     });
   }, []);
+
+  const resetHomeSections = useCallback(() => {
+    updateSettings({ homeSections: DEFAULT_HOME_SECTIONS });
+  }, [updateSettings]);
 
   const addActivity = useCallback((id) => {
     setSettings((prev) => {
@@ -139,6 +165,7 @@ export function SettingsProvider({ children }) {
       setWindUnit,
       moveSection,
       toggleSection,
+      resetHomeSections,
       addActivity,
       removeActivity,
       convertTemp,

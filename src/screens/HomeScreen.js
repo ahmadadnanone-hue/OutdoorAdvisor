@@ -359,64 +359,69 @@ export default function HomeScreen({ navigation }) {
           </Text>
         )}
 
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={[
-            styles.decisionCard,
-            {
-              backgroundColor: decision.bg,
-              borderColor: decision.border,
-            },
-          ]}
-          onPress={() =>
-            setInsightModal({
-              title: decision.label,
-              body: `${decision.tone} ${decision.body}`,
-            })
-          }
-        >
-          <View style={styles.decisionHeader}>
-            <Text style={[styles.decisionEyebrow, { color: colors.textSecondary }]}>Outdoor decision</Text>
-            <Text style={[styles.decisionLabel, { color: decision.color }]}>{decision.label}</Text>
-          </View>
-          <Text style={[styles.decisionTone, { color: colors.text }]}>{decision.tone}</Text>
-          <Text style={[styles.decisionBody, { color: colors.textSecondary }]}>{decision.body}</Text>
-        </TouchableOpacity>
-
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Travel Quick Checks</Text>
-          <View style={styles.tripActionStack}>
-            {HOME_TRIP_ACTIONS.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                activeOpacity={0.85}
-                style={[
-                  styles.tripActionCard,
-                  { backgroundColor: colors.card },
-                  cardShadow,
-                  cardBorder,
-                ]}
-                onPress={() =>
-                  navigation.navigate('Travel', {
-                    highlightRoute: item.id,
-                    requestKey: Date.now(),
-                  })
-                }
-              >
-                <View style={styles.tripActionText}>
-                  <Text style={[styles.tripActionEyebrow, { color: colors.primary }]}>{item.eyebrow}</Text>
-                  <Text style={[styles.tripActionTitle, { color: colors.text }]}>{item.title}</Text>
-                  <Text style={[styles.tripActionBody, { color: colors.textSecondary }]}>{item.body}</Text>
-                </View>
-                <Text style={[styles.tripActionArrow, { color: colors.primary }]}>→</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
         {/* ===== Customizable Sections ===== */}
         {settings.homeSections.map((key) => {
           switch (key) {
+            case 'decision':
+              return (
+                <TouchableOpacity
+                  key="decision"
+                  activeOpacity={0.85}
+                  style={[
+                    styles.decisionCard,
+                    {
+                      backgroundColor: decision.bg,
+                      borderColor: decision.border,
+                    },
+                  ]}
+                  onPress={() =>
+                    setInsightModal({
+                      title: decision.label,
+                      body: `${decision.tone} ${decision.body}`,
+                    })
+                  }
+                >
+                  <View style={styles.decisionHeader}>
+                    <Text style={[styles.decisionEyebrow, { color: colors.textSecondary }]}>Outdoor decision</Text>
+                    <Text style={[styles.decisionLabel, { color: decision.color }]}>{decision.label}</Text>
+                  </View>
+                  <Text style={[styles.decisionTone, { color: colors.text }]}>{decision.tone}</Text>
+                  <Text style={[styles.decisionBody, { color: colors.textSecondary }]}>{decision.body}</Text>
+                </TouchableOpacity>
+              );
+            case 'travel':
+              return (
+                <View key="travel" style={styles.section}>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>Travel Quick Checks</Text>
+                  <View style={styles.tripActionStack}>
+                    {HOME_TRIP_ACTIONS.map((item) => (
+                      <TouchableOpacity
+                        key={item.id}
+                        activeOpacity={0.85}
+                        style={[
+                          styles.tripActionCard,
+                          { backgroundColor: colors.card },
+                          cardShadow,
+                          cardBorder,
+                        ]}
+                        onPress={() =>
+                          navigation.navigate('Travel', {
+                            highlightRoute: item.id,
+                            requestKey: Date.now(),
+                          })
+                        }
+                      >
+                        <View style={styles.tripActionText}>
+                          <Text style={[styles.tripActionEyebrow, { color: colors.primary }]}>{item.eyebrow}</Text>
+                          <Text style={[styles.tripActionTitle, { color: colors.text }]}>{item.title}</Text>
+                          <Text style={[styles.tripActionBody, { color: colors.textSecondary }]}>{item.body}</Text>
+                        </View>
+                        <Text style={[styles.tripActionArrow, { color: colors.primary }]}>→</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              );
             case 'aqi':
               return (
                 <View key="aqi" style={styles.section}>

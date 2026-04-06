@@ -27,6 +27,8 @@ import {
 const TABS = ['Thresholds', 'Notifications', 'Customize', 'About'];
 
 const SECTION_META = {
+  decision: { label: 'Outdoor Decision', icon: '🧭', desc: 'Plain-language go / go with care / limit exposure answer' },
+  travel: { label: 'Travel Quick Checks', icon: '🛣️', desc: 'Fast access to Murree and M2 route conditions' },
   aqi: { label: 'AQI Hero Card', icon: '🌬️', desc: 'Air Quality Index with scale bar' },
   wind: { label: 'Wind', icon: '💨', desc: 'Wind speed, gusts & direction' },
   details: { label: 'Current Details', icon: '📊', desc: 'Feels like, PM2.5, temp, and pollen' },
@@ -492,7 +494,7 @@ export default function AlertsScreen() {
 
   /* ---------- Customize Tab ---------- */
   const renderCustomize = () => {
-    const { units, windUnit, homeSections, setUnits, setWindUnit, moveSection, toggleSection } = settings;
+    const { units, windUnit, homeSections, setUnits, setWindUnit, moveSection, toggleSection, resetHomeSections } = settings;
 
     const unitOptions = [
       { key: 'metric', label: 'Metric', desc: '°C, mm' },
@@ -559,8 +561,21 @@ export default function AlertsScreen() {
         {/* Home Layout */}
         <Text style={[styles.sectionLabel, { color: colors.text, marginTop: 28 }]}>Home Screen Layout</Text>
         <Text style={[styles.sectionDesc, { color: colors.textSecondary }]}>
-          Reorder sections or hide them. Use the arrows to move a section up or down.
+          Reorder the important Home stacks and hide the ones you do not need. Your current setup is saved automatically.
         </Text>
+        <View style={[styles.layoutHintCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.layoutHintTitle, { color: colors.text }]}>Recommended order</Text>
+          <Text style={[styles.layoutHintBody, { color: colors.textSecondary }]}>
+            Lead with decision-making first, then travel and AQI, followed by forecast and supporting details.
+          </Text>
+          <TouchableOpacity
+            style={[styles.resetLayoutBtn, { backgroundColor: colors.primary + '15' }]}
+            onPress={resetHomeSections}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.resetLayoutBtnText, { color: colors.primary }]}>Reset to Recommended</Text>
+          </TouchableOpacity>
+        </View>
 
         {enabledKeys.map((key, i) => {
           const meta = SECTION_META[key];
@@ -570,7 +585,14 @@ export default function AlertsScreen() {
             <View key={key} style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={styles.sectionCardIcon}>{meta.icon}</Text>
               <View style={styles.sectionCardInfo}>
-                <Text style={[styles.sectionCardLabel, { color: colors.text }]}>{meta.label}</Text>
+                <View style={styles.sectionCardLabelRow}>
+                  <Text style={[styles.sectionCardLabel, { color: colors.text }]}>{meta.label}</Text>
+                  {i < 2 && (
+                    <View style={[styles.priorityBadge, { backgroundColor: colors.primary + '15' }]}>
+                      <Text style={[styles.priorityBadgeText, { color: colors.primary }]}>Top</Text>
+                    </View>
+                  )}
+                </View>
                 <Text style={[styles.sectionCardDesc, { color: colors.textSecondary }]}>{meta.desc}</Text>
               </View>
               <View style={styles.sectionCardActions}>
@@ -831,13 +853,29 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
+  sectionCardLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
+  },
   sectionCardLabel: {
     fontSize: typography.body,
     fontWeight: '700',
-    marginBottom: 2,
   },
   sectionCardDesc: {
     fontSize: typography.caption,
+  },
+  priorityBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  priorityBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   sectionCardActions: {
     flexDirection: 'row',
@@ -861,6 +899,32 @@ const styles = StyleSheet.create({
   },
   addBtnText: {
     color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  layoutHintCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+  },
+  layoutHintTitle: {
+    fontSize: typography.body,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  layoutHintBody: {
+    fontSize: typography.caption,
+    lineHeight: 18,
+  },
+  resetLayoutBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+  },
+  resetLayoutBtnText: {
     fontSize: 12,
     fontWeight: '700',
   },
