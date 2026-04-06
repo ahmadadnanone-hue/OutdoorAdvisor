@@ -83,9 +83,11 @@ export default function HomeScreen({ navigation }) {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refreshLocation();
-    refreshAqi();
-    refreshWeather();
+    const nextLocation = await refreshLocation();
+    if (nextLocation?.lat != null && nextLocation?.lon != null) {
+      refreshAqi(nextLocation.lat, nextLocation.lon);
+      refreshWeather(nextLocation.lat, nextLocation.lon);
+    }
     setRefreshing(false);
   }, [refreshLocation, refreshAqi, refreshWeather]);
 

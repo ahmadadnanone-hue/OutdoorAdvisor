@@ -1,10 +1,24 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "npx expo export -p web",
+  "devCommand": "expo",
   "outputDirectory": "dist",
+  "cleanUrls": true,
   "functions": {
     "api/nhmp.js": {
       "maxDuration": 30
     },
     "api/pmd.js": {
+      "maxDuration": 30
+    },
+    "api/google/aqi.js": {
+      "maxDuration": 30
+    },
+    "api/google/geocode.js": {
+      "maxDuration": 30
+    },
+    "api/google/weather.js": {
       "maxDuration": 30
     }
   }

@@ -18,6 +18,7 @@ import { fetchWeatherForLocation } from '../hooks/useWeather';
 import { fetchAqiForLocation } from '../hooks/useAQI';
 import { getWeatherDescription } from '../utils/weatherCodes';
 import typography from '../theme/typography';
+import { fetchApiJson } from '../config/api';
 
 if (
   Platform.OS === 'android' &&
@@ -129,8 +130,7 @@ export default function TravelScreen() {
     // Fetch NHMP
     (async () => {
       try {
-        const resp = await fetch('/api/nhmp');
-        const json = await resp.json();
+        const json = await fetchApiJson('/api/nhmp');
         if (!cancelled && json.success && json.advisories) {
           setNhmpData(json.advisories);
           setNhmpTime(json.timestamp);
@@ -146,8 +146,7 @@ export default function TravelScreen() {
     // Fetch PMD
     (async () => {
       try {
-        const resp = await fetch('/api/pmd');
-        const json = await resp.json();
+        const json = await fetchApiJson('/api/pmd');
         if (!cancelled && json.success && json.cities && json.cities.length > 0) {
           setPmdCities(json.cities);
           setPmdAlerts(json.alerts || []);

@@ -9,7 +9,7 @@
 // the API restrictions list on your Maps API key.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { GOOGLE_MAPS_API_KEY } from '../config/googleApi';
+import { fetchApiJson } from '../config/api';
 import * as persistentCache from '../utils/persistentCache';
 import { mockWeatherData } from '../data/mockData';
 import { CITIES } from '../data/cities';
@@ -194,23 +194,12 @@ function parseDailyDay(day) {
   };
 }
 
-async function fetchCurrent(lat, lon) {
-  const url = `https://weather.googleapis.com/v1/currentConditions:lookup?key=${GOOGLE_MAPS_API_KEY}&location.latitude=${lat}&location.longitude=${lon}&unitsSystem=METRIC&languageCode=en`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Weather API current HTTP ${res.status}`);
-  const json = await res.json();
-  if (json.error) throw new Error(json.error.message || 'Weather API error');
-  return parseCurrent(json);
-}
-
-async function fetchDaily(lat, lon, days = 7) {
-  const url = `https://weather.googleapis.com/v1/forecast/days:lookup?key=${GOOGLE_MAPS_API_KEY}&location.latitude=${lat}&location.longitude=${lon}&days=${days}&pageSize=${days}&unitsSystem=METRIC&languageCode=en`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Weather API forecast HTTP ${res.status}`);
-  const json = await res.json();
-  if (json.error) throw new Error(json.error.message || 'Weather API error');
-  const list = json.forecastDays || [];
-  return list.map(parseDailyDay);
+async function fetchWeatherBundle(lat, lon, days = 7) {
+  const json = await fetchApiJson(`/api/google/weather?lat=${lat}&lon=${lon}&days=${days}`);
+  return {
+    current: parseCurrent(json.currentConditions),
+    daily: (json.forecastDays || []).map(parseDailyDay),
+  };
 }
 
 export async function fetchWeatherForLocation(lat, lon) {
@@ -219,12 +208,7 @@ export async function fetchWeatherForLocation(lat, lon) {
   if (cached) return cached;
 
   try {
-    // Parallel — both endpoints share the same key
-    const [current, daily] = await Promise.all([
-      fetchCurrent(lat, lon),
-      fetchDaily(lat, lon, 7),
-    ]);
-    const result = { current, daily };
+    const result = await fetchWeatherBundle(lat, lon, 7);
     setCache(key, result);
     return result;
   } catch (err) {
@@ -261,14 +245,10 @@ export default function useWeather(lat, lon) {
     }
 
     try {
-      const [curr, dly] = await Promise.all([
-        fetchCurrent(fetchLat, fetchLon),
-        fetchDaily(fetchLat, fetchLon, 7),
-      ]);
-      const result = { current: curr, daily: dly };
+      const result = await fetchWeatherBundle(fetchLat, fetchLon, 7);
       setCache(key, result);
-      setCurrent(curr);
-      setDaily(dly);
+      setCurrent(result.current);
+      setDaily(result.daily);
     } catch (err) {
       const fallback = getFallback(fetchLat, fetchLon);
       if (fallback) {
@@ -282,8 +262,10 @@ export default function useWeather(lat, lon) {
     }
   }, []);
 
-  const refresh = useCallback(() => {
-    fetchData(latRef.current, lonRef.current);
+  const refresh = useCallback((nextLat, nextLon) => {
+    const latToUse = nextLat ?? latRef.current;
+    const lonToUse = nextLon ?? lonRef.current;
+    fetchData(latToUse, lonToUse);
   }, [fetchData]);
 
   useEffect(() => {

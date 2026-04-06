@@ -1,3 +1,5 @@
+import { fetchApiJson } from './api';
+
 // Google Maps Platform API key
 // IMPORTANT: Restrict this key in Google Cloud Console:
 //   - Application restrictions: HTTP referrers
@@ -44,9 +46,7 @@ export function loadGoogleMaps() {
 // Returns a string like "DHA Phase 5, Lahore" or null on failure.
 export async function reverseGeocode(lat, lon) {
   try {
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${GOOGLE_MAPS_API_KEY}&language=en&result_type=sublocality|neighborhood|locality|administrative_area_level_2|administrative_area_level_1`;
-    const res = await fetch(url);
-    const json = await res.json();
+    const json = await fetchApiJson(`/api/google/geocode?lat=${lat}&lon=${lon}`);
     if (json.status !== 'OK' || !json.results?.length) return null;
 
     // Walk results to collect the most specific area + the city/locality

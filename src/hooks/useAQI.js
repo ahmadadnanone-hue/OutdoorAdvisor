@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { GOOGLE_MAPS_API_KEY } from '../config/googleApi';
+import { fetchApiJson } from '../config/api';
 import * as persistentCache from '../utils/persistentCache';
 
 const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
@@ -29,21 +29,8 @@ export async function fetchAqiForLocation(lat, lon) {
   if (cached) return cached;
 
   try {
-    const response = await fetch(
-      `https://airquality.googleapis.com/v1/currentConditions:lookup?key=${GOOGLE_MAPS_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          location: { latitude: lat, longitude: lon },
-          extraComputations: ['LOCAL_AQI', 'POLLUTANT_CONCENTRATION', 'DOMINANT_POLLUTANT_CONCENTRATION'],
-          languageCode: 'en',
-        }),
-      }
-    );
-
-    const json = await response.json();
-    if (json.error) throw new Error(json.error.message || 'Google AQI error');
+    const json = await fetchApiJson(`/api/google/aqi?lat=${lat}&lon=${lon}`);
+    if (json.error) throw new Error(json.error || 'Google AQI error');
 
     // Prefer USA EPA AQI (matches Pakistan context), fall back to Universal AQI
     const indexes = json.indexes || [];
@@ -113,8 +100,10 @@ export default function useAQI(lat, lon) {
     setLoading(false);
   }, []);
 
-  const refresh = useCallback(() => {
-    fetchData(currentCoords.current.lat, currentCoords.current.lon);
+  const refresh = useCallback((nextLat, nextLon) => {
+    const latToUse = nextLat ?? currentCoords.current.lat;
+    const lonToUse = nextLon ?? currentCoords.current.lon;
+    fetchData(latToUse, lonToUse);
   }, [fetchData]);
 
   useEffect(() => {

@@ -40,11 +40,12 @@ export default function useLocation() {
       const { status } = await Location.requestForegroundPermissionsAsync();
 
       if (status !== 'granted') {
-        setLocation({ lat: DEFAULT_CITY.lat, lon: DEFAULT_CITY.lon });
-        setCity(DEFAULT_CITY.name);
+        const fallback = { lat: DEFAULT_CITY.lat, lon: DEFAULT_CITY.lon, city: DEFAULT_CITY.name };
+        setLocation({ lat: fallback.lat, lon: fallback.lon });
+        setCity(fallback.city);
         setError('Location permission denied. Defaulting to Lahore.');
         setLoading(false);
-        return;
+        return fallback;
       }
 
       const position = await Location.getCurrentPositionAsync({
@@ -54,21 +55,21 @@ export default function useLocation() {
       const { latitude, longitude } = position.coords;
 
       // Set coords immediately so AQI/weather can start fetching at the precise point
-      setLocation({ lat: latitude, lon: longitude });
+      const nextLocation = { lat: latitude, lon: longitude };
+      setLocation(nextLocation);
 
       // Try Google reverse-geocoding for a friendly "Area, City" label.
       // Fall back to nearest known city if it fails.
       const friendly = await reverseGeocode(latitude, longitude);
-      if (friendly) {
-        setCity(friendly);
-      } else {
-        const nearest = findNearestCity(latitude, longitude);
-        setCity(nearest.name);
-      }
+      const resolvedCity = friendly || findNearestCity(latitude, longitude).name;
+      setCity(resolvedCity);
+      return { ...nextLocation, city: resolvedCity };
     } catch (err) {
-      setLocation({ lat: DEFAULT_CITY.lat, lon: DEFAULT_CITY.lon });
-      setCity(DEFAULT_CITY.name);
+      const fallback = { lat: DEFAULT_CITY.lat, lon: DEFAULT_CITY.lon, city: DEFAULT_CITY.name };
+      setLocation({ lat: fallback.lat, lon: fallback.lon });
+      setCity(fallback.city);
       setError(err.message || 'Failed to get location. Defaulting to Lahore.');
+      return fallback;
     } finally {
       setLoading(false);
     }
