@@ -28,7 +28,6 @@ import HourlyForecastStrip from '../components/HourlyForecastStrip';
 import AnimatedWeatherIcon from '../components/AnimatedWeatherIcon';
 import ActivityCard from '../components/ActivityCard';
 import CacheIndicator from '../components/CacheIndicator';
-import ThemeToggle from '../components/ThemeToggle';
 import PlacesAutocomplete from '../components/PlacesAutocomplete';
 
 function getWindDirectionLabel(deg) {
@@ -344,7 +343,6 @@ export default function HomeScreen({ navigation }) {
                 {settings.formatTempShort(weatherCurrent?.temp)}
               </Text>
             </View>
-            <ThemeToggle />
           </View>
         </View>
 
@@ -353,12 +351,6 @@ export default function HomeScreen({ navigation }) {
           visible={aqiCached || weatherCached}
           updatedAt={lastUpdated !== '--' ? lastUpdated : null}
         />
-        {Platform.OS === 'web' && (
-          <Text style={[styles.webRefreshHint, { color: colors.textSecondary }]}>
-            Use the Refresh button above on web. Browser pull-to-refresh is not reliable here.
-          </Text>
-        )}
-
         {/* ===== Customizable Sections ===== */}
         {settings.homeSections.map((key) => {
           switch (key) {
@@ -870,12 +862,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.3,
-  },
-  webRefreshHint: {
-    fontSize: 11,
-    textAlign: 'center',
-    marginBottom: 10,
-    opacity: 0.75,
   },
   headerWeather: {
     flexDirection: 'row',

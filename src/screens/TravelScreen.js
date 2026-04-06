@@ -172,6 +172,8 @@ export default function TravelScreen({ route }) {
   const [stopData, setStopData] = useState({});
   const fetchingRef = useRef({});
   const nhmpCancelRef = useRef(false);
+  const scrollRef = useRef(null);
+  const routeOffsetsRef = useRef({});
 
   // NHMP live data
   const [nhmpData, setNhmpData] = useState([]);
@@ -296,6 +298,17 @@ export default function TravelScreen({ route }) {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedMotorway(routeIndex);
     loadRouteStops(routeIndex);
+    const timer = setTimeout(() => {
+      const y = routeOffsetsRef.current[routeIndex];
+      if (scrollRef.current && typeof y === 'number') {
+        scrollRef.current.scrollTo({
+          y: Math.max(0, y - 12),
+          animated: true,
+        });
+      }
+    }, 220);
+
+    return () => clearTimeout(timer);
   }, [route?.params?.highlightRoute, route?.params?.requestKey, loadRouteStops]);
 
   const isLoading = (index) => expandedMotorway === index && !stopData[index];
@@ -306,6 +319,7 @@ export default function TravelScreen({ route }) {
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.contentContainer}
     >
@@ -523,6 +537,9 @@ export default function TravelScreen({ route }) {
           <View
             key={motorway.id}
             style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onLayout={(event) => {
+              routeOffsetsRef.current[index] = event.nativeEvent.layout.y;
+            }}
           >
             <TouchableOpacity
               style={styles.cardHeader}

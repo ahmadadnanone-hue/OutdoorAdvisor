@@ -31,7 +31,6 @@ const fonts = Platform.select({
 });
 
 import HomeScreen from './src/screens/HomeScreen';
-import MapScreen from './src/screens/MapScreen';
 import TravelScreen from './src/screens/TravelScreen';
 import ActivitiesScreen from './src/screens/ActivitiesScreen';
 import AlertsScreen from './src/screens/AlertsScreen';
@@ -40,7 +39,6 @@ const Tab = createBottomTabNavigator();
 
 const TAB_ICONS = {
   Home: { icon: '🏠', label: 'Home' },
-  Map: { icon: '🗺️', label: 'Map' },
   Travel: { icon: '🛣️', label: 'Travel' },
   Activities: { icon: '🏃', label: 'Activities' },
   Alerts: { icon: '⚙️', label: 'Alerts' },
@@ -107,7 +105,6 @@ function AppNavigator() {
           })}
         >
           <Tab.Screen name="Home" component={HomeScreen} />
-          <Tab.Screen name="Map" component={MapScreen} />
           <Tab.Screen name="Travel" component={TravelScreen} />
           <Tab.Screen name="Activities" component={ActivitiesScreen} />
           <Tab.Screen name="Alerts" component={AlertsScreen} />
