@@ -55,13 +55,14 @@ function getFallback(lat, lon) {
         weatherCode: mock.weatherCode,
       },
       daily: mock.daily,
+      hourly: [],
     };
   }
   return null;
 }
 
 function buildUrl(lat, lon) {
-  return `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,weather_code,apparent_temperature,wind_gusts_10m&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,uv_index_max,sunrise,sunset,apparent_temperature_max,apparent_temperature_min,relative_humidity_2m_max,relative_humidity_2m_min,wind_direction_10m_dominant&timezone=Asia/Karachi&forecast_days=7`;
+  return `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,weather_code,apparent_temperature,wind_gusts_10m&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,is_day&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,uv_index_max,sunrise,sunset,apparent_temperature_max,apparent_temperature_min,relative_humidity_2m_max,relative_humidity_2m_min,wind_direction_10m_dominant&timezone=Asia/Karachi&forecast_days=7`;
 }
 
 function parseResponse(json) {
@@ -95,7 +96,23 @@ function parseResponse(json) {
     humidityMin: d.relative_humidity_2m_min?.[i] ?? null,
   }));
 
-  return { current, daily };
+  const h = json.hourly;
+  const hourly = (h?.time || []).slice(0, 24).map((time, i) => ({
+    time,
+    temp: h.temperature_2m?.[i] ?? null,
+    feelsLike: h.apparent_temperature?.[i] ?? null,
+    humidity: h.relative_humidity_2m?.[i] ?? null,
+    precipProbability: h.precipitation_probability?.[i] ?? null,
+    precipitation: h.precipitation?.[i] ?? null,
+    weatherCode: h.weather_code?.[i] ?? null,
+    windSpeed: h.wind_speed_10m?.[i] ?? null,
+    windGusts: h.wind_gusts_10m?.[i] ?? null,
+    windDirection: h.wind_direction_10m?.[i] ?? null,
+    uvIndex: h.uv_index?.[i] ?? null,
+    isDaytime: h.is_day?.[i] === 1,
+  }));
+
+  return { current, daily, hourly };
 }
 
 export async function fetchWeatherForLocation(lat, lon) {
@@ -124,6 +141,7 @@ export async function fetchWeatherForLocation(lat, lon) {
 export default function useWeather(lat, lon) {
   const [current, setCurrent] = useState(null);
   const [daily, setDaily] = useState([]);
+  const [hourly, setHourly] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isUsingCache, setIsUsingCache] = useState(false);
@@ -142,6 +160,7 @@ export default function useWeather(lat, lon) {
     if (cached) {
       setCurrent(cached.current);
       setDaily(cached.daily);
+      setHourly(cached.hourly || []);
       setIsUsingCache(true);
       setLoading(false);
       return;
@@ -159,11 +178,13 @@ export default function useWeather(lat, lon) {
       setCache(key, result);
       setCurrent(result.current);
       setDaily(result.daily);
+      setHourly(result.hourly || []);
     } catch (err) {
       const fallback = getFallback(fetchLat, fetchLon);
       if (fallback) {
         setCurrent(fallback.current);
         setDaily(fallback.daily);
+        setHourly(fallback.hourly || []);
       }
       setError(err.message || 'Failed to fetch weather data');
       setIsUsingCache(true);
@@ -172,8 +193,10 @@ export default function useWeather(lat, lon) {
     }
   }, []);
 
-  const refresh = useCallback(() => {
-    fetchData(latRef.current, lonRef.current);
+  const refresh = useCallback((nextLat, nextLon) => {
+    const latToUse = nextLat ?? latRef.current;
+    const lonToUse = nextLon ?? lonRef.current;
+    fetchData(latToUse, lonToUse);
   }, [fetchData]);
 
   useEffect(() => {
@@ -182,5 +205,5 @@ export default function useWeather(lat, lon) {
     fetchData(lat, lon);
   }, [lat, lon, fetchData]);
 
-  return { current, daily, loading, error, isUsingCache, refresh };
+  return { current, daily, hourly, loading, error, isUsingCache, refresh };
 }

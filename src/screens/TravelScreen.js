@@ -52,7 +52,11 @@ function isRain(weatherCode) { return weatherCode >= 61 && weatherCode <= 82; }
 function NHMPAdvisory({ advisory, colors, isDark }) {
   const config = SEVERITY_CONFIG[advisory.severity] || SEVERITY_CONFIG.clear;
   return (
-    <View style={[styles.nhmpCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
+    <TouchableOpacity
+      activeOpacity={0.75}
+      onPress={() => Linking.openURL('https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx')}
+      style={[styles.nhmpCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}
+    >
       <View style={styles.nhmpHeader}>
         <View style={[styles.severityBadge, { backgroundColor: config.bg }]}>
           <Text style={styles.severityIcon}>{config.icon}</Text>
@@ -70,7 +74,8 @@ function NHMPAdvisory({ advisory, colors, isDark }) {
       <Text style={[styles.nhmpStatus, { color: advisory.severity === 'clear' ? colors.textSecondary : config.color }]}>
         {advisory.status}
       </Text>
-    </View>
+      <Text style={[styles.bannerHint, { color: colors.textSecondary }]}>Tap for official NHMP details</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -312,7 +317,11 @@ export default function TravelScreen() {
         ) : (
           <>
             {pmdAlerts.length > 0 && (
-              <View style={[styles.pmdAlertBanner, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' }]}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => Linking.openURL('https://nwfc.pmd.gov.pk/new/daily-forecast-en.php')}
+                style={[styles.pmdAlertBanner, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' }]}
+              >
                 <Text style={styles.pmdAlertIcon}>🚨</Text>
                 <View style={styles.pmdAlertContent}>
                   <Text style={[styles.pmdAlertTitle, { color: '#EF4444' }]}>Weather Alert</Text>
@@ -321,8 +330,9 @@ export default function TravelScreen() {
                       {alert}
                     </Text>
                   ))}
+                  <Text style={[styles.bannerHint, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>Tap for official PMD alert details</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             )}
             <View style={styles.pmdCityGrid}>
               {pmdCities.map((city, i) => {
@@ -466,6 +476,7 @@ const styles = StyleSheet.create({
   nhmpRoute: { fontSize: 14, fontWeight: '700', marginBottom: 2 },
   nhmpSector: { fontSize: 12, marginBottom: 4 },
   nhmpStatus: { fontSize: 13, lineHeight: 19 },
+  bannerHint: { fontSize: 11, marginTop: 8, fontWeight: '600' },
   allClearBanner: { borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 8 },
   allClearText: { fontSize: 15, fontWeight: '600', color: '#22C55E' },
   clearCount: { fontSize: 12, marginTop: 6, textAlign: 'center' },

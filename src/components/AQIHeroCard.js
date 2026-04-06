@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { getAqiColor, getAqiCategory } from '../theme/colors';
 
@@ -137,7 +137,7 @@ function PMCard({ label, value, color, colors, isDark, customUnit }) {
   );
 }
 
-export default function AQIHeroCard({ aqi, pm25, pm10, humidity, loading }) {
+export default function AQIHeroCard({ aqi, pm25, pm10, humidity, loading, onPress }) {
   const { colors, isDark } = useTheme();
   const aqiColor = aqi != null ? getAqiColor(aqi) : colors.textSecondary;
   const category = aqi != null ? getAqiCategory(aqi) : '';
@@ -171,7 +171,7 @@ export default function AQIHeroCard({ aqi, pm25, pm10, humidity, loading }) {
     );
   }
 
-  return (
+  const content = (
     <View
       style={[
         styles.card,
@@ -220,6 +220,16 @@ export default function AQIHeroCard({ aqi, pm25, pm10, humidity, loading }) {
       </View>
     </View>
   );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity activeOpacity={0.85} onPress={onPress}>
+        {content}
+      </TouchableOpacity>
+    );
+  }
+
+  return content;
 }
 
 const styles = StyleSheet.create({

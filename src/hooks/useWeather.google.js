@@ -194,11 +194,38 @@ function parseDailyDay(day) {
   };
 }
 
+function parseHourlyHour(hour) {
+  const local = hour.displayDateTime || {};
+  const iso = local.year
+    ? `${local.year}-${String(local.month).padStart(2, '0')}-${String(local.day).padStart(2, '0')}T${String(local.hours).padStart(2, '0')}:00:00${local.utcOffset || 'Z'}`
+    : hour.interval?.startTime || null;
+  const windDirDeg = hour.wind?.direction?.degrees;
+  const windDirCard = hour.wind?.direction?.cardinal;
+  const windDirection =
+    windDirDeg != null ? windDirDeg : windDirCard ? CARDINAL_DEG[windDirCard] ?? null : null;
+
+  return {
+    time: iso,
+    temp: hour.temperature?.degrees ?? null,
+    feelsLike: hour.feelsLikeTemperature?.degrees ?? hour.heatIndex?.degrees ?? null,
+    weatherCode: mapConditionTypeToWmo(hour.weatherCondition?.type),
+    precipProbability: hour.precipitation?.probability?.percent ?? null,
+    precipitation: hour.precipitation?.qpf?.quantity ?? null,
+    windSpeed: hour.wind?.speed?.value ?? null,
+    windGusts: hour.wind?.gust?.value ?? null,
+    windDirection,
+    humidity: hour.relativeHumidity ?? null,
+    uvIndex: hour.uvIndex ?? null,
+    isDaytime: hour.isDaytime ?? null,
+  };
+}
+
 async function fetchWeatherBundle(lat, lon, days = 7) {
-  const json = await fetchApiJson(`/api/google/weather?lat=${lat}&lon=${lon}&days=${days}`);
+  const json = await fetchApiJson(`/api/google/weather?lat=${lat}&lon=${lon}&days=${days}&hours=24`);
   return {
     current: parseCurrent(json.currentConditions),
     daily: (json.forecastDays || []).map(parseDailyDay),
+    hourly: (json.forecastHours || []).map(parseHourlyHour),
   };
 }
 
@@ -221,6 +248,7 @@ export async function fetchWeatherForLocation(lat, lon) {
 export default function useWeather(lat, lon) {
   const [current, setCurrent] = useState(null);
   const [daily, setDaily] = useState([]);
+  const [hourly, setHourly] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isUsingCache, setIsUsingCache] = useState(false);
@@ -239,6 +267,7 @@ export default function useWeather(lat, lon) {
     if (cached) {
       setCurrent(cached.current);
       setDaily(cached.daily);
+      setHourly(cached.hourly || []);
       setIsUsingCache(true);
       setLoading(false);
       return;
@@ -249,11 +278,13 @@ export default function useWeather(lat, lon) {
       setCache(key, result);
       setCurrent(result.current);
       setDaily(result.daily);
+      setHourly(result.hourly || []);
     } catch (err) {
       const fallback = getFallback(fetchLat, fetchLon);
       if (fallback) {
         setCurrent(fallback.current);
         setDaily(fallback.daily);
+        setHourly(fallback.hourly || []);
       }
       setError(err.message || 'Failed to fetch weather data');
       setIsUsingCache(true);
@@ -274,5 +305,5 @@ export default function useWeather(lat, lon) {
     fetchData(lat, lon);
   }, [lat, lon, fetchData]);
 
-  return { current, daily, loading, error, isUsingCache, refresh };
+  return { current, daily, hourly, loading, error, isUsingCache, refresh };
 }

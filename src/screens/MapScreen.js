@@ -130,7 +130,10 @@ function GoogleMapView({ points, aqiData, isDark, onReady }) {
   if (Platform.OS !== 'web') {
     return (
       <View style={webStyles.fallback}>
-        <Text>Map requires web platform.</Text>
+        <Text style={webStyles.fallbackTitle}>Interactive AQI map is available on the web app.</Text>
+        <Text style={webStyles.fallbackBody}>
+          On mobile, use the city air quality list below for the same live readings.
+        </Text>
       </View>
     );
   }
@@ -139,7 +142,9 @@ function GoogleMapView({ points, aqiData, isDark, onReady }) {
 }
 
 const webStyles = {
-  fallback: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  fallback: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
+  fallbackTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
+  fallbackBody: { fontSize: 13, lineHeight: 18, textAlign: 'center', opacity: 0.75 },
 };
 
 export default function MapScreen() {

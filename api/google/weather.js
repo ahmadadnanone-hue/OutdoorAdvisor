@@ -24,6 +24,7 @@ export default async function handler(req, res) {
   const lat = Number(req.query.lat);
   const lon = Number(req.query.lon);
   const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 10);
+  const hours = Math.min(Math.max(Number(req.query.hours) || 24, 1), 24);
 
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
     return sendJson(res, 400, { error: 'Valid lat and lon query params are required.' });
@@ -46,14 +47,25 @@ export default async function handler(req, res) {
     forecastUrl.searchParams.set('unitsSystem', 'METRIC');
     forecastUrl.searchParams.set('languageCode', 'en');
 
-    const [currentConditions, forecast] = await Promise.all([
+    const hourlyUrl = new URL('https://weather.googleapis.com/v1/forecast/hours:lookup');
+    hourlyUrl.searchParams.set('key', GOOGLE_MAPS_API_KEY);
+    hourlyUrl.searchParams.set('location.latitude', String(lat));
+    hourlyUrl.searchParams.set('location.longitude', String(lon));
+    hourlyUrl.searchParams.set('hours', String(hours));
+    hourlyUrl.searchParams.set('pageSize', String(hours));
+    hourlyUrl.searchParams.set('unitsSystem', 'METRIC');
+    hourlyUrl.searchParams.set('languageCode', 'en');
+
+    const [currentConditions, forecast, hourlyForecast] = await Promise.all([
       fetchGoogleJson(currentUrl),
       fetchGoogleJson(forecastUrl),
+      fetchGoogleJson(hourlyUrl),
     ]);
 
     return sendJson(res, 200, {
       currentConditions,
       forecastDays: forecast.forecastDays || [],
+      forecastHours: hourlyForecast.forecastHours || [],
     });
   } catch (error) {
     return sendJson(res, 500, { error: error.message || 'Weather request failed.' });

@@ -330,7 +330,7 @@ export default function AlertsScreen() {
 
         <Text style={[styles.sectionLabel, { color: colors.text, marginTop: 24 }]}>Notifications</Text>
         <Text style={[styles.sectionDesc, { color: colors.textSecondary }]}>
-          Choose which notifications you want to receive. Changes are saved automatically.
+          These are saved alert preferences for now. Push notifications are not live yet, but the app will remember the alert types you care about.
         </Text>
 
         {items.map((item) => (

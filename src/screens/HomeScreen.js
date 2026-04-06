@@ -23,6 +23,7 @@ import { getAqiColor } from '../theme/colors';
 import { CITIES } from '../data/cities';
 import AQIHeroCard from '../components/AQIHeroCard';
 import ForecastStrip from '../components/ForecastStrip';
+import HourlyForecastStrip from '../components/HourlyForecastStrip';
 import AnimatedWeatherIcon from '../components/AnimatedWeatherIcon';
 import ActivityCard from '../components/ActivityCard';
 import CacheIndicator from '../components/CacheIndicator';
@@ -58,6 +59,42 @@ function getGreeting() {
   return 'Good Evening';
 }
 
+function getAqiInsight(aqi, pm25) {
+  if (aqi == null) {
+    return 'Live AQI insight is unavailable right now. Pull to refresh or try another city.';
+  }
+  if (aqi <= 50) return `Air quality is excellent right now. PM2.5 is ${pm25 ?? '--'}, so outdoor plans are in a comfortable range for most people.`;
+  if (aqi <= 100) return `Air quality is acceptable, but sensitive groups should keep an eye on symptoms. PM2.5 is ${pm25 ?? '--'}.`;
+  if (aqi <= 150) return `Air quality is elevated for sensitive groups. Consider shorter outdoor sessions and lighter exertion. PM2.5 is ${pm25 ?? '--'}.`;
+  if (aqi <= 200) return `Air quality is unhealthy. Limit prolonged outdoor activity and consider a mask for essential time outside. PM2.5 is ${pm25 ?? '--'}.`;
+  return `Air quality is very poor right now. Keep outdoor exposure brief and shift activities indoors if possible. PM2.5 is ${pm25 ?? '--'}.`;
+}
+
+function getWindInsight({ windSpeed, windGusts, windDirectionLabel, gustsFromForecast, directionFromForecast, formatWind }) {
+  const parts = [];
+  parts.push(`Current wind speed is ${formatWind(windSpeed)}${windDirectionLabel && windDirectionLabel !== '--' ? ` from the ${windDirectionLabel}` : ''}.`);
+  if (windGusts != null) {
+    parts.push(`Peak gusts are ${formatWind(windGusts)}.`);
+  }
+  if (gustsFromForecast || directionFromForecast) {
+    parts.push('Some wind details are forecast-derived because live station data was incomplete for this location.');
+  }
+  return parts.join(' ');
+}
+
+function getPollenInsight(primary, types) {
+  if (!primary) {
+    return 'Pollen insight is unavailable for this location right now. Google does not always return pollen coverage for every area.';
+  }
+  const topTypes = types
+    .filter((type) => type.value != null)
+    .slice(0, 3)
+    .map((type) => `${type.displayName || type.code}: ${type.indexDisplayName || type.category || type.value}`)
+    .join(' · ');
+
+  return `${primary.displayName || 'Pollen'} is the main pollen driver right now with a ${primary.indexDisplayName || primary.category || primary.value} reading.${topTypes ? ` Top pollen types: ${topTypes}.` : ''}`;
+}
+
 export default function HomeScreen({ navigation }) {
   const { colors, isDark } = useTheme();
   const settings = useSettings();
@@ -73,15 +110,17 @@ export default function HomeScreen({ navigation }) {
   const {
     current: weatherCurrent,
     daily,
+    hourly,
     loading: weatherLoading,
     isUsingCache: weatherCached,
     refresh: refreshWeather,
   } = useWeather(location.lat, location.lon);
-  const { primary: pollenPrimary, refresh: refreshPollen } = usePollen(location.lat, location.lon);
+  const { primary: pollenPrimary, types: pollenTypes, refresh: refreshPollen } = usePollen(location.lat, location.lon);
 
   const [refreshing, setRefreshing] = useState(false);
   const [cityPickerVisible, setCityPickerVisible] = useState(false);
   const [forecastDetail, setForecastDetail] = useState(null);
+  const [insightModal, setInsightModal] = useState(null);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -107,6 +146,8 @@ export default function HomeScreen({ navigation }) {
   const todayForecast = daily?.[0] || null;
   const displayWindGusts = weatherCurrent?.windGusts ?? todayForecast?.windGusts ?? null;
   const displayWindDirection = weatherCurrent?.windDirection ?? todayForecast?.windDirection ?? null;
+  const gustsFromForecast = weatherCurrent?.windGusts == null && todayForecast?.windGusts != null;
+  const directionFromForecast = weatherCurrent?.windDirection == null && todayForecast?.windDirection != null;
   const currentWindDirection =
     displayWindDirection != null ? getWindDirectionLabel(displayWindDirection) : '--';
 
@@ -203,13 +244,41 @@ export default function HomeScreen({ navigation }) {
             case 'aqi':
               return (
                 <View key="aqi" style={styles.section}>
-                  <AQIHeroCard aqi={aqi} pm25={pm25} pm10={pm10} humidity={weatherCurrent?.humidity} loading={aqiLoading} />
+                  <AQIHeroCard
+                    aqi={aqi}
+                    pm25={pm25}
+                    pm10={pm10}
+                    humidity={weatherCurrent?.humidity}
+                    loading={aqiLoading}
+                    onPress={() =>
+                      setInsightModal({
+                        title: 'AQI Insight',
+                        body: getAqiInsight(aqi, pm25),
+                      })
+                    }
+                  />
                 </View>
               );
             case 'wind':
               return (
                 <View key="wind" style={styles.section}>
                   <Text style={[styles.sectionTitle, { color: colors.text }]}>Wind</Text>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() =>
+                      setInsightModal({
+                        title: 'Wind Insight',
+                        body: getWindInsight({
+                          windSpeed: weatherCurrent?.windSpeed,
+                          windGusts: displayWindGusts,
+                          windDirectionLabel: currentWindDirection,
+                          gustsFromForecast,
+                          directionFromForecast,
+                          formatWind: settings.formatWind,
+                        }),
+                      })
+                    }
+                  >
                   <View style={[styles.windCard, { backgroundColor: colors.card }, cardShadow, cardBorder]}>
                     <View style={styles.windColumns}>
                       <View style={styles.windColumn}>
@@ -229,16 +298,26 @@ export default function HomeScreen({ navigation }) {
                             : '--'}
                         </Text>
                         <Text style={[styles.windUnit, { color: colors.textSecondary }]}>{settings.windUnitLabel}</Text>
-                        <Text style={[styles.windLabel, { color: colors.textSecondary }]}>Gusts</Text>
+                        <Text style={[styles.windLabel, { color: colors.textSecondary }]}>
+                          {gustsFromForecast ? 'Gusts*' : 'Gusts'}
+                        </Text>
                       </View>
                       <View style={[styles.windDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]} />
                       <View style={styles.windColumn}>
                         <Text style={[styles.windValue, { color: colors.text }]}>{currentWindDirection}</Text>
                         <Text style={[styles.windUnit, { color: colors.textSecondary }]}>{' '}</Text>
-                        <Text style={[styles.windLabel, { color: colors.textSecondary }]}>Direction</Text>
+                        <Text style={[styles.windLabel, { color: colors.textSecondary }]}>
+                          {directionFromForecast ? 'Direction*' : 'Direction'}
+                        </Text>
                       </View>
                     </View>
+                    {(gustsFromForecast || directionFromForecast) && (
+                      <Text style={[styles.windFootnote, { color: colors.textSecondary }]}>
+                        * Forecast-derived when live station data is unavailable.
+                      </Text>
+                    )}
                   </View>
+                  </TouchableOpacity>
                 </View>
               );
             case 'details':
@@ -274,7 +353,16 @@ export default function HomeScreen({ navigation }) {
                       </Text>
                       <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Temp</Text>
                     </View>
-                    <View style={[styles.detailCard, { backgroundColor: colors.card }, cardShadow, cardBorder]}>
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      style={[styles.detailCard, { backgroundColor: colors.card }, cardShadow, cardBorder]}
+                      onPress={() =>
+                        setInsightModal({
+                          title: 'Pollen Insight',
+                          body: getPollenInsight(pollenPrimary, pollenTypes),
+                        })
+                      }
+                    >
                       <Text style={styles.detailIcon}>🌼</Text>
                       <Text style={[styles.detailValue, { color: pollenColor }]}>
                         {pollenValue != null ? pollenValue : '--'}
@@ -282,7 +370,7 @@ export default function HomeScreen({ navigation }) {
                       <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
                         {pollenDisplayName}: {pollenCategory}
                       </Text>
-                    </View>
+                    </TouchableOpacity>
                   </View>
                 </View>
               );
@@ -291,6 +379,8 @@ export default function HomeScreen({ navigation }) {
                 <View key="forecast" style={styles.section}>
                   <Text style={[styles.sectionTitle, { color: colors.text }]}>7-Day Forecast</Text>
                   <ForecastStrip daily={daily} loading={weatherLoading} onDayPress={(day) => setForecastDetail(day)} />
+                  <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>Next 12 Hours</Text>
+                  <HourlyForecastStrip hourly={hourly} />
                 </View>
               );
             case 'activities':
@@ -334,7 +424,7 @@ export default function HomeScreen({ navigation }) {
                   selectPlace(place);
                   setCityPickerVisible(false);
                 }}
-                placeholder="Search any city in Pakistan..."
+                placeholder="Search cities in Pakistan..."
               />
             </View>
             <Text style={[styles.cityOptionText, { color: colors.textSecondary, fontSize: 12, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }]}>Popular Cities</Text>
@@ -361,6 +451,23 @@ export default function HomeScreen({ navigation }) {
             />
           </Pressable>
         </Pressable>
+      </Modal>
+
+      <Modal visible={insightModal !== null} transparent animationType="fade" onRequestClose={() => setInsightModal(null)}>
+        <View style={styles.modalOverlay}>
+          {insightModal && (
+            <View style={[styles.insightModal, { backgroundColor: isDark ? '#151D2E' : '#FFFFFF' }]}>
+              <Text style={[styles.insightTitle, { color: colors.text }]}>{insightModal.title}</Text>
+              <Text style={[styles.insightBody, { color: colors.textSecondary }]}>{insightModal.body}</Text>
+              <TouchableOpacity
+                style={[styles.forecastCloseBtn, { backgroundColor: colors.primary, marginTop: 20 }]}
+                onPress={() => setInsightModal(null)}
+              >
+                <Text style={styles.forecastCloseBtnText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </Modal>
 
       {/* ===== Forecast Detail Modal ===== */}
@@ -573,6 +680,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     letterSpacing: 0.2,
   },
+  sectionSubtitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 14,
+    marginBottom: 10,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
 
   /* ---- Wind Card ---- */
   windCard: {
@@ -607,6 +722,12 @@ const styles = StyleSheet.create({
   windDivider: {
     width: 1,
     height: 44,
+  },
+  windFootnote: {
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 12,
+    textAlign: 'center',
   },
 
   /* ---- Details Grid ---- */
@@ -700,6 +821,24 @@ const styles = StyleSheet.create({
   cityOptionText: {
     fontSize: 16,
     fontWeight: '500',
+  },
+  insightModal: {
+    position: 'absolute',
+    top: '18%',
+    left: 20,
+    right: 20,
+    borderRadius: 24,
+    padding: 24,
+  },
+  insightTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  insightBody: {
+    fontSize: 15,
+    lineHeight: 24,
   },
 
   /* ---- Forecast Detail Modal ---- */

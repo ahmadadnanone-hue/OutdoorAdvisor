@@ -5,9 +5,9 @@ import { loadGoogleMaps } from '../config/googleApi';
 
 /**
  * City search using Google Places Autocomplete (web).
- * Biased to Pakistan, restricted to cities. Calls onPlaceSelect({ name, lat, lon }).
+ * Biased to Pakistan and restricted to city-level results. Calls onPlaceSelect({ name, lat, lon }).
  */
-export default function PlacesAutocomplete({ onPlaceSelect, placeholder = 'Search city or area...' }) {
+export default function PlacesAutocomplete({ onPlaceSelect, placeholder = 'Search cities in Pakistan...' }) {
   const { colors, isDark } = useTheme();
   const [query, setQuery] = useState('');
   const [predictions, setPredictions] = useState([]);
@@ -89,7 +89,9 @@ export default function PlacesAutocomplete({ onPlaceSelect, placeholder = 'Searc
   if (Platform.OS !== 'web') {
     return (
       <View style={[styles.fallback, { backgroundColor: colors.card }]}>
-        <Text style={{ color: colors.textSecondary }}>Place search requires web platform.</Text>
+        <Text style={{ color: colors.textSecondary, textAlign: 'center' }}>
+          City search is available on the web app. On mobile, use the popular cities list below.
+        </Text>
       </View>
     );
   }

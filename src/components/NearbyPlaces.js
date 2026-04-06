@@ -33,7 +33,7 @@ export default function NearbyPlaces({ lat, lon, keyword, type, colors, title = 
 
     async function run() {
       if (Platform.OS !== 'web') {
-        setError('Nearby search requires web platform.');
+        setError('Nearby venue suggestions are available on the web app. AQI and activity guidance still work on mobile.');
         setPlaces([]);
         return;
       }
