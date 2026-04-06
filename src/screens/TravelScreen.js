@@ -20,6 +20,8 @@ import { getWeatherDescription } from '../utils/weatherCodes';
 import typography from '../theme/typography';
 import { fetchApiJson } from '../config/api';
 
+const NHMP_REFRESH_MS = 5 * 60 * 1000;
+
 if (
   Platform.OS === 'android' &&
   UIManager.setLayoutAnimationEnabledExperimental
@@ -184,43 +186,55 @@ export default function TravelScreen() {
   const [pmdBlocked, setPmdBlocked] = useState(false);
   const [expandedPmdCity, setExpandedPmdCity] = useState(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    // Fetch NHMP
-    (async () => {
-      try {
-        const json = await fetchApiJson('/api/nhmp');
-        if (!cancelled && json.success && json.advisories) {
-          setNhmpData(json.advisories);
-          setNhmpTime(json.timestamp);
-        } else if (!cancelled) {
-          setNhmpError(true);
-        }
-      } catch {
-        if (!cancelled) setNhmpError(true);
-      } finally {
-        if (!cancelled) setNhmpLoading(false);
+  const loadNhmp = useCallback(async (cancelledRef) => {
+    try {
+      const json = await fetchApiJson('/api/nhmp');
+      if (cancelledRef.current) return;
+
+      if (json.success && json.advisories) {
+        setNhmpData(json.advisories);
+        setNhmpTime(json.timestamp);
+        setNhmpError(false);
+      } else {
+        setNhmpError(true);
       }
-    })();
+    } catch {
+      if (!cancelledRef.current) setNhmpError(true);
+    } finally {
+      if (!cancelledRef.current) setNhmpLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const cancelledRef = { current: false };
+    loadNhmp(cancelledRef);
+
+    const nhmpInterval = setInterval(() => {
+      loadNhmp(cancelledRef);
+    }, NHMP_REFRESH_MS);
+
     // Fetch PMD
     (async () => {
       try {
         const json = await fetchApiJson('/api/pmd');
-        if (!cancelled && json.success && json.cities && json.cities.length > 0) {
+        if (!cancelledRef.current && json.success && json.cities && json.cities.length > 0) {
           setPmdCities(json.cities);
           setPmdAlerts(json.alerts || []);
           setPmdTime(json.timestamp);
-        } else if (!cancelled) {
+        } else if (!cancelledRef.current) {
           setPmdBlocked(true);
         }
       } catch {
-        if (!cancelled) setPmdBlocked(true);
+        if (!cancelledRef.current) setPmdBlocked(true);
       } finally {
-        if (!cancelled) setPmdLoading(false);
+        if (!cancelledRef.current) setPmdLoading(false);
       }
     })();
-    return () => { cancelled = true; };
-  }, []);
+    return () => {
+      cancelledRef.current = true;
+      clearInterval(nhmpInterval);
+    };
+  }, [loadNhmp]);
 
   const toggleMotorway = useCallback(
     async (index) => {
