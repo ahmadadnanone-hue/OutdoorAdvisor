@@ -1,11 +1,11 @@
 import React from 'react';
 import { Text, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
-import { getActivityStatus } from '../theme/colors';
+import { getActivitySummary } from '../utils/activityScoring';
 
-export default function ActivityCard({ name, icon, aqi, onPress }) {
+export default function ActivityCard({ activity, aqi, weather, hourly, onPress }) {
   const { isDark, colors } = useTheme();
-  const status = getActivityStatus(aqi);
+  const summary = getActivitySummary(activity, aqi ?? 0, weather, hourly);
 
   const cardShadow = !isDark
     ? {
@@ -36,24 +36,24 @@ export default function ActivityCard({ name, icon, aqi, onPress }) {
       <View
         style={[
           styles.accentBorder,
-          { backgroundColor: status.color },
+          { backgroundColor: summary.color },
         ]}
       />
       <View style={styles.content}>
         <View style={styles.leftSection}>
-          <Text style={styles.icon}>{icon}</Text>
+          <Text style={styles.icon}>{activity.emoji}</Text>
           <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
-            {name}
+            {activity.name}
           </Text>
         </View>
         <View
           style={[
             styles.statusBadge,
-            { backgroundColor: status.color + '26' },
+            { backgroundColor: summary.color + '26' },
           ]}
         >
-          <Text style={[styles.statusText, { color: status.color }]}>
-            {status.label}
+          <Text style={[styles.statusText, { color: summary.color }]}>
+            {summary.label}
           </Text>
         </View>
       </View>

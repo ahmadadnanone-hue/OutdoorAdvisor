@@ -89,6 +89,9 @@ export default function ForecastStrip({ daily, loading, onDayPress }) {
         cardBorder,
       ]}
     >
+      <View style={styles.cueRow}>
+        <Text style={[styles.cueText, { color: colors.textSecondary }]}>Swipe →</Text>
+      </View>
       <FlatList
         data={daily}
         horizontal
@@ -121,8 +124,17 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 14,
   },
+  cueRow: {
+    alignItems: 'flex-end',
+    marginBottom: 8,
+  },
+  cueText: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
   listContent: {
-    gap: 0,
+    paddingRight: 18,
   },
   item: {
     borderRadius: 14,

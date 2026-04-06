@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
   placeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 14,
     borderTopWidth: 1,
   },
   placeInfo: {
@@ -249,12 +249,13 @@ const styles = StyleSheet.create({
   },
   placeVicinity: {
     fontSize: typography.caption,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   metaRow: {
     flexDirection: 'row',
     gap: 10,
     flexWrap: 'wrap',
+    marginTop: 2,
   },
   metaText: {
     fontSize: typography.caption,

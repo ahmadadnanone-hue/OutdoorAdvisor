@@ -4,12 +4,22 @@ import { DEFAULT_ENABLED_ACTIVITY_IDS } from '../data/activities';
 
 const STORAGE_KEY = 'outdooradvisor_settings';
 
-const DEFAULT_HOME_SECTIONS = [
+const LEGACY_HOME_SECTIONS = [
   'decision',
   'travel',
   'aqi',
   'forecast',
   'activities',
+  'details',
+  'wind',
+];
+
+const DEFAULT_HOME_SECTIONS = [
+  'aqi',
+  'decision',
+  'activities',
+  'travel',
+  'forecast',
   'details',
   'wind',
 ];
@@ -23,6 +33,12 @@ const DEFAULT_SETTINGS = {
 
 function normalizeHomeSections(homeSections) {
   const incoming = Array.isArray(homeSections) ? homeSections : [];
+  if (
+    incoming.length === LEGACY_HOME_SECTIONS.length &&
+    incoming.every((key, index) => key === LEGACY_HOME_SECTIONS[index])
+  ) {
+    return DEFAULT_HOME_SECTIONS;
+  }
   const known = new Set(DEFAULT_HOME_SECTIONS);
   const cleaned = incoming.filter((key) => known.has(key));
   const missingDefaults = DEFAULT_HOME_SECTIONS.filter((key) => !cleaned.includes(key));

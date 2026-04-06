@@ -35,8 +35,10 @@ export default async function handler(req, res) {
 
     const subscriptions = await listSubscriptions();
     if (!subscriptions.length) {
-      return sendJson(res, 404, {
-        error: 'No browser push subscriptions are registered yet.',
+      return sendJson(res, 200, {
+        success: false,
+        sent: 0,
+        message: 'No devices are subscribed to browser push yet.',
       });
     }
 

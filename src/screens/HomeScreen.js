@@ -31,6 +31,8 @@ import CacheIndicator from '../components/CacheIndicator';
 import PlacesAutocomplete from '../components/PlacesAutocomplete';
 import { maybeSendLocalAlert } from '../utils/alertNotifications';
 import { loadStoredNotifications, loadStoredThresholds } from '../utils/alertPreferences';
+import { getActivitySummary } from '../utils/activityScoring';
+import { getActivityById } from '../data/activities';
 
 const LIVE_REFRESH_WINDOW_MS = 5 * 60 * 1000;
 const MAX_LIVE_REFRESHES_PER_WINDOW = 2;
@@ -61,12 +63,12 @@ function isFogCode(code) {
 }
 
 const ACTIVITIES = [
-  { name: 'Running', icon: '🏃' },
-  { name: 'Cricket', icon: '🏏' },
-  { name: 'Cycling', icon: '🚴' },
-  { name: 'Walking', icon: '🚶' },
-  { name: 'Outdoor Dining', icon: '🍽️' },
-  { name: 'School Outdoor', icon: '🏫' },
+  'running',
+  'cricket',
+  'cycling',
+  'walking',
+  'dining',
+  'schoolpe',
 ];
 
 const HOME_TRIP_ACTIONS = [
@@ -748,11 +750,12 @@ export default function HomeScreen({ navigation }) {
                   <Text style={[styles.sectionTitle, { color: colors.text }]}>Activity Advisory</Text>
                   <View style={styles.activityGrid}>
                     {ACTIVITIES.map((activity) => (
-                      <View key={activity.name} style={styles.activityItem}>
+                      <View key={activity} style={styles.activityItem}>
                         <ActivityCard
-                          name={activity.name}
-                          icon={activity.icon}
+                          activity={getActivityById(activity)}
                           aqi={aqi}
+                          weather={weatherCurrent}
+                          hourly={hourly}
                           onPress={() => handleActivityPress(activity)}
                         />
                       </View>

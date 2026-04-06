@@ -28,6 +28,9 @@ export default function HourlyForecastStrip({ hourly = [] }) {
 
   return (
     <View style={[styles.wrapper, { backgroundColor: colors.card }]}>
+      <View style={styles.cueRow}>
+        <Text style={[styles.cueText, { color: colors.textSecondary }]}>Swipe →</Text>
+      </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.listContent}>
         {hourly.slice(0, 12).map((hour) => {
           const weather = getWeatherDescription(hour.weatherCode);
@@ -65,8 +68,17 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 14,
   },
+  cueRow: {
+    alignItems: 'flex-end',
+    marginBottom: 8,
+  },
+  cueText: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
   listContent: {
-    paddingRight: 4,
+    paddingRight: 18,
   },
   item: {
     width: 82,
