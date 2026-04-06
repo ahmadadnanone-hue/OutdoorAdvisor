@@ -53,13 +53,25 @@ const ROUTE_ALERT_KEYWORDS = {
   SWAT: ['swat', 'mingora', 'kalam', 'malakand', 'mardan'],
 };
 
+const NHMP_ROUTE_ALIASES = {
+  M1: ['m1', 'peshawar-islamabad', 'peshawar to islamabad', 'islamabad to peshawar'],
+  M2: ['m2', 'islamabad-lahore', 'islamabad to lahore', 'lahore to islamabad'],
+  M3: ['m3', 'lahore-abdul hakam', 'lahore to abdul hakam', 'abdul hakam to lahore'],
+  M4: ['m4', 'abdul hakam-multan', 'abdul hakam to multan', 'multan to abdul hakam'],
+  M9: ['m9', 'karachi-hyderabad', 'karachi to hyderabad', 'hyderabad to karachi'],
+};
+
 function findNhmpRouteMatch(route, advisories) {
-  const routeId = route.id.toLowerCase();
-  const routeName = route.name.toLowerCase();
+  const aliases = [
+    route.id.toLowerCase(),
+    route.name.toLowerCase(),
+    ...(NHMP_ROUTE_ALIASES[route.id] || []),
+    ...route.stops.map((stop) => stop.name.toLowerCase()),
+  ];
 
   return advisories.find((advisory) => {
     const haystack = `${advisory.route || ''} ${advisory.sector || ''} ${advisory.status || ''}`.toLowerCase();
-    return haystack.includes(routeId) || haystack.includes(routeName);
+    return aliases.some((alias) => haystack.includes(alias));
   }) || null;
 }
 
@@ -449,12 +461,12 @@ export default function TravelScreen() {
           motorway.kind === 'motorway'
             ? matchedAdvisory
               ? matchedAdvisory.severity === 'clear'
-                ? { label: 'NHMP Clear', color: '#22C55E', bg: 'rgba(34,197,94,0.14)' }
-                : { label: 'NHMP Alert', color: '#EF4444', bg: 'rgba(239,68,68,0.14)' }
-              : { label: 'Live Scan', color: colors.primary, bg: colors.primary + '15' }
+                ? { label: 'NHMP Match', color: '#22C55E', bg: 'rgba(34,197,94,0.14)' }
+                : { label: 'NHMP Match', color: '#EF4444', bg: 'rgba(239,68,68,0.14)' }
+              : { label: 'Stop Scan', color: colors.primary, bg: colors.primary + '15' }
             : matchedPmdAlerts.length > 0
             ? { label: 'PMD Alert', color: '#EF4444', bg: 'rgba(239,68,68,0.14)' }
-            : { label: 'Live Scan', color: colors.primary, bg: colors.primary + '15' };
+            : { label: 'Stop Scan', color: colors.primary, bg: colors.primary + '15' };
 
         return (
           <View

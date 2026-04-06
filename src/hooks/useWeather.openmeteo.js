@@ -99,6 +99,7 @@ function parseResponse(json) {
   const h = json.hourly;
   const hourly = (h?.time || []).slice(0, 24).map((time, i) => ({
     time,
+    hourLabel: Number.isFinite(new Date(time).getHours()) ? new Date(time).getHours() : null,
     temp: h.temperature_2m?.[i] ?? null,
     feelsLike: h.apparent_temperature?.[i] ?? null,
     humidity: h.relative_humidity_2m?.[i] ?? null,
@@ -145,6 +146,7 @@ export default function useWeather(lat, lon) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isUsingCache, setIsUsingCache] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState(null);
   const latRef = useRef(lat);
   const lonRef = useRef(lon);
 
@@ -162,6 +164,7 @@ export default function useWeather(lat, lon) {
       setDaily(cached.daily);
       setHourly(cached.hourly || []);
       setIsUsingCache(true);
+      setUpdatedAt(cache[key]?.timestamp ?? Date.now());
       setLoading(false);
       return;
     }
@@ -179,12 +182,14 @@ export default function useWeather(lat, lon) {
       setCurrent(result.current);
       setDaily(result.daily);
       setHourly(result.hourly || []);
+      setUpdatedAt(Date.now());
     } catch (err) {
       const fallback = getFallback(fetchLat, fetchLon);
       if (fallback) {
         setCurrent(fallback.current);
         setDaily(fallback.daily);
         setHourly(fallback.hourly || []);
+        setUpdatedAt(Date.now());
       }
       setError(err.message || 'Failed to fetch weather data');
       setIsUsingCache(true);
@@ -205,5 +210,5 @@ export default function useWeather(lat, lon) {
     fetchData(lat, lon);
   }, [lat, lon, fetchData]);
 
-  return { current, daily, hourly, loading, error, isUsingCache, refresh };
+  return { current, daily, hourly, loading, error, isUsingCache, updatedAt, refresh };
 }

@@ -8,6 +8,7 @@ import AnimatedWeatherIcon from './AnimatedWeatherIcon';
 function formatHourLabel(time) {
   if (!time) return '--';
   const date = new Date(time);
+  if (Number.isNaN(date.getTime())) return '--';
   return date.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
 }
 
@@ -42,7 +43,7 @@ export default function HourlyForecastStrip({ hourly = [] }) {
               ]}
             >
               <Text style={[styles.hourLabel, { color: colors.textSecondary }]}>
-                {formatHourLabel(hour.time)}
+                {hour.hourLabel != null ? formatHourLabel(`2000-01-01T${String(hour.hourLabel).padStart(2, '0')}:00:00`) : formatHourLabel(hour.time)}
               </Text>
               <AnimatedWeatherIcon weatherCode={hour.weatherCode} emoji={weather.icon} size={24} />
               <Text style={[styles.temp, { color: colors.text }]}>

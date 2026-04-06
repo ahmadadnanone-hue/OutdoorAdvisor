@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 
-export default function CacheIndicator({ visible }) {
+export default function CacheIndicator({ visible, updatedAt }) {
   const { isDark, colors } = useTheme();
 
   if (!visible) return null;
@@ -19,7 +19,7 @@ export default function CacheIndicator({ visible }) {
       >
         <View style={styles.dot} />
         <Text style={[styles.text, { color: colors.textSecondary }]}>
-          Cached data
+          {updatedAt ? `Cached data · ${updatedAt}` : 'Cached data'}
         </Text>
       </View>
     </View>

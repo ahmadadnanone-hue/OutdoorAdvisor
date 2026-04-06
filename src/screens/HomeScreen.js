@@ -106,6 +106,7 @@ export default function HomeScreen({ navigation }) {
     pm10,
     loading: aqiLoading,
     isUsingCache: aqiCached,
+    updatedAt: aqiUpdatedAt,
     refresh: refreshAqi,
   } = useAQI(location.lat, location.lon);
   const {
@@ -114,6 +115,7 @@ export default function HomeScreen({ navigation }) {
     hourly,
     loading: weatherLoading,
     isUsingCache: weatherCached,
+    updatedAt: weatherUpdatedAt,
     refresh: refreshWeather,
   } = useWeather(location.lat, location.lon);
   const { primary: pollenPrimary, types: pollenTypes, refresh: refreshPollen } = usePollen(location.lat, location.lon);
@@ -138,10 +140,11 @@ export default function HomeScreen({ navigation }) {
     navigation.navigate('Activities');
   };
 
-  const lastUpdated = new Date().toLocaleTimeString([], {
+  const freshestUpdate = [aqiUpdatedAt, weatherUpdatedAt].filter(Boolean).sort((a, b) => b - a)[0] || null;
+  const lastUpdated = freshestUpdate ? new Date(freshestUpdate).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
-  });
+  }) : '--';
 
   const weather = getWeatherDescription(weatherCurrent?.weatherCode);
   const todayForecast = daily?.[0] || null;
@@ -246,7 +249,10 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         {/* Cache Indicator */}
-        <CacheIndicator visible={aqiCached || weatherCached} />
+        <CacheIndicator
+          visible={aqiCached || weatherCached}
+          updatedAt={lastUpdated !== '--' ? lastUpdated : null}
+        />
         {Platform.OS === 'web' && (
           <Text style={[styles.webRefreshHint, { color: colors.textSecondary }]}>
             Use the Refresh button above on web. Browser pull-to-refresh is not reliable here.
@@ -423,7 +429,7 @@ export default function HomeScreen({ navigation }) {
 
         {/* ===== 7. Last Updated ===== */}
         <Text style={[styles.lastUpdated, { color: colors.textSecondary }]}>
-          Last updated at {lastUpdated}
+          Data updated at {lastUpdated}
         </Text>
       </ScrollView>
 

@@ -68,6 +68,7 @@ export default function useAQI(lat, lon) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isUsingCache, setIsUsingCache] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState(null);
   const currentCoords = useRef({ lat, lon });
 
   const fetchData = useCallback(async (la, lo) => {
@@ -82,11 +83,13 @@ export default function useAQI(lat, lon) {
     const key = cacheKey(la, lo);
     const cached = getCached(key);
     if (cached) {
+      const cachedEntry = persistentCache.getEntry(CACHE_NS, key);
       setAqi(cached.aqi);
       setPm25(cached.pm25);
       setPm10(cached.pm10);
       setCategory(cached.category);
       setIsUsingCache(true);
+      setUpdatedAt(cachedEntry?.timestamp ?? Date.now());
       setLoading(false);
       return;
     }
@@ -96,6 +99,7 @@ export default function useAQI(lat, lon) {
     setPm25(result.pm25);
     setPm10(result.pm10);
     setCategory(result.category);
+    setUpdatedAt(Date.now());
     if (result.error) setError(result.error);
     setLoading(false);
   }, []);
@@ -111,5 +115,5 @@ export default function useAQI(lat, lon) {
     fetchData(lat, lon);
   }, [lat, lon, fetchData]);
 
-  return { aqi, pm25, pm10, category, loading, error, isUsingCache, refresh };
+  return { aqi, pm25, pm10, category, loading, error, isUsingCache, updatedAt, refresh };
 }
