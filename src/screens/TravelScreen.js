@@ -65,6 +65,58 @@ const NHMP_ROUTE_ALIASES = {
   M9: ['m9', 'karachi-hyderabad', 'karachi to hyderabad', 'hyderabad to karachi'],
 };
 
+function getTravelRiskSummary({ nhmpData, pmdAlerts }) {
+  const closures = nhmpData.filter((item) => item.severity === 'closed');
+  const fog = nhmpData.filter((item) => item.severity === 'fog');
+  const warnings = nhmpData.filter((item) => item.severity === 'warning' || item.severity === 'rain');
+  const northernAlerts = pmdAlerts.filter((alert) =>
+    /(murree|naran|kaghan|swat|gilgit|hazara|karakoram|abbottabad|mansehra)/i.test(String(alert))
+  );
+
+  if (closures.length > 0) {
+    return {
+      label: 'High travel caution',
+      tone: '#EF4444',
+      bg: 'rgba(239,68,68,0.10)',
+      border: 'rgba(239,68,68,0.22)',
+      body: `${closures.length} official closure alert${closures.length > 1 ? 's are' : ' is'} active right now. Recheck NHMP before motorway travel and expect diversions.`,
+      chips: [
+        `${closures.length} closure${closures.length > 1 ? 's' : ''}`,
+        fog.length ? `${fog.length} fog advisory${fog.length > 1 ? 'ies' : ''}` : null,
+        northernAlerts.length ? `${northernAlerts.length} PMD northern alert${northernAlerts.length > 1 ? 's' : ''}` : null,
+      ].filter(Boolean),
+    };
+  }
+
+  if (fog.length > 0 || northernAlerts.length > 0 || warnings.length > 0) {
+    return {
+      label: 'Go with care',
+      tone: '#F97316',
+      bg: 'rgba(249,115,22,0.10)',
+      border: 'rgba(249,115,22,0.22)',
+      body: fog.length
+        ? `Fog or visibility-related advisories are active. Slow down, keep more margin, and check route-specific notes below.`
+        : northernAlerts.length
+        ? `PMD is flagging weather risk on northern corridors. Trips are still possible, but route timing matters more right now.`
+        : `There are live travel advisories worth checking before a longer drive today.`,
+      chips: [
+        fog.length ? `${fog.length} fog advisory${fog.length > 1 ? 'ies' : ''}` : null,
+        warnings.length ? `${warnings.length} active advisory${warnings.length > 1 ? 'ies' : ''}` : null,
+        northernAlerts.length ? `${northernAlerts.length} PMD corridor alert${northernAlerts.length > 1 ? 's' : ''}` : null,
+      ].filter(Boolean),
+    };
+  }
+
+  return {
+    label: 'Routes mostly clear',
+    tone: '#22C55E',
+    bg: 'rgba(34,197,94,0.10)',
+    border: 'rgba(34,197,94,0.22)',
+    body: 'No major closure or fog alert is dominating the official feeds right now. Check a specific corridor below for stop-by-stop weather and AQI before you leave.',
+    chips: ['NHMP quiet', pmdAlerts.length ? `${pmdAlerts.length} PMD weather note${pmdAlerts.length > 1 ? 's' : ''}` : 'No major PMD corridor alert'],
+  };
+}
+
 function findNhmpRouteMatch(route, advisories) {
   const aliases = [
     route.id.toLowerCase(),
@@ -372,6 +424,7 @@ export default function TravelScreen({ route }) {
   // Separate active alerts from clear
   const activeAlerts = nhmpData.filter((a) => a.severity !== 'clear');
   const clearRoutes = nhmpData.filter((a) => a.severity === 'clear');
+  const travelSummary = getTravelRiskSummary({ nhmpData, pmdAlerts });
 
   return (
     <ScrollView
@@ -565,6 +618,35 @@ export default function TravelScreen({ route }) {
         )}
       </View>
 
+      <View
+        style={[
+          styles.travelSummaryCard,
+          {
+            backgroundColor: travelSummary.bg,
+            borderColor: travelSummary.border,
+          },
+        ]}
+      >
+        <Text style={[styles.travelSummaryEyebrow, { color: colors.textSecondary }]}>Travel snapshot</Text>
+        <Text style={[styles.travelSummaryTitle, { color: travelSummary.tone }]}>{travelSummary.label}</Text>
+        <Text style={[styles.travelSummaryBody, { color: colors.text }]}>
+          {travelSummary.body}
+        </Text>
+        <View style={styles.travelSummaryChips}>
+          {travelSummary.chips.map((chip) => (
+            <View
+              key={chip}
+              style={[
+                styles.travelSummaryChip,
+                { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFFAA', borderColor: travelSummary.border },
+              ]}
+            >
+              <Text style={[styles.travelSummaryChipText, { color: colors.text }]}>{chip}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
       {/* Weather-Based Route Conditions */}
       <Text style={[styles.title, { color: colors.text, marginTop: 24 }]}>
         Weather Along Major Routes
@@ -730,6 +812,44 @@ const styles = StyleSheet.create({
   /* Motorway Cards */
   card: { borderRadius: 12, borderWidth: 1, marginBottom: 12, overflow: 'hidden' },
   routeSubtitle: { fontSize: 13, marginBottom: 12, lineHeight: 18 },
+  travelSummaryCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+    marginTop: 8,
+  },
+  travelSummaryEyebrow: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  travelSummaryTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  travelSummaryBody: {
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  travelSummaryChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  travelSummaryChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  travelSummaryChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
   cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   roadEmoji: { fontSize: 22, marginRight: 10 },

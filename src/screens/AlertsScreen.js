@@ -16,6 +16,7 @@ import { useSettings } from '../context/SettingsContext';
 import typography from '../theme/typography';
 import {
   ensureWebPush,
+  getWebNotificationPermission,
   hasPushSubscription,
   isWebPushSupported,
   syncWebPushPreferences,
@@ -148,6 +149,11 @@ export default function AlertsScreen() {
   // Notifications state
   const [notifications, setNotifications] = useState(DEFAULT_NOTIFICATIONS);
   const [pushSupported, setPushSupported] = useState(false);
+  const [notificationState, setNotificationState] = useState({
+    tone: 'neutral',
+    title: 'Checking alert delivery',
+    body: 'We are checking whether this device can receive alerts directly or save them locally for later.',
+  });
   const [mockAccount, setMockAccount] = useState(null);
   const [accountBusy, setAccountBusy] = useState(false);
 
@@ -205,6 +211,117 @@ export default function AlertsScreen() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshNotificationState = async () => {
+      const enabledCount = Object.values(notifications).filter(Boolean).length;
+
+      if (enabledCount === 0) {
+        if (!cancelled) {
+          setNotificationState({
+            tone: 'neutral',
+            title: 'No alerts selected yet',
+            body: 'Turn on the alerts you care about and OutdoorAdvisor will watch for those conditions.',
+          });
+        }
+        return;
+      }
+
+      try {
+        const local = await ensureLocalNotificationPermission({ prompt: false });
+        if (cancelled) return;
+
+        if (Platform.OS === 'web') {
+          if (!isWebPushSupported()) {
+            setNotificationState({
+              tone: 'soft',
+              title: 'Saved on this browser only',
+              body: 'Your alert choices are saved here, but this browser does not support the current push setup.',
+            });
+            return;
+          }
+
+          const permission = getWebNotificationPermission();
+          const subscribed = permission === 'granted' ? await hasPushSubscription().catch(() => false) : false;
+          if (cancelled) return;
+
+          if (permission === 'denied') {
+            setNotificationState({
+              tone: 'warning',
+              title: 'Browser notifications are blocked',
+              body: 'Your alert choices are saved, but you will need to allow notifications in browser settings to receive live alerts.',
+            });
+            return;
+          }
+
+          if (subscribed) {
+            setNotificationState({
+              tone: 'ready',
+              title: 'Alerts are live on this browser',
+              body: 'OutdoorAdvisor can send real web alerts here when conditions cross your thresholds.',
+            });
+            return;
+          }
+
+          if (permission === 'granted') {
+            setNotificationState({
+              tone: 'soft',
+              title: 'Browser permission is ready',
+              body: 'The next enabled alert will finish browser registration automatically and keep this device in sync.',
+            });
+            return;
+          }
+
+          setNotificationState({
+            tone: 'neutral',
+            title: 'Permission will be requested when needed',
+            body: 'Turn on any alert and OutdoorAdvisor will ask this browser for permission the first time it needs to deliver one.',
+          });
+          return;
+        }
+
+        if (local.granted) {
+          setNotificationState({
+            tone: 'ready',
+            title: 'Alerts are ready on this device',
+            body: 'OutdoorAdvisor can deliver local alerts here when weather, AQI, or route conditions become important.',
+          });
+          return;
+        }
+
+        if (local.blocked) {
+          setNotificationState({
+            tone: 'warning',
+            title: 'Device notifications are blocked',
+            body: 'Your alert choices are saved, but you will need to enable notifications in system settings to receive them.',
+          });
+          return;
+        }
+
+        setNotificationState({
+          tone: 'neutral',
+          title: 'Alert preferences are saved',
+          body: 'OutdoorAdvisor will ask for notification permission when it needs to deliver a real alert on this device.',
+        });
+      } catch {
+        if (!cancelled) {
+          setNotificationState({
+            tone: 'soft',
+            title: 'Alert preferences are saved',
+            body: 'We could not confirm delivery status just now, but your chosen alerts are still saved on this device.',
+          });
+        }
+      }
+    };
+
+    refreshNotificationState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, notifications]);
 
   // Persist thresholds
   const updateThreshold = useCallback(
@@ -364,6 +481,15 @@ export default function AlertsScreen() {
       { key: 'routeClosureAlerts', label: 'Major Route Closures', desc: 'Important alerts for serious motorway and corridor closures.' },
     ];
 
+    const stateAccent =
+      notificationState.tone === 'ready'
+        ? { bg: '#22C55E15', border: '#22C55E33', text: '#15803D' }
+        : notificationState.tone === 'warning'
+        ? { bg: '#F9731615', border: '#F9731633', text: '#C2410C' }
+        : notificationState.tone === 'soft'
+        ? { bg: colors.primary + '10', border: colors.primary + '24', text: colors.primary }
+        : { bg: colors.card, border: colors.border, text: colors.text };
+
     return (
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Theme Mode Picker */}
@@ -396,11 +522,27 @@ export default function AlertsScreen() {
         <Text style={[styles.sectionDesc, { color: colors.textSecondary }]}>
           These preferences control the alerts OutdoorAdvisor should watch for. On supported browsers, notification permission is handled automatically when you turn alerts on.
         </Text>
+        <View
+          style={[
+            styles.notificationStatusCard,
+            {
+              backgroundColor: stateAccent.bg,
+              borderColor: stateAccent.border,
+            },
+          ]}
+        >
+          <Text style={[styles.notificationStatusTitle, { color: stateAccent.text }]}>
+            {notificationState.title}
+          </Text>
+          <Text style={[styles.notificationStatusBody, { color: colors.textSecondary }]}>
+            {notificationState.body}
+          </Text>
+        </View>
         {Platform.OS === 'web' && (
           <Text style={[styles.notificationHint, { color: colors.textSecondary }]}>
             {pushSupported
-              ? 'Browser alerts will be requested the first time you turn on a notification that needs them.'
-              : 'This browser cannot receive the current web notification setup, but your alert preferences are still saved.'}
+              ? 'Web push and local browser alerts work best when this site is allowed to send notifications.'
+              : 'This browser can still save your alert interests even when direct web push is unavailable.'}
           </Text>
         )}
 
@@ -948,6 +1090,21 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     lineHeight: 18,
     marginBottom: 14,
+  },
+  notificationStatusCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+  },
+  notificationStatusTitle: {
+    fontSize: typography.body,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  notificationStatusBody: {
+    fontSize: typography.caption,
+    lineHeight: 18,
   },
 
   /* About */

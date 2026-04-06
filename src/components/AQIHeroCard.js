@@ -143,6 +143,10 @@ function InfoPill({ label, value, colors }) {
   );
 }
 
+function HeroGlow({ color, style }) {
+  return <View pointerEvents="none" style={[styles.glowOrb, { backgroundColor: color }, style]} />;
+}
+
 export default function AQIHeroCard({
   locationTitle,
   locationSubtitle,
@@ -186,6 +190,21 @@ export default function AQIHeroCard({
 
   const content = (
     <View style={[styles.card, { backgroundColor: heroColors.background }, cardShadow]}>
+      <HeroGlow color={heroColors.accent + '22'} style={styles.glowTop} />
+      <HeroGlow color={'rgba(255,255,255,0.08)'} style={styles.glowBottom} />
+
+      <View style={styles.topMetaRow}>
+        <View style={[styles.liveChip, { backgroundColor: heroColors.surface, borderColor: heroColors.line }]}>
+          <View style={[styles.liveDot, { backgroundColor: heroColors.accent }]} />
+          <Text style={[styles.liveChipText, { color: heroColors.text }]}>Live conditions</Text>
+        </View>
+        <View style={[styles.weatherMoodChip, { backgroundColor: heroColors.surface, borderColor: heroColors.line }]}>
+          <Text style={[styles.weatherMoodText, { color: heroColors.subtext }]}>
+            {(windSpeed ?? 0) >= 20 ? 'Windy' : conditionLabel || 'Now'}
+          </Text>
+        </View>
+      </View>
+
       <View style={[styles.locationPill, { backgroundColor: heroColors.surface, borderColor: heroColors.line }]}>
         <Text style={styles.locationIcon}>📍</Text>
         <View style={styles.locationCopy}>
@@ -263,6 +282,62 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     padding: 18,
     minHeight: 280,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  glowOrb: {
+    position: 'absolute',
+    borderRadius: 999,
+  },
+  glowTop: {
+    width: 180,
+    height: 180,
+    top: -36,
+    right: -28,
+  },
+  glowBottom: {
+    width: 140,
+    height: 140,
+    bottom: -54,
+    left: -34,
+  },
+  topMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 12,
+  },
+  liveChip: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+  },
+  liveChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  weatherMoodChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  weatherMoodText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   locationPill: {
     borderRadius: 18,
