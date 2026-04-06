@@ -9,11 +9,20 @@ import {
   StyleSheet,
   SafeAreaView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
 import typography from '../theme/typography';
+import {
+  disableWebPush,
+  enableWebPush,
+  hasPushSubscription,
+  isWebPushSupported,
+  sendWebPushTest,
+  syncWebPushPreferences,
+} from '../utils/webPush';
 
 const TABS = ['Thresholds', 'Notifications', 'Customize', 'About'];
 
@@ -37,10 +46,12 @@ const DEFAULT_THRESHOLDS = {
 };
 
 const DEFAULT_NOTIFICATIONS = {
+  severeAqiWarnings: true,
   dailySummary: true,
   smogAlerts: true,
   rainAlerts: false,
   fogWarnings: true,
+  routeClosureAlerts: true,
 };
 
 /* ---------- Custom Slider ---------- */
@@ -145,19 +156,45 @@ export default function AlertsScreen() {
 
   // Notifications state
   const [notifications, setNotifications] = useState(DEFAULT_NOTIFICATIONS);
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMessage, setPushMessage] = useState('');
 
   // Load persisted data on mount
   useEffect(() => {
     (async () => {
       try {
         const savedT = await AsyncStorage.getItem(THRESHOLDS_KEY);
-        if (savedT) setThresholds(JSON.parse(savedT));
+        if (savedT) setThresholds({ ...DEFAULT_THRESHOLDS, ...JSON.parse(savedT) });
       } catch (_) {}
       try {
         const savedN = await AsyncStorage.getItem(NOTIFICATIONS_KEY);
-        if (savedN) setNotifications(JSON.parse(savedN));
+        if (savedN) setNotifications({ ...DEFAULT_NOTIFICATIONS, ...JSON.parse(savedN) });
       } catch (_) {}
     })();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      if (Platform.OS !== 'web' || !isWebPushSupported()) return;
+
+      try {
+        const subscribed = await hasPushSubscription();
+        if (!cancelled) {
+          setPushSupported(true);
+          setPushEnabled(subscribed);
+        }
+      } catch {
+        if (!cancelled) setPushSupported(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Persist thresholds
@@ -176,8 +213,11 @@ export default function AlertsScreen() {
       const updated = { ...notifications, [key]: value };
       setNotifications(updated);
       AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated)).catch(() => {});
+      if (Platform.OS === 'web' && pushEnabled) {
+        syncWebPushPreferences(updated).catch(() => {});
+      }
     },
-    [notifications]
+    [notifications, pushEnabled]
   );
 
   /* ---------- Tab Bar ---------- */
@@ -294,11 +334,52 @@ export default function AlertsScreen() {
     ];
 
     const items = [
+      { key: 'severeAqiWarnings', label: 'Severe AQI Warnings', desc: 'Important alerts when air quality becomes unhealthy enough to change outdoor plans.' },
       { key: 'dailySummary', label: 'Daily AQI Summary', desc: 'Receive a morning summary of air quality in your city.' },
       { key: 'smogAlerts', label: 'Smog Season Alerts', desc: 'Get notified when smog season conditions are detected.' },
       { key: 'rainAlerts', label: 'Rain Alerts', desc: 'Be alerted when rain is expected in your area.' },
       { key: 'fogWarnings', label: 'Motorway Fog Warnings', desc: 'Warnings for dangerous fog conditions on motorways.' },
+      { key: 'routeClosureAlerts', label: 'Major Route Closures', desc: 'Important alerts for serious motorway and corridor closures.' },
     ];
+
+    const handlePushToggle = async () => {
+      if (!pushSupported) return;
+
+      setPushBusy(true);
+      setPushMessage('');
+      try {
+        if (pushEnabled) {
+          await disableWebPush();
+          setPushEnabled(false);
+          setPushMessage('Web push notifications are now off for this browser.');
+        } else {
+          await enableWebPush(notifications);
+          setPushEnabled(true);
+          setPushMessage('Web push notifications are now enabled for this browser.');
+        }
+      } catch (error) {
+        setPushMessage(error.message || 'Could not update push notification status.');
+      } finally {
+        setPushBusy(false);
+      }
+    };
+
+    const handleSendTest = async () => {
+      setPushBusy(true);
+      setPushMessage('');
+      try {
+        const result = await sendWebPushTest('severeAqi');
+        setPushMessage(
+          result?.sent
+            ? `Sent severe AQI test notification to ${result.sent} subscribed browser${result.sent > 1 ? 's' : ''}.`
+            : 'No subscribed browsers were available for a test notification.'
+        );
+      } catch (error) {
+        setPushMessage(error.message || 'Could not send a test notification.');
+      } finally {
+        setPushBusy(false);
+      }
+    };
 
     return (
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -330,8 +411,63 @@ export default function AlertsScreen() {
 
         <Text style={[styles.sectionLabel, { color: colors.text, marginTop: 24 }]}>Notifications</Text>
         <Text style={[styles.sectionDesc, { color: colors.textSecondary }]}>
-          These are saved alert preferences for now. Push notifications are not live yet, but the app will remember the alert types you care about.
+          Saved alert preferences control what matters most to you. On supported browsers, you can also turn on real web push notifications below.
         </Text>
+
+        <View style={[styles.pushCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.pushCardHeader}>
+            <View style={styles.pushCardInfo}>
+              <Text style={[styles.pushCardTitle, { color: colors.text }]}>Web Push Notifications</Text>
+              <Text style={[styles.pushCardBody, { color: colors.textSecondary }]}>
+                {Platform.OS !== 'web'
+                  ? 'Push controls are currently available on the web app. Mobile still saves your alert interests locally.'
+                  : pushSupported
+                  ? pushEnabled
+                    ? 'This browser is subscribed and can receive real OutdoorAdvisor alerts.'
+                    : 'Enable browser notifications to receive important OutdoorAdvisor alerts here.'
+                  : 'This browser does not support the current web push setup.'}
+              </Text>
+            </View>
+            {pushBusy && <ActivityIndicator size="small" color={colors.primary} />}
+          </View>
+
+          {Platform.OS === 'web' && pushSupported && (
+            <View style={styles.pushActionRow}>
+              <TouchableOpacity
+                style={[
+                  styles.pushActionBtn,
+                  { backgroundColor: pushEnabled ? '#EF4444' + '15' : colors.primary + '15' },
+                ]}
+                onPress={handlePushToggle}
+                activeOpacity={0.75}
+                disabled={pushBusy}
+              >
+                <Text style={[styles.pushActionBtnText, { color: pushEnabled ? '#EF4444' : colors.primary }]}>
+                  {pushEnabled ? 'Disable Push' : 'Enable Push'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.pushActionBtn,
+                  { backgroundColor: colors.primary + '15', opacity: pushEnabled ? 1 : 0.5 },
+                ]}
+                onPress={handleSendTest}
+                activeOpacity={0.75}
+                disabled={!pushEnabled || pushBusy}
+              >
+                <Text style={[styles.pushActionBtnText, { color: colors.primary }]}>
+                  Send Severe AQI Test
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {!!pushMessage && (
+            <Text style={[styles.pushStatusText, { color: colors.textSecondary }]}>
+              {pushMessage}
+            </Text>
+          )}
+        </View>
 
         {items.map((item) => (
           <View
@@ -503,54 +639,43 @@ export default function AlertsScreen() {
           Your smart guide to outdoor safety — real-time AQI, weather & travel conditions across Pakistan.
         </Text>
 
-        {/* Data Sources */}
         <View style={[styles.aboutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.aboutCardTitle, { color: colors.primary }]}>Data Sources</Text>
+          <Text style={[styles.aboutCardTitle, { color: colors.primary }]}>What It Covers</Text>
           <View style={styles.aboutRow}>
             <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>Google Air Quality API for live AQI and pollutant data</Text>
+            <Text style={[styles.aboutRowText, { color: colors.text }]}>AQI, weather, pollen, and route conditions in one place</Text>
           </View>
           <View style={styles.aboutRow}>
             <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>Google Weather API for current conditions and 7-day forecasts</Text>
+            <Text style={[styles.aboutRowText, { color: colors.text }]}>Pakistan-focused guidance for daily outdoor plans and travel</Text>
           </View>
           <View style={styles.aboutRow}>
             <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>Google Pollen API for localized pollen outlook and seasonal sensitivity signals</Text>
-          </View>
-          <View style={styles.aboutRow}>
-            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>Google Geocoding, Maps, and Places for location search, map view, and nearby venues</Text>
-          </View>
-          <View style={styles.aboutRow}>
-            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>NHMP travel advisories and PMD forecasts surfaced through the app&apos;s serverless API routes</Text>
+            <Text style={[styles.aboutRowText, { color: colors.text }]}>Clickable insights that explain what the conditions mean</Text>
           </View>
         </View>
 
-        {/* Developer */}
+        <View style={[styles.aboutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.aboutCardTitle, { color: colors.primary }]}>Live Data & Stack</Text>
+          <View style={styles.aboutRow}>
+            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
+            <Text style={[styles.aboutRowText, { color: colors.text }]}>Google APIs power AQI, weather, pollen, maps, and location search</Text>
+          </View>
+          <View style={styles.aboutRow}>
+            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
+            <Text style={[styles.aboutRowText, { color: colors.text }]}>NHMP and PMD advisories are surfaced through Vercel serverless routes</Text>
+          </View>
+          <View style={styles.aboutRow}>
+            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
+            <Text style={[styles.aboutRowText, { color: colors.text }]}>Expo SDK {sdkVersion} with web push support on compatible browsers</Text>
+          </View>
+        </View>
+
         <View style={[styles.aboutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.aboutCardTitle, { color: colors.primary }]}>Developer</Text>
           <Text style={[styles.aboutBodyText, { color: colors.text }]}>
             Built with ❤️ in Pakistan
           </Text>
-        </View>
-
-        {/* Tech */}
-        <View style={[styles.aboutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.aboutCardTitle, { color: colors.primary }]}>Technology</Text>
-          <View style={styles.aboutRow}>
-            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>React Native, Expo, and React Navigation</Text>
-          </View>
-          <View style={styles.aboutRow}>
-            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>Expo SDK {sdkVersion}</Text>
-          </View>
-          <View style={styles.aboutRow}>
-            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>Vercel serverless functions for travel and forecast scraping endpoints</Text>
-          </View>
         </View>
       </ScrollView>
     );
@@ -761,6 +886,50 @@ const styles = StyleSheet.create({
   notifDesc: {
     fontSize: typography.caption,
     lineHeight: 18,
+  },
+  pushCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+  },
+  pushCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  pushCardInfo: {
+    flex: 1,
+  },
+  pushCardTitle: {
+    fontSize: typography.body,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  pushCardBody: {
+    fontSize: typography.caption,
+    lineHeight: 18,
+  },
+  pushActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  pushActionBtn: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  pushActionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  pushStatusText: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 12,
   },
 
   /* About */

@@ -60,6 +60,29 @@ function getGreeting() {
   return 'Good Evening';
 }
 
+function getLocationDisplay(label) {
+  if (!label) {
+    return { primary: 'Lahore', secondary: 'Pakistan' };
+  }
+
+  const parts = String(label)
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length >= 2) {
+    return {
+      primary: parts[0],
+      secondary: `${parts.slice(1).join(', ')}, Pakistan`,
+    };
+  }
+
+  return {
+    primary: label,
+    secondary: `${label}, Pakistan`,
+  };
+}
+
 function getAqiInsight(aqi, pm25) {
   if (aqi == null) {
     return 'Live AQI insight is unavailable right now. Pull to refresh or try another city.';
@@ -145,6 +168,7 @@ export default function HomeScreen({ navigation }) {
     hour: '2-digit',
     minute: '2-digit',
   }) : '--';
+  const locationDisplay = getLocationDisplay(city);
 
   const weather = getWeatherDescription(weatherCurrent?.weatherCode);
   const todayForecast = daily?.[0] || null;
@@ -219,12 +243,12 @@ export default function HomeScreen({ navigation }) {
               <TouchableOpacity style={styles.cityRow} onPress={() => setCityPickerVisible(true)} activeOpacity={0.7}>
                 <Text style={styles.locationPin}>📍</Text>
                 <Text style={[styles.cityText, { color: colors.text }]} numberOfLines={1}>
-                  {city}
+                  {locationDisplay.primary}
                 </Text>
                 <Text style={[styles.cityChevron, { color: colors.textSecondary }]}>▼</Text>
               </TouchableOpacity>
               <Text style={[styles.areaText, { color: colors.textSecondary }]} numberOfLines={1}>
-                {city}, Pakistan
+                {locationDisplay.secondary}
               </Text>
             </View>
           </View>

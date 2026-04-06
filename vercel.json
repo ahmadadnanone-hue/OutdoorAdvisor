@@ -23,6 +23,15 @@
     },
     "api/google/weather.js": {
       "maxDuration": 30
+    },
+    "api/notifications/subscribe.js": {
+      "maxDuration": 30
+    },
+    "api/notifications/unsubscribe.js": {
+      "maxDuration": 30
+    },
+    "api/notifications/send-test.js": {
+      "maxDuration": 30
     }
   }
 }
