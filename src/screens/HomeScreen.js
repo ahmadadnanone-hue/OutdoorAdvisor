@@ -119,6 +119,59 @@ function getPollenInsight(primary, types) {
   return `${primary.displayName || 'Pollen'} is the main pollen driver right now with a ${primary.indexDisplayName || primary.category || primary.value} reading.${topTypes ? ` Top pollen types: ${topTypes}.` : ''}`;
 }
 
+function getHomeDecision({ aqi, temp, feelsLike, weatherCode, pollenValue, windSpeed }) {
+  const heatValue = feelsLike ?? temp ?? null;
+  const isStormy = weatherCode != null && [95, 96, 99].includes(weatherCode);
+  const isHeavyRain = weatherCode != null && [65, 82].includes(weatherCode);
+  const isRain = weatherCode != null && [51, 53, 55, 61, 63, 65, 80, 81, 82].includes(weatherCode);
+  const hasHighPollen = pollenValue != null && pollenValue >= 4;
+  const hasStrongWind = windSpeed != null && windSpeed >= 35;
+
+  if (isStormy || aqi > 200 || heatValue >= 47) {
+    const reasons = [];
+    if (isStormy) reasons.push('thunderstorm risk');
+    if (aqi > 200) reasons.push(`AQI ${aqi}`);
+    if (heatValue >= 47) reasons.push(`feels-like ${Math.round(heatValue)}°`);
+    return {
+      label: 'Better to limit exposure',
+      tone: 'Strong risk is present right now.',
+      body: `If you still need to go out, keep it brief, avoid hard exertion, and use protection that matches the condition.${reasons.length ? ` Main factor: ${reasons.join(' · ')}.` : ''}`,
+      color: '#EF4444',
+      bg: 'rgba(239,68,68,0.12)',
+      border: 'rgba(239,68,68,0.24)',
+    };
+  }
+
+  if (aqi > 100 || heatValue >= 38 || isHeavyRain || hasHighPollen || hasStrongWind || isRain) {
+    const guidance = [];
+    if (aqi > 100) guidance.push('wear an N95 if you are sensitive or staying out long');
+    if (heatValue >= 38) guidance.push('go earlier or later and hydrate often');
+    if (isHeavyRain) guidance.push('use waterproof gear and slow down');
+    else if (isRain) guidance.push('take rain gear for shorter trips');
+    if (hasHighPollen) guidance.push('keep allergy medication or a mask handy');
+    if (hasStrongWind) guidance.push('avoid exposed routes and secure loose gear');
+    return {
+      label: 'Go with care',
+      tone: 'Outdoor plans are still workable with a few precautions.',
+      body: guidance.length
+        ? `Best approach: ${guidance.slice(0, 3).join(' · ')}.`
+        : 'Conditions are manageable, but you will feel them more than on an easy-weather day.',
+      color: '#F97316',
+      bg: 'rgba(249,115,22,0.12)',
+      border: 'rgba(249,115,22,0.24)',
+    };
+  }
+
+  return {
+    label: 'Good to go',
+    tone: 'Conditions are comfortable for most outdoor plans.',
+    body: 'This is a good window for walks, errands, and regular outdoor activity without major adjustments.',
+    color: '#22C55E',
+    bg: 'rgba(34,197,94,0.12)',
+    border: 'rgba(34,197,94,0.24)',
+  };
+}
+
 export default function HomeScreen({ navigation }) {
   const { colors, isDark } = useTheme();
   const settings = useSettings();
@@ -210,6 +263,14 @@ export default function HomeScreen({ navigation }) {
   const pollenDisplayName = pollenPrimary?.displayName || 'Pollen';
   const pollenCategory = pollenPrimary?.indexDisplayName || pollenPrimary?.category || '--';
   const pollenColor = pollenValue != null ? getAqiColor((pollenValue + 1) * 50) : '#7A8BA7';
+  const decision = getHomeDecision({
+    aqi,
+    temp: weatherCurrent?.temp,
+    feelsLike: weatherCurrent?.feelsLike,
+    weatherCode: weatherCurrent?.weatherCode,
+    pollenValue,
+    windSpeed: weatherCurrent?.windSpeed,
+  });
 
   // Loading screen while location is being determined
   if (locationLoading) {
@@ -282,6 +343,30 @@ export default function HomeScreen({ navigation }) {
             Use the Refresh button above on web. Browser pull-to-refresh is not reliable here.
           </Text>
         )}
+
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={[
+            styles.decisionCard,
+            {
+              backgroundColor: decision.bg,
+              borderColor: decision.border,
+            },
+          ]}
+          onPress={() =>
+            setInsightModal({
+              title: decision.label,
+              body: `${decision.tone} ${decision.body}`,
+            })
+          }
+        >
+          <View style={styles.decisionHeader}>
+            <Text style={[styles.decisionEyebrow, { color: colors.textSecondary }]}>Outdoor decision</Text>
+            <Text style={[styles.decisionLabel, { color: decision.color }]}>{decision.label}</Text>
+          </View>
+          <Text style={[styles.decisionTone, { color: colors.text }]}>{decision.tone}</Text>
+          <Text style={[styles.decisionBody, { color: colors.textSecondary }]}>{decision.body}</Text>
+        </TouchableOpacity>
 
         {/* ===== Customizable Sections ===== */}
         {settings.homeSections.map((key) => {
@@ -757,6 +842,41 @@ const styles = StyleSheet.create({
   /* ---- Sections ---- */
   section: {
     marginBottom: 16,
+  },
+  decisionCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 18,
+    marginBottom: 16,
+  },
+  decisionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 12,
+  },
+  decisionEyebrow: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  decisionLabel: {
+    fontSize: 18,
+    fontWeight: '800',
+    textAlign: 'right',
+    flexShrink: 1,
+  },
+  decisionTone: {
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 24,
+    marginBottom: 8,
+  },
+  decisionBody: {
+    fontSize: 14,
+    lineHeight: 21,
   },
   sectionTitle: {
     fontSize: 18,

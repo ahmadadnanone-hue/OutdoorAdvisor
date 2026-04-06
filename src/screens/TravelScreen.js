@@ -171,10 +171,12 @@ export default function TravelScreen() {
   const [expandedMotorway, setExpandedMotorway] = useState(null);
   const [stopData, setStopData] = useState({});
   const fetchingRef = useRef({});
+  const nhmpCancelRef = useRef(false);
 
   // NHMP live data
   const [nhmpData, setNhmpData] = useState([]);
   const [nhmpLoading, setNhmpLoading] = useState(true);
+  const [nhmpRefreshing, setNhmpRefreshing] = useState(false);
   const [nhmpTime, setNhmpTime] = useState(null);
   const [nhmpError, setNhmpError] = useState(false);
 
@@ -186,10 +188,13 @@ export default function TravelScreen() {
   const [pmdBlocked, setPmdBlocked] = useState(false);
   const [expandedPmdCity, setExpandedPmdCity] = useState(null);
 
-  const loadNhmp = useCallback(async (cancelledRef) => {
+  const loadNhmp = useCallback(async ({ silent = false } = {}) => {
+    if (!silent && nhmpData.length > 0) {
+      setNhmpRefreshing(true);
+    }
     try {
       const json = await fetchApiJson('/api/nhmp');
-      if (cancelledRef.current) return;
+      if (nhmpCancelRef.current) return;
 
       if (json.success && json.advisories) {
         setNhmpData(json.advisories);
@@ -199,39 +204,42 @@ export default function TravelScreen() {
         setNhmpError(true);
       }
     } catch {
-      if (!cancelledRef.current) setNhmpError(true);
+      if (!nhmpCancelRef.current) setNhmpError(true);
     } finally {
-      if (!cancelledRef.current) setNhmpLoading(false);
+      if (!nhmpCancelRef.current) {
+        setNhmpLoading(false);
+        setNhmpRefreshing(false);
+      }
     }
-  }, []);
+  }, [nhmpData.length]);
 
   useEffect(() => {
-    const cancelledRef = { current: false };
-    loadNhmp(cancelledRef);
+    nhmpCancelRef.current = false;
+    loadNhmp();
 
     const nhmpInterval = setInterval(() => {
-      loadNhmp(cancelledRef);
+      loadNhmp({ silent: true });
     }, NHMP_REFRESH_MS);
 
     // Fetch PMD
     (async () => {
       try {
         const json = await fetchApiJson('/api/pmd');
-        if (!cancelledRef.current && json.success && json.cities && json.cities.length > 0) {
+        if (!nhmpCancelRef.current && json.success && json.cities && json.cities.length > 0) {
           setPmdCities(json.cities);
           setPmdAlerts(json.alerts || []);
           setPmdTime(json.timestamp);
-        } else if (!cancelledRef.current) {
+        } else if (!nhmpCancelRef.current) {
           setPmdBlocked(true);
         }
       } catch {
-        if (!cancelledRef.current) setPmdBlocked(true);
+        if (!nhmpCancelRef.current) setPmdBlocked(true);
       } finally {
-        if (!cancelledRef.current) setPmdLoading(false);
+        if (!nhmpCancelRef.current) setPmdLoading(false);
       }
     })();
     return () => {
-      cancelledRef.current = true;
+      nhmpCancelRef.current = true;
       clearInterval(nhmpInterval);
     };
   }, [loadNhmp]);
@@ -287,12 +295,23 @@ export default function TravelScreen() {
       <View style={styles.nhmpSection}>
         <View style={styles.nhmpTitleRow}>
           <Text style={[styles.title, { color: colors.text }]}>NHMP Live Advisory</Text>
-          <TouchableOpacity
-            onPress={() => Linking.openURL('https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.nhmpLink, { color: colors.primary }]}>View Full</Text>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              onPress={() => loadNhmp()}
+              activeOpacity={0.7}
+              disabled={nhmpRefreshing}
+            >
+              <Text style={[styles.nhmpLink, { color: colors.primary, opacity: nhmpRefreshing ? 0.6 : 1 }]}>
+                {nhmpRefreshing ? 'Refreshing…' : 'Refresh'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => Linking.openURL('https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.nhmpLink, { color: colors.primary }]}>View Full</Text>
+            </TouchableOpacity>
+          </View>
         </View>
         {nhmpTime && (
           <Text style={[styles.nhmpTimestamp, { color: colors.textSecondary }]}>
@@ -571,6 +590,7 @@ const styles = StyleSheet.create({
   /* NHMP Section */
   nhmpSection: { marginBottom: 8 },
   nhmpTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   nhmpLink: { fontSize: 13, fontWeight: '600' },
   nhmpTimestamp: { fontSize: 11, marginBottom: 10 },
   nhmpLoadingWrap: { flexDirection: 'row', alignItems: 'center', paddingVertical: 20, justifyContent: 'center' },
