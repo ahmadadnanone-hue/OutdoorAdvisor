@@ -13,9 +13,9 @@ import {
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
-import { MOTORWAYS, CITIES } from '../data/cities';
+import { MOTORWAYS } from '../data/cities';
 import { fetchWeatherForLocation } from '../hooks/useWeather';
-import { fetchAqiForCity } from '../hooks/useAQI';
+import { fetchAqiForLocation } from '../hooks/useAQI';
 import { getWeatherDescription } from '../utils/weatherCodes';
 import typography from '../theme/typography';
 
@@ -25,11 +25,6 @@ if (
 ) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
-const CITY_AQI_MAP = {};
-CITIES.forEach((c) => {
-  CITY_AQI_MAP[c.name.toLowerCase()] = c.waqiName;
-});
 
 const PMD_SEVERITY_MAP = {
   severe: { icon: '⛈️', color: '#EF4444', bg: 'rgba(239,68,68,0.12)' },
@@ -182,10 +177,9 @@ export default function TravelScreen() {
           motorway.stops.map(async (stop) => {
             const weather = await fetchWeatherForLocation(stop.lat, stop.lon);
             let aqiData = { aqi: null };
-            const waqiName = CITY_AQI_MAP[stop.name.toLowerCase()];
-            if (waqiName) {
-              try { aqiData = await fetchAqiForCity(waqiName); } catch {}
-            }
+            try {
+              aqiData = await fetchAqiForLocation(stop.lat, stop.lon);
+            } catch {}
             return {
               name: stop.name,
               temp: weather.current.temp,

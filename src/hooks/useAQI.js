@@ -73,16 +73,6 @@ export async function fetchAqiForLocation(lat, lon) {
   }
 }
 
-/**
- * Backwards-compat helper for callers passing a city object with lat/lon.
- */
-export async function fetchAqiForCity(cityOrName) {
-  if (cityOrName && typeof cityOrName === 'object' && cityOrName.lat != null) {
-    return fetchAqiForLocation(cityOrName.lat, cityOrName.lon);
-  }
-  return { aqi: null, pm25: null, pm10: null };
-}
-
 export default function useAQI(lat, lon) {
   const [aqi, setAqi] = useState(null);
   const [pm25, setPm25] = useState(null);

@@ -99,6 +99,11 @@ export default function HomeScreen({ navigation }) {
   });
 
   const weather = getWeatherDescription(weatherCurrent?.weatherCode);
+  const todayForecast = daily?.[0] || null;
+  const displayWindGusts = weatherCurrent?.windGusts ?? todayForecast?.windGusts ?? null;
+  const displayWindDirection = weatherCurrent?.windDirection ?? todayForecast?.windDirection ?? null;
+  const currentWindDirection =
+    displayWindDirection != null ? getWindDirectionLabel(displayWindDirection) : '--';
 
   const cardShadow = !isDark
     ? {
@@ -209,13 +214,17 @@ export default function HomeScreen({ navigation }) {
                       </View>
                       <View style={[styles.windDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]} />
                       <View style={styles.windColumn}>
-                        <Text style={[styles.windValue, { color: colors.text }]}>--</Text>
+                        <Text style={[styles.windValue, { color: colors.text }]}>
+                          {displayWindGusts != null
+                            ? `${Math.round(settings.convertWind(displayWindGusts))}`
+                            : '--'}
+                        </Text>
                         <Text style={[styles.windUnit, { color: colors.textSecondary }]}>{settings.windUnitLabel}</Text>
                         <Text style={[styles.windLabel, { color: colors.textSecondary }]}>Gusts</Text>
                       </View>
                       <View style={[styles.windDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]} />
                       <View style={styles.windColumn}>
-                        <Text style={[styles.windValue, { color: colors.text }]}>--</Text>
+                        <Text style={[styles.windValue, { color: colors.text }]}>{currentWindDirection}</Text>
                         <Text style={[styles.windUnit, { color: colors.textSecondary }]}>{' '}</Text>
                         <Text style={[styles.windLabel, { color: colors.textSecondary }]}>Direction</Text>
                       </View>

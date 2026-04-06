@@ -508,11 +508,19 @@ export default function AlertsScreen() {
           <Text style={[styles.aboutCardTitle, { color: colors.primary }]}>Data Sources</Text>
           <View style={styles.aboutRow}>
             <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>WAQI API (waqi.info)</Text>
+            <Text style={[styles.aboutRowText, { color: colors.text }]}>Google Air Quality API for live AQI and pollutant data</Text>
           </View>
           <View style={styles.aboutRow}>
             <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>Open-Meteo API (open-meteo.com)</Text>
+            <Text style={[styles.aboutRowText, { color: colors.text }]}>Google Weather API for current conditions and 7-day forecasts</Text>
+          </View>
+          <View style={styles.aboutRow}>
+            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
+            <Text style={[styles.aboutRowText, { color: colors.text }]}>Google Geocoding, Maps, and Places for location search, map view, and nearby venues</Text>
+          </View>
+          <View style={styles.aboutRow}>
+            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
+            <Text style={[styles.aboutRowText, { color: colors.text }]}>NHMP travel advisories and PMD forecasts surfaced through the app&apos;s serverless API routes</Text>
           </View>
         </View>
 
@@ -529,11 +537,15 @@ export default function AlertsScreen() {
           <Text style={[styles.aboutCardTitle, { color: colors.primary }]}>Technology</Text>
           <View style={styles.aboutRow}>
             <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>React Native (Expo)</Text>
+            <Text style={[styles.aboutRowText, { color: colors.text }]}>React Native, Expo, and React Navigation</Text>
           </View>
           <View style={styles.aboutRow}>
             <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
             <Text style={[styles.aboutRowText, { color: colors.text }]}>Expo SDK {sdkVersion}</Text>
+          </View>
+          <View style={styles.aboutRow}>
+            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
+            <Text style={[styles.aboutRowText, { color: colors.text }]}>Vercel serverless functions for travel and forecast scraping endpoints</Text>
           </View>
         </View>
       </ScrollView>

@@ -49,12 +49,15 @@ function getFallback(lat, lon) {
   const cityName = getNearestCityName(lat, lon);
   const mock = mockWeatherData[cityName];
   if (mock) {
+    const today = mock.daily?.[0] || {};
     return {
       current: {
         temp: mock.temp,
         feelsLike: mock.feelsLike,
         humidity: mock.humidity,
         windSpeed: mock.windSpeed,
+        windGusts: today.windGusts ?? null,
+        windDirection: today.windDirection ?? null,
         weatherCode: mock.weatherCode,
       },
       daily: mock.daily,
@@ -127,9 +130,14 @@ function parseCurrent(json) {
   const feelsLike = json.feelsLikeTemperature?.degrees ?? json.heatIndex?.degrees ?? temp;
   const humidity = json.relativeHumidity ?? null;
   const windSpeed = json.wind?.speed?.value ?? null;
+  const windGusts = json.wind?.gust?.value ?? null;
+  const windDirDeg = json.wind?.direction?.degrees;
+  const windDirCard = json.wind?.direction?.cardinal;
+  const windDirection =
+    windDirDeg != null ? windDirDeg : windDirCard ? CARDINAL_DEG[windDirCard] ?? null : null;
   const weatherCode = mapConditionTypeToWmo(json.weatherCondition?.type);
 
-  return { temp, feelsLike, humidity, windSpeed, weatherCode };
+  return { temp, feelsLike, humidity, windSpeed, windGusts, windDirection, weatherCode };
 }
 
 function parseDailyDay(day) {

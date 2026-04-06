@@ -1,14 +1,14 @@
 export const CITIES = [
-  { name: 'Lahore', lat: 31.5204, lon: 74.3587, waqiName: 'lahore' },
-  { name: 'Karachi', lat: 24.8607, lon: 67.0011, waqiName: 'karachi' },
-  { name: 'Islamabad', lat: 33.6844, lon: 73.0479, waqiName: 'islamabad' },
-  { name: 'Rawalpindi', lat: 33.5651, lon: 73.0169, waqiName: 'rawalpindi' },
-  { name: 'Faisalabad', lat: 31.4504, lon: 73.1350, waqiName: 'faisalabad' },
-  { name: 'Multan', lat: 30.1575, lon: 71.5249, waqiName: 'multan' },
-  { name: 'Peshawar', lat: 34.0151, lon: 71.5249, waqiName: 'peshawar' },
-  { name: 'Quetta', lat: 30.1798, lon: 66.9750, waqiName: 'quetta' },
-  { name: 'Sialkot', lat: 32.4945, lon: 74.5229, waqiName: 'sialkot' },
-  { name: 'Gujranwala', lat: 32.1877, lon: 74.1945, waqiName: 'gujranwala' },
+  { name: 'Lahore', lat: 31.5204, lon: 74.3587 },
+  { name: 'Karachi', lat: 24.8607, lon: 67.0011 },
+  { name: 'Islamabad', lat: 33.6844, lon: 73.0479 },
+  { name: 'Rawalpindi', lat: 33.5651, lon: 73.0169 },
+  { name: 'Faisalabad', lat: 31.4504, lon: 73.1350 },
+  { name: 'Multan', lat: 30.1575, lon: 71.5249 },
+  { name: 'Peshawar', lat: 34.0151, lon: 71.5249 },
+  { name: 'Quetta', lat: 30.1798, lon: 66.9750 },
+  { name: 'Sialkot', lat: 32.4945, lon: 74.5229 },
+  { name: 'Gujranwala', lat: 32.1877, lon: 74.1945 },
 ];
 
 // Neighborhood / sub-area AQI sampling points for major cities.

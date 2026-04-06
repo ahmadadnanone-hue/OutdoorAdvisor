@@ -43,12 +43,15 @@ function getFallback(lat, lon) {
   const cityName = getNearestCityName(lat, lon);
   const mock = mockWeatherData[cityName];
   if (mock) {
+    const today = mock.daily?.[0] || {};
     return {
       current: {
         temp: mock.temp,
         feelsLike: mock.feelsLike,
         humidity: mock.humidity,
         windSpeed: mock.windSpeed,
+        windGusts: today.windGusts ?? null,
+        windDirection: today.windDirection ?? null,
         weatherCode: mock.weatherCode,
       },
       daily: mock.daily,
@@ -58,7 +61,7 @@ function getFallback(lat, lon) {
 }
 
 function buildUrl(lat, lon) {
-  return `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,apparent_temperature,wind_gusts_10m&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,uv_index_max,sunrise,sunset,apparent_temperature_max,apparent_temperature_min,relative_humidity_2m_max,relative_humidity_2m_min,wind_direction_10m_dominant&timezone=Asia/Karachi&forecast_days=7`;
+  return `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,weather_code,apparent_temperature,wind_gusts_10m&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,uv_index_max,sunrise,sunset,apparent_temperature_max,apparent_temperature_min,relative_humidity_2m_max,relative_humidity_2m_min,wind_direction_10m_dominant&timezone=Asia/Karachi&forecast_days=7`;
 }
 
 function parseResponse(json) {
@@ -67,6 +70,8 @@ function parseResponse(json) {
     feelsLike: json.current.apparent_temperature,
     humidity: json.current.relative_humidity_2m,
     windSpeed: json.current.wind_speed_10m,
+    windGusts: json.current.wind_gusts_10m ?? null,
+    windDirection: json.current.wind_direction_10m ?? null,
     weatherCode: json.current.weather_code,
   };
 
