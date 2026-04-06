@@ -324,6 +324,22 @@ export default function ActivitiesScreen() {
                 </View>
 
                 <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.sectionTitle, { color: colors.primary }]}>Why This Score</Text>
+                  {activitySummary.rationale.map((line, idx) => (
+                    <View key={idx} style={styles.tipRow}>
+                      <Text style={[styles.tipBullet, { color: colors.accent }]}>•</Text>
+                      <Text style={[styles.tipText, { color: colors.text }]}>{line}</Text>
+                    </View>
+                  ))}
+                  <Text style={[styles.scoreWhyMeta, { color: colors.textSecondary }]}>
+                    Best-case setup: {activitySummary.idealScenario}
+                  </Text>
+                  <Text style={[styles.scoreWhyMeta, { color: colors.textSecondary }]}>
+                    Activity profile: {activitySummary.profileReason}
+                  </Text>
+                </View>
+
+                <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <Text style={[styles.sectionTitle, { color: colors.primary }]}>Recommendation</Text>
                   <Text style={[styles.sectionBody, { color: colors.text }]}>{advisory.recommendation}</Text>
                 </View>
@@ -491,6 +507,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: typography.subtitle, fontWeight: '700', marginBottom: 8 },
   sectionBody: { fontSize: typography.body, lineHeight: 24 },
+  scoreWhyMeta: { fontSize: typography.caption, lineHeight: 20, marginTop: 8 },
   tipRow: { flexDirection: 'row', marginBottom: 6, paddingRight: 8 },
   tipBullet: { fontSize: typography.body, fontWeight: '700', marginRight: 8, minWidth: 18 },
   tipText: { fontSize: typography.body, lineHeight: 24, flex: 1 },
