@@ -53,6 +53,21 @@ const ACTIVITIES = [
   { name: 'School Outdoor', icon: '🏫' },
 ];
 
+const HOME_TRIP_ACTIONS = [
+  {
+    id: 'MURREE',
+    eyebrow: 'Trip Planning',
+    title: 'Planning Murree trip?',
+    body: 'Check road, weather, and route alerts before you leave.',
+  },
+  {
+    id: 'M2',
+    eyebrow: 'Drive Status',
+    title: 'Lahore to Islamabad',
+    body: 'See M2 conditions, NHMP advisories, and stop-by-stop weather.',
+  },
+];
+
 function getGreeting() {
   const hour = new Date().getHours();
   if (hour < 12) return 'Good Morning';
@@ -367,6 +382,37 @@ export default function HomeScreen({ navigation }) {
           <Text style={[styles.decisionTone, { color: colors.text }]}>{decision.tone}</Text>
           <Text style={[styles.decisionBody, { color: colors.textSecondary }]}>{decision.body}</Text>
         </TouchableOpacity>
+
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Travel Quick Checks</Text>
+          <View style={styles.tripActionStack}>
+            {HOME_TRIP_ACTIONS.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                activeOpacity={0.85}
+                style={[
+                  styles.tripActionCard,
+                  { backgroundColor: colors.card },
+                  cardShadow,
+                  cardBorder,
+                ]}
+                onPress={() =>
+                  navigation.navigate('Travel', {
+                    highlightRoute: item.id,
+                    requestKey: Date.now(),
+                  })
+                }
+              >
+                <View style={styles.tripActionText}>
+                  <Text style={[styles.tripActionEyebrow, { color: colors.primary }]}>{item.eyebrow}</Text>
+                  <Text style={[styles.tripActionTitle, { color: colors.text }]}>{item.title}</Text>
+                  <Text style={[styles.tripActionBody, { color: colors.textSecondary }]}>{item.body}</Text>
+                </View>
+                <Text style={[styles.tripActionArrow, { color: colors.primary }]}>→</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
         {/* ===== Customizable Sections ===== */}
         {settings.homeSections.map((key) => {
@@ -877,6 +923,39 @@ const styles = StyleSheet.create({
   decisionBody: {
     fontSize: 14,
     lineHeight: 21,
+  },
+  tripActionStack: {
+    gap: 10,
+  },
+  tripActionCard: {
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  tripActionText: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  tripActionEyebrow: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  tripActionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  tripActionBody: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  tripActionArrow: {
+    fontSize: 24,
+    fontWeight: '700',
   },
   sectionTitle: {
     fontSize: 18,

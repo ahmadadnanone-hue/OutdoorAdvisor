@@ -165,7 +165,7 @@ function StopRow({ stop, colors, formatTempShort }) {
 }
 
 /* ===== Main Screen ===== */
-export default function TravelScreen() {
+export default function TravelScreen({ route }) {
   const { colors, isDark } = useTheme();
   const { formatTempShort } = useSettings();
   const [expandedMotorway, setExpandedMotorway] = useState(null);
@@ -244,41 +244,59 @@ export default function TravelScreen() {
     };
   }, [loadNhmp]);
 
+  const loadRouteStops = useCallback(async (routeIndex) => {
+    if (stopData[routeIndex] || fetchingRef.current[routeIndex]) return;
+
+    fetchingRef.current[routeIndex] = true;
+    const motorway = TRAVEL_ROUTES[routeIndex];
+    try {
+      const results = await Promise.all(
+        motorway.stops.map(async (stop) => {
+          const weather = await fetchWeatherForLocation(stop.lat, stop.lon);
+          let aqiData = { aqi: null };
+          try {
+            aqiData = await fetchAqiForLocation(stop.lat, stop.lon);
+          } catch {}
+          return {
+            name: stop.name,
+            temp: weather.current.temp,
+            weatherCode: weather.current.weatherCode,
+            humidity: weather.current.humidity,
+            windSpeed: weather.current.windSpeed,
+            aqi: aqiData.aqi,
+          };
+        })
+      );
+      setStopData((prev) => ({ ...prev, [routeIndex]: results }));
+    } catch {
+      setStopData((prev) => ({ ...prev, [routeIndex]: [] }));
+    } finally {
+      fetchingRef.current[routeIndex] = false;
+    }
+  }, [stopData]);
+
   const toggleMotorway = useCallback(
     async (index) => {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       if (expandedMotorway === index) { setExpandedMotorway(null); return; }
       setExpandedMotorway(index);
-      if (stopData[index] || fetchingRef.current[index]) return;
-      fetchingRef.current[index] = true;
-      const motorway = TRAVEL_ROUTES[index];
-      try {
-        const results = await Promise.all(
-          motorway.stops.map(async (stop) => {
-            const weather = await fetchWeatherForLocation(stop.lat, stop.lon);
-            let aqiData = { aqi: null };
-            try {
-              aqiData = await fetchAqiForLocation(stop.lat, stop.lon);
-            } catch {}
-            return {
-              name: stop.name,
-              temp: weather.current.temp,
-              weatherCode: weather.current.weatherCode,
-              humidity: weather.current.humidity,
-              windSpeed: weather.current.windSpeed,
-              aqi: aqiData.aqi,
-            };
-          })
-        );
-        setStopData((prev) => ({ ...prev, [index]: results }));
-      } catch {
-        setStopData((prev) => ({ ...prev, [index]: [] }));
-      } finally {
-        fetchingRef.current[index] = false;
-      }
+      loadRouteStops(index);
     },
-    [expandedMotorway, stopData]
+    [expandedMotorway, loadRouteStops]
   );
+
+  useEffect(() => {
+    const highlightRoute = route?.params?.highlightRoute;
+    const requestKey = route?.params?.requestKey;
+    if (!highlightRoute || !requestKey) return;
+
+    const routeIndex = TRAVEL_ROUTES.findIndex((item) => item.id === highlightRoute);
+    if (routeIndex === -1) return;
+
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedMotorway(routeIndex);
+    loadRouteStops(routeIndex);
+  }, [route?.params?.highlightRoute, route?.params?.requestKey, loadRouteStops]);
 
   const isLoading = (index) => expandedMotorway === index && !stopData[index];
 

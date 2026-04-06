@@ -15,11 +15,164 @@ import { useSettings } from '../context/SettingsContext';
 import useAQI from '../hooks/useAQI';
 import useWeather from '../hooks/useWeather';
 import useLocation from '../hooks/useLocation';
-import { getActivityStatus, getAqiColor, getAqiCategory } from '../theme/colors';
+import { getAqiColor } from '../theme/colors';
 import { getWeatherDescription } from '../utils/weatherCodes';
 import typography from '../theme/typography';
 import NearbyPlaces from '../components/NearbyPlaces';
 import { ACTIVITY_CATALOG, getActivityById } from '../data/activities';
+
+const SCORE_COLORS = {
+  excellent: '#22C55E',
+  good: '#84CC16',
+  fair: '#F59E0B',
+  limited: '#F97316',
+  avoid: '#EF4444',
+};
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getActivityProfile(activityId) {
+  const intense = new Set([
+    'running',
+    'cycling',
+    'cricket',
+    'football',
+    'basketball',
+    'tennis',
+    'hiking',
+    'paragliding',
+    'biking',
+    'skateboarding',
+    'martial_arts',
+  ]);
+  const light = new Set([
+    'walking',
+    'dining',
+    'fishing',
+    'bowling',
+    'ice_skating',
+    'golf',
+    'yoga',
+  ]);
+
+  if (intense.has(activityId)) {
+    return { air: 1.2, heat: 1.15, wind: 1.1, rain: 1.1, idealMax: 29 };
+  }
+  if (light.has(activityId)) {
+    return { air: 0.8, heat: 0.85, wind: 0.75, rain: 0.8, idealMax: 33 };
+  }
+  return { air: 1, heat: 1, wind: 0.9, rain: 0.95, idealMax: 31 };
+}
+
+function getScoreTone(score) {
+  if (score >= 80) return { label: 'Great', color: SCORE_COLORS.excellent };
+  if (score >= 65) return { label: 'Good', color: SCORE_COLORS.good };
+  if (score >= 50) return { label: 'Fair', color: SCORE_COLORS.fair };
+  if (score >= 35) return { label: 'Limited', color: SCORE_COLORS.limited };
+  return { label: 'Avoid', color: SCORE_COLORS.avoid };
+}
+
+function scoreActivityConditions(activity, aqi, weather) {
+  const profile = getActivityProfile(activity.id);
+  const heatValue = weather?.feelsLike ?? weather?.temp ?? null;
+  const weatherCode = weather?.weatherCode;
+  const windSpeed = weather?.windSpeed ?? 0;
+  const humidity = weather?.humidity ?? null;
+  const isRain = weatherCode != null && [51, 53, 55, 61, 63, 65, 80, 81, 82].includes(weatherCode);
+  const isHeavyRain = weatherCode != null && [65, 82].includes(weatherCode);
+  const isStorm = weatherCode != null && [95, 96, 99].includes(weatherCode);
+
+  let score = 100;
+
+  if (aqi > 50) score -= Math.min(12, (aqi - 50) * 0.18 * profile.air);
+  if (aqi > 100) score -= Math.min(18, (aqi - 100) * 0.22 * profile.air);
+  if (aqi > 150) score -= Math.min(20, (aqi - 150) * 0.24 * profile.air);
+  if (aqi > 200) score -= Math.min(22, (aqi - 200) * 0.26 * profile.air);
+
+  if (heatValue != null && heatValue > profile.idealMax) {
+    score -= Math.min(24, (heatValue - profile.idealMax) * 2.3 * profile.heat);
+  }
+  if (heatValue != null && heatValue >= 44) score -= 14;
+  if (humidity != null && humidity > 85 && heatValue != null && heatValue >= 34) {
+    score -= 8 * profile.heat;
+  }
+
+  if (isStorm) score -= 45;
+  else if (isHeavyRain) score -= 20 * profile.rain;
+  else if (isRain) score -= 10 * profile.rain;
+
+  if (windSpeed > 25) score -= Math.min(16, (windSpeed - 25) * 0.8 * profile.wind);
+
+  const normalized = Math.round(clamp(score, 0, 100));
+  return {
+    score: normalized,
+    ...getScoreTone(normalized),
+  };
+}
+
+function formatHour(date) {
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    hour12: true,
+  });
+}
+
+function getBestTimeLabel(activity, aqi, hourly = []) {
+  const now = new Date();
+  const todayKey = now.toDateString();
+  const candidates = hourly
+    .map((hour) => {
+      const date = hour?.time ? new Date(hour.time) : null;
+      if (!date || Number.isNaN(date.getTime())) return null;
+      if (date < now) return null;
+      if (date.toDateString() !== todayKey) return null;
+      return {
+        ...hour,
+        date,
+        summary: scoreActivityConditions(activity, aqi, hour),
+      };
+    })
+    .filter(Boolean);
+
+  if (candidates.length === 0) {
+    return 'Use the next comfortable weather window';
+  }
+
+  let best = { score: -1, startIndex: 0, span: 1 };
+  for (let i = 0; i < candidates.length; i += 1) {
+    const current = candidates[i];
+    const next = candidates[i + 1];
+    const pairScore = next
+      ? Math.round((current.summary.score + next.summary.score) / 2)
+      : current.summary.score;
+    if (pairScore > best.score) {
+      best = {
+        score: pairScore,
+        startIndex: i,
+        span: next ? 2 : 1,
+      };
+    }
+  }
+
+  const start = candidates[best.startIndex].date;
+  if (best.span === 1) return formatHour(start);
+
+  const end = new Date(start.getTime() + best.span * 60 * 60 * 1000);
+  const startHour = formatHour(start).replace(':00', '');
+  const endHour = formatHour(end).replace(':00', '');
+  return `${startHour}–${endHour}`;
+}
+
+function getActivitySummary(activity, aqi, weather, hourly) {
+  const score = scoreActivityConditions(activity, aqi, weather);
+  const bestTime = getBestTimeLabel(activity, aqi, hourly);
+  return {
+    ...score,
+    bestTime,
+  };
+}
 
 function getSmartAdvisory(activity, aqi, weather) {
   const temp = weather?.temp;
@@ -102,13 +255,12 @@ export default function ActivitiesScreen() {
   const { enabledActivities, addActivity, removeActivity } = useSettings();
   const { city, location, loading: locLoading } = useLocation();
   const { aqi, loading: aqiLoading } = useAQI(location.lat, location.lon);
-  const { current: weatherCurrent } = useWeather(location.lat, location.lon);
+  const { current: weatherCurrent, hourly } = useWeather(location.lat, location.lon);
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [addModalVisible, setAddModalVisible] = useState(false);
 
   const loading = locLoading || aqiLoading;
   const currentAqi = aqi ?? 0;
-  const status = getActivityStatus(currentAqi);
 
   // The activities the user has enabled, in order
   const activeActivities = useMemo(
@@ -135,7 +287,7 @@ export default function ActivitiesScreen() {
         </TouchableOpacity>
       );
     }
-    const actStatus = getActivityStatus(currentAqi);
+    const activitySummary = getActivitySummary(item, currentAqi, weatherCurrent, hourly);
     return (
       <TouchableOpacity
         style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -146,8 +298,14 @@ export default function ActivitiesScreen() {
         <Text style={[styles.cardName, { color: colors.text }]} numberOfLines={1}>
           {item.name}
         </Text>
-        <View style={[styles.badge, { backgroundColor: actStatus.color + '22' }]}>
-          <Text style={[styles.badgeText, { color: actStatus.color }]}>{actStatus.label}</Text>
+        <Text style={[styles.cardScore, { color: activitySummary.color }]}>
+          {activitySummary.score}/100
+        </Text>
+        <Text style={[styles.cardHint, { color: colors.textSecondary }]} numberOfLines={1}>
+          Best {activitySummary.bestTime}
+        </Text>
+        <View style={[styles.badge, { backgroundColor: activitySummary.color + '22' }]}>
+          <Text style={[styles.badgeText, { color: activitySummary.color }]}>{activitySummary.label}</Text>
         </View>
       </TouchableOpacity>
     );
@@ -257,6 +415,7 @@ export default function ActivitiesScreen() {
       >
         {selectedActivity && (() => {
           const advisory = getSmartAdvisory(selectedActivity, currentAqi, weatherCurrent);
+          const activitySummary = getActivitySummary(selectedActivity, currentAqi, weatherCurrent, hourly);
           const weatherDesc = getWeatherDescription(weatherCurrent?.weatherCode);
           return (
             <SafeAreaView style={[styles.modalContainer, { backgroundColor: colors.background }]}>
@@ -288,10 +447,31 @@ export default function ActivitiesScreen() {
                   </View>
                   <View style={[styles.conditionDivider, { backgroundColor: colors.border }]} />
                   <View style={styles.conditionItem}>
-                    <View style={[styles.modalStatusBadge, { backgroundColor: status.color + '22' }]}>
-                      <Text style={[styles.modalStatusSmall, { color: status.color }]}>{status.label}</Text>
+                    <View style={[styles.modalStatusBadge, { backgroundColor: activitySummary.color + '22' }]}>
+                      <Text style={[styles.modalStatusSmall, { color: activitySummary.color }]}>{activitySummary.label}</Text>
                     </View>
                     <Text style={[styles.conditionLabel, { color: colors.textSecondary }]}>Status</Text>
+                  </View>
+                </View>
+
+                <View style={styles.summaryRow}>
+                  <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Activity Score</Text>
+                    <Text style={[styles.summaryValue, { color: activitySummary.color }]}>
+                      {activitySummary.score}/100
+                    </Text>
+                    <Text style={[styles.summaryMeta, { color: colors.textSecondary }]}>
+                      {activitySummary.label}
+                    </Text>
+                  </View>
+                  <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>Best Time Today</Text>
+                    <Text style={[styles.summaryValue, { color: colors.text }]}>
+                      {activitySummary.bestTime}
+                    </Text>
+                    <Text style={[styles.summaryMeta, { color: colors.textSecondary }]}>
+                      Based on the next hourly weather window
+                    </Text>
                   </View>
                 </View>
 
@@ -379,6 +559,8 @@ const styles = StyleSheet.create({
   addPlus: { fontSize: 44, fontWeight: '300', lineHeight: 48, marginBottom: 4 },
   cardEmoji: { fontSize: 40, marginBottom: 8 },
   cardName: { fontSize: typography.body, fontWeight: '600', marginBottom: 8, textAlign: 'center' },
+  cardScore: { fontSize: 20, fontWeight: '800', marginBottom: 4 },
+  cardHint: { fontSize: 11, marginBottom: 8, textAlign: 'center' },
   badge: { paddingHorizontal: 14, paddingVertical: 4, borderRadius: 12 },
   badgeText: { fontSize: typography.caption, fontWeight: '700' },
 
@@ -429,6 +611,29 @@ const styles = StyleSheet.create({
   conditionDivider: { width: 1, height: 32, opacity: 0.3 },
   modalStatusSmall: { fontSize: 12, fontWeight: '700' },
   modalStatusBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 },
+  summaryRow: { width: '100%', flexDirection: 'row', gap: 12, marginBottom: 12 },
+  summaryCard: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+  },
+  summaryLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 8,
+  },
+  summaryValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  summaryMeta: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
   section: {
     width: '100%',
     padding: 16,
