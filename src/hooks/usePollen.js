@@ -46,15 +46,16 @@ function buildSummary(json) {
   };
 }
 
-export async function fetchPollenForLocation(lat, lon) {
+export async function fetchPollenForLocation(lat, lon, options = {}) {
   if (lat == null || lon == null) return { primary: null, types: [] };
+  const { force = false } = options;
 
   const key = getCacheKey(lat, lon);
-  const cached = getCached(key);
+  const cached = !force ? getCached(key) : null;
   if (cached) return cached;
 
   try {
-    const json = await fetchApiJson(`/api/google/pollen?lat=${lat}&lon=${lon}&days=1`);
+    const json = await fetchApiJson(`/api/google/pollen?lat=${lat}&lon=${lon}&days=1${force ? `&_=${Date.now()}` : ''}`);
     const result = buildSummary(json);
     setCache(key, result);
     return result;
@@ -71,18 +72,19 @@ export default function usePollen(lat, lon) {
   const [isUsingCache, setIsUsingCache] = useState(false);
   const coordsRef = useRef({ lat, lon });
 
-  const fetchData = useCallback(async (nextLat, nextLon) => {
+  const fetchData = useCallback(async (nextLat, nextLon, options = {}) => {
     if (nextLat == null || nextLon == null) {
       setLoading(false);
       return;
     }
+    const { force = false } = options;
 
     setLoading(true);
     setError(null);
     setIsUsingCache(false);
 
     const key = getCacheKey(nextLat, nextLon);
-    const cached = getCached(key);
+    const cached = !force ? getCached(key) : null;
     if (cached) {
       setPrimary(cached.primary);
       setTypes(cached.types || []);
@@ -91,17 +93,17 @@ export default function usePollen(lat, lon) {
       return;
     }
 
-    const result = await fetchPollenForLocation(nextLat, nextLon);
+    const result = await fetchPollenForLocation(nextLat, nextLon, { force });
     setPrimary(result.primary);
     setTypes(result.types || []);
     if (result.error) setError(result.error);
     setLoading(false);
   }, []);
 
-  const refresh = useCallback((nextLat, nextLon) => {
+  const refresh = useCallback((nextLat, nextLon, options = {}) => {
     const latToUse = nextLat ?? coordsRef.current.lat;
     const lonToUse = nextLon ?? coordsRef.current.lon;
-    fetchData(latToUse, lonToUse);
+    return fetchData(latToUse, lonToUse, options);
   }, [fetchData]);
 
   useEffect(() => {

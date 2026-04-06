@@ -33,6 +33,7 @@ function findNearestCity(lat, lon) {
 export default function useLocation() {
   const [location, setLocation] = useState({ lat: DEFAULT_CITY.lat, lon: DEFAULT_CITY.lon });
   const [city, setCity] = useState(DEFAULT_CITY.name);
+  const [isUsingDeviceLocation, setIsUsingDeviceLocation] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -46,6 +47,7 @@ export default function useLocation() {
         if (cached?.lat != null && cached?.lon != null) {
           setLocation({ lat: cached.lat, lon: cached.lon });
           setCity(cached.city || DEFAULT_CITY.name);
+          setIsUsingDeviceLocation(cached.source !== 'manual');
           setLoading(false);
           return cached;
         }
@@ -54,9 +56,10 @@ export default function useLocation() {
       const { status } = await Location.requestForegroundPermissionsAsync();
 
       if (status !== 'granted') {
-        const fallback = { lat: DEFAULT_CITY.lat, lon: DEFAULT_CITY.lon, city: DEFAULT_CITY.name };
+        const fallback = { lat: DEFAULT_CITY.lat, lon: DEFAULT_CITY.lon, city: DEFAULT_CITY.name, source: 'device' };
         setLocation({ lat: fallback.lat, lon: fallback.lon });
         setCity(fallback.city);
+        setIsUsingDeviceLocation(true);
         persistentCache.set(LOCATION_CACHE_NS, LOCATION_CACHE_KEY, fallback);
         setError('Location permission denied. Defaulting to Lahore.');
         setLoading(false);
@@ -78,13 +81,15 @@ export default function useLocation() {
       const friendly = await reverseGeocode(latitude, longitude);
       const resolvedCity = friendly || findNearestCity(latitude, longitude).name;
       setCity(resolvedCity);
-      const resolved = { ...nextLocation, city: resolvedCity };
+      setIsUsingDeviceLocation(true);
+      const resolved = { ...nextLocation, city: resolvedCity, source: 'device' };
       persistentCache.set(LOCATION_CACHE_NS, LOCATION_CACHE_KEY, resolved);
       return resolved;
     } catch (err) {
-      const fallback = { lat: DEFAULT_CITY.lat, lon: DEFAULT_CITY.lon, city: DEFAULT_CITY.name };
+      const fallback = { lat: DEFAULT_CITY.lat, lon: DEFAULT_CITY.lon, city: DEFAULT_CITY.name, source: 'device' };
       setLocation({ lat: fallback.lat, lon: fallback.lon });
       setCity(fallback.city);
+      setIsUsingDeviceLocation(true);
       persistentCache.set(LOCATION_CACHE_NS, LOCATION_CACHE_KEY, fallback);
       setError(err.message || 'Failed to get location. Defaulting to Lahore.');
       return fallback;
@@ -101,11 +106,13 @@ export default function useLocation() {
     const found = CITIES.find((c) => c.name === cityName);
     if (found) {
       setCity(found.name);
+      setIsUsingDeviceLocation(false);
       const nextLocation = { lat: found.lat, lon: found.lon };
       setLocation(nextLocation);
       persistentCache.set(LOCATION_CACHE_NS, LOCATION_CACHE_KEY, {
         ...nextLocation,
         city: found.name,
+        source: 'manual',
       });
     }
   }, []);
@@ -114,13 +121,15 @@ export default function useLocation() {
   const selectPlace = useCallback(({ name, lat, lon }) => {
     if (lat == null || lon == null) return;
     setCity(name || 'Selected');
+    setIsUsingDeviceLocation(false);
     setLocation({ lat, lon });
     persistentCache.set(LOCATION_CACHE_NS, LOCATION_CACHE_KEY, {
       lat,
       lon,
       city: name || 'Selected',
+      source: 'manual',
     });
   }, []);
 
-  return { location, city, loading, error, refresh: fetchLocation, selectCity, selectPlace };
+  return { location, city, isUsingDeviceLocation, loading, error, refresh: fetchLocation, selectCity, selectPlace };
 }

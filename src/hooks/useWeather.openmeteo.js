@@ -116,9 +116,10 @@ function parseResponse(json) {
   return { current, daily, hourly };
 }
 
-export async function fetchWeatherForLocation(lat, lon) {
+export async function fetchWeatherForLocation(lat, lon, options = {}) {
+  const { force = false } = options;
   const key = getCacheKey(lat, lon);
-  const cached = getCached(key);
+  const cached = !force ? getCached(key) : null;
   if (cached) return cached;
 
   try {
@@ -150,15 +151,16 @@ export default function useWeather(lat, lon) {
   const latRef = useRef(lat);
   const lonRef = useRef(lon);
 
-  const fetchData = useCallback(async (fetchLat, fetchLon) => {
+  const fetchData = useCallback(async (fetchLat, fetchLon, options = {}) => {
     if (fetchLat == null || fetchLon == null) return;
+    const { force = false } = options;
 
     setLoading(true);
     setError(null);
     setIsUsingCache(false);
 
     const key = getCacheKey(fetchLat, fetchLon);
-    const cached = getCached(key);
+    const cached = !force ? getCached(key) : null;
     if (cached) {
       setCurrent(cached.current);
       setDaily(cached.daily);
@@ -198,10 +200,10 @@ export default function useWeather(lat, lon) {
     }
   }, []);
 
-  const refresh = useCallback((nextLat, nextLon) => {
+  const refresh = useCallback((nextLat, nextLon, options = {}) => {
     const latToUse = nextLat ?? latRef.current;
     const lonToUse = nextLon ?? lonRef.current;
-    fetchData(latToUse, lonToUse);
+    return fetchData(latToUse, lonToUse, options);
   }, [fetchData]);
 
   useEffect(() => {

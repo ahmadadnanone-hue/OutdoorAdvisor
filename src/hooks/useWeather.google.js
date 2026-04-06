@@ -229,8 +229,9 @@ function parseHourlyHour(hour) {
   };
 }
 
-async function fetchWeatherBundle(lat, lon, days = 7) {
-  const json = await fetchApiJson(`/api/google/weather?lat=${lat}&lon=${lon}&days=${days}&hours=24`);
+async function fetchWeatherBundle(lat, lon, days = 7, options = {}) {
+  const { force = false } = options;
+  const json = await fetchApiJson(`/api/google/weather?lat=${lat}&lon=${lon}&days=${days}&hours=24${force ? `&_=${Date.now()}` : ''}`);
   return {
     current: parseCurrent(json.currentConditions),
     daily: (json.forecastDays || []).map(parseDailyDay),
@@ -238,13 +239,14 @@ async function fetchWeatherBundle(lat, lon, days = 7) {
   };
 }
 
-export async function fetchWeatherForLocation(lat, lon) {
+export async function fetchWeatherForLocation(lat, lon, options = {}) {
+  const { force = false } = options;
   const key = getCacheKey(lat, lon);
-  const cached = getCached(key);
+  const cached = !force ? getCached(key) : null;
   if (cached) return cached;
 
   try {
-    const result = await fetchWeatherBundle(lat, lon, 7);
+    const result = await fetchWeatherBundle(lat, lon, 7, { force });
     setCache(key, result);
     return result;
   } catch (err) {
@@ -265,15 +267,16 @@ export default function useWeather(lat, lon) {
   const latRef = useRef(lat);
   const lonRef = useRef(lon);
 
-  const fetchData = useCallback(async (fetchLat, fetchLon) => {
+  const fetchData = useCallback(async (fetchLat, fetchLon, options = {}) => {
     if (fetchLat == null || fetchLon == null) return;
+    const { force = false } = options;
 
     setLoading(true);
     setError(null);
     setIsUsingCache(false);
 
     const key = getCacheKey(fetchLat, fetchLon);
-    const cached = getCached(key);
+    const cached = !force ? getCached(key) : null;
     if (cached) {
       const cachedEntry = persistentCache.getEntry(CACHE_NS, key);
       setCurrent(cached.current);
@@ -286,7 +289,7 @@ export default function useWeather(lat, lon) {
     }
 
     try {
-      const result = await fetchWeatherBundle(fetchLat, fetchLon, 7);
+      const result = await fetchWeatherBundle(fetchLat, fetchLon, 7, { force });
       setCache(key, result);
       setCurrent(result.current);
       setDaily(result.daily);
@@ -307,10 +310,10 @@ export default function useWeather(lat, lon) {
     }
   }, []);
 
-  const refresh = useCallback((nextLat, nextLon) => {
+  const refresh = useCallback((nextLat, nextLon, options = {}) => {
     const latToUse = nextLat ?? latRef.current;
     const lonToUse = nextLon ?? lonRef.current;
-    fetchData(latToUse, lonToUse);
+    return fetchData(latToUse, lonToUse, options);
   }, [fetchData]);
 
   useEffect(() => {

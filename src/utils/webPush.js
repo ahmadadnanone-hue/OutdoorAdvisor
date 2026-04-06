@@ -22,6 +22,11 @@ export function isWebPushSupported() {
   );
 }
 
+export function getWebNotificationPermission() {
+  if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
+  return Notification.permission;
+}
+
 async function getServiceWorkerRegistration() {
   const registration = await navigator.serviceWorker.register('/sw.js');
   return navigator.serviceWorker.ready.then(() => registration);
@@ -73,6 +78,23 @@ export async function enableWebPush(preferences = {}) {
   });
 
   return true;
+}
+
+export async function ensureWebPush(preferences = {}, { prompt = false } = {}) {
+  if (!isWebPushSupported()) return { supported: false, enabled: false };
+
+  const permission = getWebNotificationPermission();
+  if (permission === 'granted') {
+    await enableWebPush(preferences);
+    return { supported: true, enabled: true };
+  }
+
+  if (permission === 'default' && prompt) {
+    await enableWebPush(preferences);
+    return { supported: true, enabled: true };
+  }
+
+  return { supported: true, enabled: false, blocked: permission === 'denied' };
 }
 
 export async function disableWebPush() {

@@ -19,6 +19,8 @@ import { fetchAqiForLocation } from '../hooks/useAQI';
 import { getWeatherDescription } from '../utils/weatherCodes';
 import typography from '../theme/typography';
 import { fetchApiJson } from '../config/api';
+import { loadStoredNotifications } from '../utils/alertPreferences';
+import { maybeSendLocalAlert } from '../utils/alertNotifications';
 
 const NHMP_REFRESH_MS = 5 * 60 * 1000;
 
@@ -245,6 +247,60 @@ export default function TravelScreen({ route }) {
       clearInterval(nhmpInterval);
     };
   }, [loadNhmp]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!nhmpData.length && !pmdAlerts.length) return undefined;
+
+    (async () => {
+      const prefs = await loadStoredNotifications();
+      if (cancelled) return;
+
+      if (prefs.routeClosureAlerts) {
+        const closure = nhmpData.find((item) => item.severity === 'closed');
+        if (closure) {
+          maybeSendLocalAlert('nhmp-route-closure', {
+            title: 'Major route closure',
+            body: closure.route
+              ? `${closure.route} has an active closure advisory. Check NHMP before you leave.`
+              : 'An important route closure advisory is active. Check NHMP before you leave.',
+            url: 'https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx',
+          });
+        }
+      }
+
+      if (prefs.fogWarnings) {
+        const fogAlert = nhmpData.find((item) => item.severity === 'fog');
+        if (fogAlert) {
+          maybeSendLocalAlert('nhmp-fog-warning', {
+            title: 'Motorway fog warning',
+            body: fogAlert.route
+              ? `${fogAlert.route} has fog-related visibility risk. Drive slower and leave extra margin.`
+              : 'A motorway fog advisory is active. Drive slower and leave extra margin.',
+            url: 'https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx',
+          });
+        }
+      }
+
+      if (prefs.routeClosureAlerts && pmdAlerts.length > 0) {
+        const northernAlert = pmdAlerts.find((alert) =>
+          /(murree|naran|kaghan|swat|gilgit|hazara|karakoram|abbottabad|mansehra)/i.test(String(alert))
+        );
+        if (northernAlert) {
+          maybeSendLocalAlert('pmd-corridor-alert', {
+            title: 'Northern route weather alert',
+            body: String(northernAlert).slice(0, 180),
+            url: 'https://nwfc.pmd.gov.pk/',
+          });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [nhmpData, pmdAlerts]);
 
   const loadRouteStops = useCallback(async (routeIndex) => {
     if (stopData[routeIndex] || fetchingRef.current[routeIndex]) return;

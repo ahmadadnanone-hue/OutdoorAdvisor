@@ -1,305 +1,402 @@
-import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  TouchableOpacity,
+  Animated,
+  Easing,
+} from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import AnimatedWeatherIcon from './AnimatedWeatherIcon';
 import { getAqiColor, getAqiCategory } from '../theme/colors';
 
-const AQI_BANDS = [
-  { max: 50, color: '#22C55E', label: 'Good' },
-  { max: 100, color: '#EAB308', label: 'Moderate' },
-  { max: 150, color: '#F97316', label: 'Unhealthy (SG)' },
-  { max: 200, color: '#EF4444', label: 'Unhealthy' },
-  { max: 300, color: '#A855F7', label: 'Very Unhealthy' },
-  { max: 500, color: '#991B1B', label: 'Hazardous' },
-];
+function isRainCode(code) {
+  return code != null && [51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code);
+}
 
-function AQIScaleBar({ aqi, isDark }) {
-  const percent = aqi != null ? Math.min((aqi / 500) * 100, 100) : 0;
+function isStormCode(code) {
+  return code != null && [95, 96, 99].includes(code);
+}
+
+function isFogCode(code) {
+  return code != null && [45, 48].includes(code);
+}
+
+function getHeroTheme(weatherCode, windSpeed) {
+  const isWindy = (windSpeed ?? 0) >= 20;
+
+  if (isStormCode(weatherCode)) {
+    return {
+      background: '#2A3050',
+      surface: 'rgba(255,255,255,0.12)',
+      line: 'rgba(255,255,255,0.22)',
+      text: '#FFFFFF',
+      subtext: 'rgba(255,255,255,0.78)',
+      accent: '#FBBF24',
+    };
+  }
+
+  if (isRainCode(weatherCode)) {
+    return {
+      background: '#2F5D8A',
+      surface: 'rgba(255,255,255,0.12)',
+      line: 'rgba(255,255,255,0.22)',
+      text: '#FFFFFF',
+      subtext: 'rgba(255,255,255,0.78)',
+      accent: '#7DD3FC',
+    };
+  }
+
+  if (isFogCode(weatherCode)) {
+    return {
+      background: '#556476',
+      surface: 'rgba(255,255,255,0.12)',
+      line: 'rgba(255,255,255,0.2)',
+      text: '#FFFFFF',
+      subtext: 'rgba(255,255,255,0.78)',
+      accent: '#E2E8F0',
+    };
+  }
+
+  if (isWindy) {
+    return {
+      background: '#343F70',
+      surface: 'rgba(255,255,255,0.12)',
+      line: 'rgba(255,255,255,0.2)',
+      text: '#FFFFFF',
+      subtext: 'rgba(255,255,255,0.78)',
+      accent: '#C7D2FE',
+    };
+  }
+
+  if (weatherCode === 0) {
+    return {
+      background: '#E38A1C',
+      surface: 'rgba(255,255,255,0.18)',
+      line: 'rgba(255,255,255,0.22)',
+      text: '#FFFFFF',
+      subtext: 'rgba(255,255,255,0.82)',
+      accent: '#FEF3C7',
+    };
+  }
+
+  return {
+    background: '#53627C',
+    surface: 'rgba(255,255,255,0.12)',
+    line: 'rgba(255,255,255,0.2)',
+    text: '#FFFFFF',
+    subtext: 'rgba(255,255,255,0.8)',
+    accent: '#DCE7F7',
+  };
+}
+
+function WindMotion({ color }) {
+  const translateX = useRef(new Animated.Value(-12)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(translateX, {
+          toValue: 16,
+          duration: 1800,
+          easing: Easing.inOut(Easing.sine),
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateX, {
+          toValue: -12,
+          duration: 1800,
+          easing: Easing.inOut(Easing.sine),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [translateX]);
 
   return (
-    <View style={scaleStyles.wrapper}>
-      {/* Gradient bar made of segments */}
-      <View style={scaleStyles.barTrack}>
-        {AQI_BANDS.map((band, i) => {
-          const prevMax = i === 0 ? 0 : AQI_BANDS[i - 1].max;
-          const widthPercent = ((band.max - prevMax) / 500) * 100;
-          const isFirst = i === 0;
-          const isLast = i === AQI_BANDS.length - 1;
-          return (
-            <View
-              key={band.max}
-              style={[
-                scaleStyles.barSegment,
-                {
-                  backgroundColor: band.color,
-                  width: `${widthPercent}%`,
-                  borderTopLeftRadius: isFirst ? 6 : 0,
-                  borderBottomLeftRadius: isFirst ? 6 : 0,
-                  borderTopRightRadius: isLast ? 6 : 0,
-                  borderBottomRightRadius: isLast ? 6 : 0,
-                },
-              ]}
-            />
-          );
-        })}
-      </View>
-
-      {/* Position indicator */}
-      {aqi != null && (
-        <View style={[scaleStyles.indicatorWrap, { left: `${percent}%` }]}>
-          <View
-            style={[
-              scaleStyles.indicator,
-              {
-                backgroundColor: isDark ? '#FFFFFF' : '#1A1D26',
-                borderColor: isDark ? '#0B1120' : '#FFFFFF',
-              },
-            ]}
-          />
-        </View>
-      )}
-
-      {/* Scale labels */}
-      <View style={scaleStyles.labels}>
-        <Text style={[scaleStyles.labelText, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)' }]}>0</Text>
-        <Text style={[scaleStyles.labelText, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)' }]}>100</Text>
-        <Text style={[scaleStyles.labelText, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)' }]}>200</Text>
-        <Text style={[scaleStyles.labelText, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)' }]}>300</Text>
-        <Text style={[scaleStyles.labelText, { color: isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)' }]}>500</Text>
-      </View>
+    <View style={styles.windMotionWrap}>
+      {[0, 1, 2].map((line) => (
+        <Animated.View
+          key={line}
+          style={[
+            styles.windLine,
+            {
+              borderColor: color,
+              opacity: 1 - line * 0.2,
+              width: 82 - line * 12,
+              transform: [{ translateX }],
+            },
+          ]}
+        />
+      ))}
     </View>
   );
 }
 
-const scaleStyles = StyleSheet.create({
-  wrapper: {
-    width: '100%',
-    paddingHorizontal: 4,
-    marginTop: 20,
-    marginBottom: 8,
-  },
-  barTrack: {
-    flexDirection: 'row',
-    height: 12,
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  barSegment: {
-    height: '100%',
-  },
-  indicatorWrap: {
-    position: 'absolute',
-    top: -3,
-    marginLeft: -9,
-  },
-  indicator: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 3,
-  },
-  labels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 6,
-    paddingHorizontal: 0,
-  },
-  labelText: {
-    fontSize: 10,
-    fontWeight: '500',
-  },
-});
-
-function PMCard({ label, value, color, colors, isDark, customUnit }) {
+function InfoPill({ label, value, colors }) {
   return (
-    <View
-      style={[
-        styles.pmCard,
-        {
-          backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)',
-        },
-      ]}
-    >
-      <View style={styles.pmCardHeader}>
-        <View style={[styles.pmDot, { backgroundColor: color }]} />
-        <Text style={[styles.pmLabel, { color: colors.textSecondary }]}>
-          {label}
-        </Text>
-      </View>
-      <Text style={[styles.pmValue, { color: colors.text }]}>
-        {value ?? '--'}
-      </Text>
-      {customUnit !== '' && (
-        <Text style={[styles.pmUnit, { color: colors.textSecondary }]}>
-          {customUnit !== undefined ? customUnit : 'µg/m³'}
-        </Text>
-      )}
+    <View style={[styles.infoPill, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+      <Text style={[styles.infoPillLabel, { color: colors.subtext }]}>{label}</Text>
+      <Text style={[styles.infoPillValue, { color: colors.text }]}>{value}</Text>
     </View>
   );
 }
 
-export default function AQIHeroCard({ aqi, pm25, pm10, humidity, loading, onPress }) {
-  const { colors, isDark } = useTheme();
-  const aqiColor = aqi != null ? getAqiColor(aqi) : colors.textSecondary;
-  const category = aqi != null ? getAqiCategory(aqi) : '';
+export default function AQIHeroCard({
+  locationTitle,
+  locationSubtitle,
+  conditionLabel,
+  weatherCode,
+  weatherEmoji,
+  tempLabel,
+  feelsLikeLabel,
+  windSpeed,
+  aqi,
+  pm25,
+  humidity,
+  loading,
+  onPress,
+}) {
+  const { colors: themeColors, isDark } = useTheme();
+  const heroColors = getHeroTheme(weatherCode, windSpeed);
+  const aqiColor = aqi != null ? getAqiColor(aqi) : heroColors.accent;
+  const aqiCategory = aqi != null ? getAqiCategory(aqi) : 'AQI pending';
 
   const cardShadow = !isDark
     ? {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
-        elevation: 3,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.12,
+        shadowRadius: 18,
+        elevation: 5,
       }
-    : {};
-
-  const cardBorder = isDark
-    ? { borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }
-    : {};
+    : {
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.08)',
+      };
 
   if (loading) {
     return (
-      <View
-        style={[
-          styles.card,
-          { backgroundColor: colors.card },
-          cardShadow,
-          cardBorder,
-        ]}
-      >
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={[styles.card, { backgroundColor: heroColors.background }, cardShadow]}>
+        <ActivityIndicator size="large" color={themeColors.primary} />
       </View>
     );
   }
 
   const content = (
-    <View
-      style={[
-        styles.card,
-        { backgroundColor: colors.card },
-        cardShadow,
-        cardBorder,
-      ]}
-    >
-      {/* Title */}
-      <Text style={[styles.title, { color: colors.textSecondary }]}>
-        Air Quality Index
-      </Text>
-
-      {/* Big AQI number */}
-      <Text style={[styles.aqiNumber, { color: aqiColor }]}>
-        {aqi ?? '--'}
-      </Text>
-
-      {/* Category badge */}
-      <View style={[styles.categoryBadge, { backgroundColor: aqiColor + '18' }]}>
-        <Text style={[styles.categoryText, { color: aqiColor }]}>
-          {category}
-        </Text>
+    <View style={[styles.card, { backgroundColor: heroColors.background }, cardShadow]}>
+      <View style={[styles.locationPill, { backgroundColor: heroColors.surface, borderColor: heroColors.line }]}>
+        <Text style={styles.locationIcon}>📍</Text>
+        <View style={styles.locationCopy}>
+          <Text style={[styles.locationTitle, { color: heroColors.text }]} numberOfLines={2}>
+            {locationTitle || 'Current location'}
+          </Text>
+          <Text style={[styles.locationSubtitle, { color: heroColors.subtext }]} numberOfLines={1}>
+            {locationSubtitle || 'Pakistan'}
+          </Text>
+        </View>
       </View>
 
-      {/* Scale bar */}
-      <AQIScaleBar aqi={aqi} isDark={isDark} />
+      <View style={styles.heroRow}>
+        <View style={styles.motionArea}>
+          {(windSpeed ?? 0) >= 20 ? (
+            <WindMotion color={heroColors.accent} />
+          ) : (
+            <AnimatedWeatherIcon weatherCode={weatherCode} emoji={weatherEmoji} size={62} />
+          )}
+          <Text style={[styles.conditionText, { color: heroColors.subtext }]}>
+            {conditionLabel || 'Current conditions'}
+          </Text>
+        </View>
 
-      {/* PM mini-cards row */}
-      <View style={styles.pmRow}>
-        <PMCard
-          label="PM2.5"
-          value={pm25}
-          color={aqiColor}
-          colors={colors}
-          isDark={isDark}
+        <View style={styles.tempArea}>
+          <Text style={[styles.tempValue, { color: heroColors.text }]}>{tempLabel || '--'}</Text>
+          <Text style={[styles.feelsLike, { color: heroColors.subtext }]}>
+            Feels like {feelsLikeLabel || '--'}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.infoRow}>
+        <InfoPill label="AQI" value={aqi != null ? String(aqi) : '--'} colors={heroColors} />
+        <InfoPill
+          label="Wind"
+          value={windSpeed != null ? `${Math.round(windSpeed)} km/h` : '--'}
+          colors={heroColors}
         />
-        <PMCard
+        <InfoPill
           label="Humidity"
-          value={humidity != null ? `${humidity}%` : null}
-          color="#38BDF8"
-          colors={colors}
-          isDark={isDark}
-          customUnit=""
+          value={humidity != null ? `${humidity}%` : '--'}
+          colors={heroColors}
         />
+      </View>
+
+      <View style={[styles.bottomCard, { backgroundColor: heroColors.surface, borderColor: heroColors.line }]}>
+        <View>
+          <Text style={[styles.bottomEyebrow, { color: heroColors.subtext }]}>Air quality snapshot</Text>
+          <Text style={[styles.bottomTitle, { color: heroColors.text }]}>
+            {aqiCategory}
+          </Text>
+          <Text style={[styles.bottomBody, { color: heroColors.subtext }]}>
+            PM2.5 {pm25 != null ? pm25 : '--'} µg/m³
+          </Text>
+        </View>
+        <View style={[styles.aqiBadge, { backgroundColor: aqiColor + '22' }]}>
+          <Text style={[styles.aqiBadgeText, { color: aqiColor }]}>{aqi != null ? aqi : '--'}</Text>
+        </View>
       </View>
     </View>
   );
 
-  if (onPress) {
-    return (
-      <TouchableOpacity activeOpacity={0.85} onPress={onPress}>
-        {content}
-      </TouchableOpacity>
-    );
-  }
+  if (!onPress) return content;
 
-  return content;
+  return (
+    <TouchableOpacity activeOpacity={0.88} onPress={onPress}>
+      {content}
+    </TouchableOpacity>
+  );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 24,
-    padding: 28,
+    borderRadius: 28,
+    padding: 18,
+    minHeight: 280,
+  },
+  locationPill: {
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  locationIcon: {
+    fontSize: 18,
+    marginRight: 10,
+  },
+  locationCopy: {
+    flex: 1,
+  },
+  locationTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  locationSubtitle: {
+    fontSize: 13,
+    marginTop: 3,
+  },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+    marginBottom: 18,
+  },
+  motionArea: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 260,
+    minHeight: 120,
   },
-  title: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 12,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+  windMotionWrap: {
+    width: 98,
+    height: 72,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
   },
-  aqiNumber: {
-    fontSize: 72,
-    fontWeight: '800',
-    lineHeight: 80,
+  windLine: {
+    height: 10,
+    borderRadius: 999,
+    borderWidth: 2.5,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
     marginBottom: 8,
   },
-  categoryBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
+  conditionText: {
+    marginTop: 10,
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
   },
-  categoryText: {
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+  tempArea: {
+    flex: 1,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
-  pmRow: {
+  tempValue: {
+    fontSize: 58,
+    fontWeight: '800',
+    lineHeight: 64,
+  },
+  feelsLike: {
+    fontSize: 15,
+    fontWeight: '500',
+    marginTop: 6,
+    textAlign: 'right',
+  },
+  infoRow: {
     flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-    marginTop: 16,
+    gap: 10,
+    marginBottom: 16,
   },
-  pmCard: {
+  infoPill: {
     flex: 1,
     borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  pmCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-  },
-  pmDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  pmLabel: {
+  infoPillLabel: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
-  pmValue: {
-    fontSize: 22,
+  infoPillValue: {
+    fontSize: 16,
     fontWeight: '700',
   },
-  pmUnit: {
-    fontSize: 10,
-    marginTop: 2,
-    opacity: 0.5,
+  bottomCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  bottomEyebrow: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  bottomTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  bottomBody: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  aqiBadge: {
+    minWidth: 70,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aqiBadgeText: {
+    fontSize: 28,
+    fontWeight: '800',
+    lineHeight: 30,
   },
 });

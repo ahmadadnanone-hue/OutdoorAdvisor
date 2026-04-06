@@ -21,15 +21,16 @@ function setCache(key, data) {
  * Fetch AQI for a location via Google Air Quality API.
  * Returns { aqi, pm25, pm10, category, dominantPollutant }
  */
-export async function fetchAqiForLocation(lat, lon) {
+export async function fetchAqiForLocation(lat, lon, options = {}) {
   if (lat == null || lon == null) return { aqi: null, pm25: null, pm10: null };
+  const { force = false } = options;
 
   const key = cacheKey(lat, lon);
-  const cached = getCached(key);
+  const cached = !force ? getCached(key) : null;
   if (cached) return cached;
 
   try {
-    const json = await fetchApiJson(`/api/google/aqi?lat=${lat}&lon=${lon}`);
+    const json = await fetchApiJson(`/api/google/aqi?lat=${lat}&lon=${lon}${force ? `&_=${Date.now()}` : ''}`);
     if (json.error) throw new Error(json.error || 'Google AQI error');
 
     // Prefer USA EPA AQI (matches Pakistan context), fall back to Universal AQI
@@ -71,17 +72,18 @@ export default function useAQI(lat, lon) {
   const [updatedAt, setUpdatedAt] = useState(null);
   const currentCoords = useRef({ lat, lon });
 
-  const fetchData = useCallback(async (la, lo) => {
+  const fetchData = useCallback(async (la, lo, options = {}) => {
     if (la == null || lo == null) {
       setLoading(false);
       return;
     }
+    const { force = false } = options;
     setLoading(true);
     setError(null);
     setIsUsingCache(false);
 
     const key = cacheKey(la, lo);
-    const cached = getCached(key);
+    const cached = !force ? getCached(key) : null;
     if (cached) {
       const cachedEntry = persistentCache.getEntry(CACHE_NS, key);
       setAqi(cached.aqi);
@@ -94,7 +96,7 @@ export default function useAQI(lat, lon) {
       return;
     }
 
-    const result = await fetchAqiForLocation(la, lo);
+    const result = await fetchAqiForLocation(la, lo, { force });
     setAqi(result.aqi);
     setPm25(result.pm25);
     setPm10(result.pm10);
@@ -104,10 +106,10 @@ export default function useAQI(lat, lon) {
     setLoading(false);
   }, []);
 
-  const refresh = useCallback((nextLat, nextLon) => {
+  const refresh = useCallback((nextLat, nextLon, options = {}) => {
     const latToUse = nextLat ?? currentCoords.current.lat;
     const lonToUse = nextLon ?? currentCoords.current.lon;
-    fetchData(latToUse, lonToUse);
+    return fetchData(latToUse, lonToUse, options);
   }, [fetchData]);
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -29,6 +29,11 @@ import AnimatedWeatherIcon from '../components/AnimatedWeatherIcon';
 import ActivityCard from '../components/ActivityCard';
 import CacheIndicator from '../components/CacheIndicator';
 import PlacesAutocomplete from '../components/PlacesAutocomplete';
+import { maybeSendLocalAlert } from '../utils/alertNotifications';
+import { loadStoredNotifications, loadStoredThresholds } from '../utils/alertPreferences';
+
+const LIVE_REFRESH_WINDOW_MS = 5 * 60 * 1000;
+const MAX_LIVE_REFRESHES_PER_WINDOW = 2;
 
 function getWindDirectionLabel(deg) {
   const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
@@ -41,6 +46,18 @@ function getUvLabel(uv) {
   if (uv <= 7) return 'High';
   if (uv <= 10) return 'Very High';
   return 'Extreme';
+}
+
+function isRainCode(code) {
+  return code != null && [51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code);
+}
+
+function isStormCode(code) {
+  return code != null && [95, 96, 99].includes(code);
+}
+
+function isFogCode(code) {
+  return code != null && [45, 48].includes(code);
 }
 
 const ACTIVITIES = [
@@ -189,7 +206,15 @@ function getHomeDecision({ aqi, temp, feelsLike, weatherCode, pollenValue, windS
 export default function HomeScreen({ navigation }) {
   const { colors, isDark } = useTheme();
   const settings = useSettings();
-  const { location, city, loading: locationLoading, refresh: refreshLocation, selectCity, selectPlace } = useLocation();
+  const {
+    location,
+    city,
+    isUsingDeviceLocation,
+    loading: locationLoading,
+    refresh: refreshLocation,
+    selectCity,
+    selectPlace,
+  } = useLocation();
   const {
     aqi,
     pm25,
@@ -214,17 +239,52 @@ export default function HomeScreen({ navigation }) {
   const [cityPickerVisible, setCityPickerVisible] = useState(false);
   const [forecastDetail, setForecastDetail] = useState(null);
   const [insightModal, setInsightModal] = useState(null);
+  const [refreshNote, setRefreshNote] = useState('');
+  const refreshWindowRef = useRef([]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    const nextLocation = await refreshLocation();
-    if (nextLocation?.lat != null && nextLocation?.lon != null) {
-      refreshAqi(nextLocation.lat, nextLocation.lon);
-      refreshWeather(nextLocation.lat, nextLocation.lon);
-      refreshPollen(nextLocation.lat, nextLocation.lon);
+    const now = Date.now();
+    const recentRefreshes = refreshWindowRef.current.filter(
+      (timestamp) => now - timestamp < LIVE_REFRESH_WINDOW_MS
+    );
+    refreshWindowRef.current = recentRefreshes;
+
+    const force = recentRefreshes.length < MAX_LIVE_REFRESHES_PER_WINDOW;
+    if (force) {
+      refreshWindowRef.current = [...recentRefreshes, now];
+      setRefreshNote('Checking fresh live conditions now.');
+    } else {
+      const retryInMs = Math.max(0, LIVE_REFRESH_WINDOW_MS - (now - recentRefreshes[0]));
+      const retryInMinutes = Math.max(1, Math.ceil(retryInMs / 60000));
+      setRefreshNote(
+        `Using cached conditions for now to save API calls. Fresh live refresh opens again in about ${retryInMinutes} min.`
+      );
     }
-    setRefreshing(false);
-  }, [refreshLocation, refreshAqi, refreshWeather, refreshPollen]);
+
+    try {
+      const targetLocation = isUsingDeviceLocation
+        ? await refreshLocation(force)
+        : location;
+
+      if (targetLocation?.lat != null && targetLocation?.lon != null) {
+        await Promise.all([
+          refreshAqi(targetLocation.lat, targetLocation.lon, { force }),
+          refreshWeather(targetLocation.lat, targetLocation.lon, { force }),
+          refreshPollen(targetLocation.lat, targetLocation.lon, { force }),
+        ]);
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }, [
+    isUsingDeviceLocation,
+    location,
+    refreshLocation,
+    refreshAqi,
+    refreshWeather,
+    refreshPollen,
+  ]);
 
   const handleActivityPress = (activity) => {
     navigation.navigate('Activities');
@@ -285,6 +345,119 @@ export default function HomeScreen({ navigation }) {
     pollenValue,
     windSpeed: weatherCurrent?.windSpeed,
   });
+
+  useEffect(() => {
+    if (!refreshNote) return undefined;
+    const timer = setTimeout(() => setRefreshNote(''), 5000);
+    return () => clearTimeout(timer);
+  }, [refreshNote]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (
+      aqi == null &&
+      pm25 == null &&
+      weatherCurrent?.weatherCode == null &&
+      weatherCurrent?.windSpeed == null &&
+      pollenValue == null
+    ) {
+      return undefined;
+    }
+
+    (async () => {
+      const [notificationPrefs, thresholds] = await Promise.all([
+        loadStoredNotifications(),
+        loadStoredThresholds(),
+      ]);
+
+      if (cancelled) return;
+
+      const placeLabel = locationDisplay.primary || 'your area';
+      const placeKey =
+        city || `${location.lat?.toFixed?.(2) || '0'}-${location.lon?.toFixed?.(2) || '0'}`;
+
+      if (notificationPrefs.severeAqiWarnings && aqi != null && aqi >= thresholds.aqiAlert) {
+        maybeSendLocalAlert(`aqi-${placeKey}`, {
+          title: 'Severe AQI warning',
+          body: `${placeLabel} is reading AQI ${aqi}. Use an N95 and keep longer outdoor exposure lighter today.`,
+        });
+      }
+
+      if (notificationPrefs.smogAlerts && pm25 != null && pm25 >= thresholds.pm25Alert) {
+        maybeSendLocalAlert(`smog-${placeKey}`, {
+          title: 'Smog alert',
+          body: `PM2.5 is elevated around ${placeLabel}. A mask and shorter outdoor sessions will help.`,
+        });
+      }
+
+      if (notificationPrefs.rainAlerts && isRainCode(weatherCurrent?.weatherCode)) {
+        maybeSendLocalAlert(`rain-${placeKey}`, {
+          title: 'Rain alert',
+          body: `Rain is active near ${placeLabel}. Outdoor plans can still work, but carry rain gear and slow down on the road.`,
+        });
+      }
+
+      if (notificationPrefs.thunderstormAlerts && isStormCode(weatherCurrent?.weatherCode)) {
+        maybeSendLocalAlert(`storm-${placeKey}`, {
+          title: 'Thunderstorm alert',
+          body: `Storm risk is active around ${placeLabel}. Delay exposed outdoor plans until the cell passes.`,
+        });
+      }
+
+      if (
+        notificationPrefs.windAlerts &&
+        ((weatherCurrent?.windSpeed ?? 0) >= 28 || (displayWindGusts ?? 0) >= 38)
+      ) {
+        maybeSendLocalAlert(`wind-${placeKey}`, {
+          title: 'Wind alert',
+          body: `Wind is picking up around ${placeLabel}. Choose sheltered routes and secure loose items before heading out.`,
+        });
+      }
+
+      if (notificationPrefs.pollenAlerts && pollenValue != null && pollenValue >= 4) {
+        maybeSendLocalAlert(`pollen-${placeKey}`, {
+          title: 'High pollen alert',
+          body: `${pollenDisplayName} pollen is elevated near ${placeLabel}. A mask and allergy medication can make time outside easier.`,
+        });
+      }
+
+      if (
+        notificationPrefs.heatAlerts &&
+        weatherCurrent?.feelsLike != null &&
+        weatherCurrent.feelsLike >= thresholds.heatAlert
+      ) {
+        maybeSendLocalAlert(`heat-${placeKey}`, {
+          title: 'Heat alert',
+          body: `Feels-like heat is high around ${placeLabel}. Go later, hydrate well, and take shade breaks.`,
+        });
+      }
+
+      if (notificationPrefs.fogWarnings && isFogCode(weatherCurrent?.weatherCode)) {
+        maybeSendLocalAlert(`fog-${placeKey}`, {
+          title: 'Low-visibility alert',
+          body: `Visibility looks reduced around ${placeLabel}. Slow down and leave extra margin while driving.`,
+        });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    aqi,
+    city,
+    displayWindGusts,
+    location.lat,
+    location.lon,
+    locationDisplay.primary,
+    pm25,
+    pollenDisplayName,
+    pollenValue,
+    weatherCurrent?.feelsLike,
+    weatherCurrent?.weatherCode,
+    weatherCurrent?.windSpeed,
+  ]);
 
   // Loading screen while location is being determined
   if (locationLoading) {
@@ -351,6 +524,11 @@ export default function HomeScreen({ navigation }) {
           visible={aqiCached || weatherCached}
           updatedAt={lastUpdated !== '--' ? lastUpdated : null}
         />
+        {!!refreshNote && (
+          <View style={[styles.refreshNotice, { backgroundColor: colors.card }, cardShadow, cardBorder]}>
+            <Text style={[styles.refreshNoticeText, { color: colors.textSecondary }]}>{refreshNote}</Text>
+          </View>
+        )}
         {/* ===== Customizable Sections ===== */}
         {settings.homeSections.map((key) => {
           switch (key) {
@@ -418,11 +596,19 @@ export default function HomeScreen({ navigation }) {
               return (
                 <View key="aqi" style={styles.section}>
                   <AQIHeroCard
+                    locationTitle={locationDisplay.primary}
+                    locationSubtitle={locationDisplay.secondary}
+                    conditionLabel={weather.description}
+                    weatherCode={weatherCurrent?.weatherCode}
+                    weatherEmoji={weather.icon}
+                    tempLabel={settings.formatTempShort(weatherCurrent?.temp)}
+                    feelsLikeLabel={settings.formatTemp(weatherCurrent?.feelsLike)}
+                    windSpeed={weatherCurrent?.windSpeed}
                     aqi={aqi}
                     pm25={pm25}
                     pm10={pm10}
                     humidity={weatherCurrent?.humidity}
-                    loading={aqiLoading}
+                    loading={aqiLoading || weatherLoading}
                     onPress={() =>
                       setInsightModal({
                         title: 'AQI Insight',
@@ -602,9 +788,11 @@ export default function HomeScreen({ navigation }) {
               onPress={async () => {
                 const nextLocation = await refreshLocation(true);
                 if (nextLocation?.lat != null && nextLocation?.lon != null) {
-                  refreshAqi(nextLocation.lat, nextLocation.lon);
-                  refreshWeather(nextLocation.lat, nextLocation.lon);
-                  refreshPollen(nextLocation.lat, nextLocation.lon);
+                  await Promise.all([
+                    refreshAqi(nextLocation.lat, nextLocation.lon, { force: true }),
+                    refreshWeather(nextLocation.lat, nextLocation.lon, { force: true }),
+                    refreshPollen(nextLocation.lat, nextLocation.lon, { force: true }),
+                  ]);
                 }
                 setCityPickerVisible(false);
               }}
@@ -862,6 +1050,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+  refreshNotice: {
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  refreshNoticeText: {
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
   },
   headerWeather: {
     flexDirection: 'row',

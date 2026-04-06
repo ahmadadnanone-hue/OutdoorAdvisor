@@ -11,50 +11,39 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
 import typography from '../theme/typography';
 import {
-  disableWebPush,
-  enableWebPush,
+  ensureWebPush,
   hasPushSubscription,
   isWebPushSupported,
-  sendWebPushTest,
   syncWebPushPreferences,
 } from '../utils/webPush';
+import {
+  DEFAULT_NOTIFICATIONS,
+  DEFAULT_THRESHOLDS,
+  loadMockAccount,
+  loadStoredNotifications,
+  loadStoredThresholds,
+  saveMockAccount,
+  saveStoredNotifications,
+  saveStoredThresholds,
+} from '../utils/alertPreferences';
+import { ensureLocalNotificationPermission } from '../utils/alertNotifications';
 
 const TABS = ['Thresholds', 'Notifications', 'Customize', 'About'];
 
 const SECTION_META = {
   decision: { label: 'Outdoor Decision', icon: '🧭', desc: 'Plain-language go / go with care / limit exposure answer' },
   travel: { label: 'Travel Quick Checks', icon: '🛣️', desc: 'Fast access to Murree and M2 route conditions' },
-  aqi: { label: 'AQI Hero Card', icon: '🌬️', desc: 'Air Quality Index with scale bar' },
+  aqi: { label: 'Live Conditions Hero', icon: '🌤️', desc: 'Weather-led hero card with location, motion, and AQI context' },
   wind: { label: 'Wind', icon: '💨', desc: 'Wind speed, gusts & direction' },
   details: { label: 'Current Details', icon: '📊', desc: 'Feels like, PM2.5, temp, and pollen' },
   forecast: { label: '7-Day Forecast', icon: '📅', desc: 'Weekly weather outlook' },
   activities: { label: 'Activity Advisory', icon: '🏃', desc: 'Outdoor activity recommendations' },
 };
 const ALL_SECTION_KEYS = Object.keys(SECTION_META);
-
-const THRESHOLDS_KEY = 'outdooradvisor_thresholds';
-const NOTIFICATIONS_KEY = 'outdooradvisor_notifications';
-
-const DEFAULT_THRESHOLDS = {
-  aqiAlert: 150,
-  pm25Alert: 75,
-  heatAlert: 42,
-  coldAlert: 5,
-};
-
-const DEFAULT_NOTIFICATIONS = {
-  severeAqiWarnings: true,
-  dailySummary: true,
-  smogAlerts: true,
-  rainAlerts: false,
-  fogWarnings: true,
-  routeClosureAlerts: true,
-};
 
 /* ---------- Custom Slider ---------- */
 function CustomSlider({ value, min, max, step = 1, onValueChange, trackColor, thumbColor, colors }) {
@@ -159,23 +148,38 @@ export default function AlertsScreen() {
   // Notifications state
   const [notifications, setNotifications] = useState(DEFAULT_NOTIFICATIONS);
   const [pushSupported, setPushSupported] = useState(false);
-  const [pushEnabled, setPushEnabled] = useState(false);
-  const [pushBusy, setPushBusy] = useState(false);
-  const [pushMessage, setPushMessage] = useState('');
+  const [mockAccount, setMockAccount] = useState(null);
+  const [accountBusy, setAccountBusy] = useState(false);
 
   // Load persisted data on mount
   useEffect(() => {
     (async () => {
-      try {
-        const savedT = await AsyncStorage.getItem(THRESHOLDS_KEY);
-        if (savedT) setThresholds({ ...DEFAULT_THRESHOLDS, ...JSON.parse(savedT) });
-      } catch (_) {}
-      try {
-        const savedN = await AsyncStorage.getItem(NOTIFICATIONS_KEY);
-        if (savedN) setNotifications({ ...DEFAULT_NOTIFICATIONS, ...JSON.parse(savedN) });
-      } catch (_) {}
+      setThresholds(await loadStoredThresholds());
+      setNotifications(await loadStoredNotifications());
+      setMockAccount(await loadMockAccount());
     })();
   }, []);
+
+  const handleMockSignIn = useCallback(async () => {
+    setAccountBusy(true);
+    try {
+      if (mockAccount) {
+        await saveMockAccount(null);
+        setMockAccount(null);
+        return;
+      }
+
+      const account = {
+        name: 'Guest Explorer',
+        email: 'guest@outdooradvisor.app',
+        provider: 'Mock',
+      };
+      await saveMockAccount(account);
+      setMockAccount(account);
+    } finally {
+      setAccountBusy(false);
+    }
+  }, [mockAccount]);
 
   useEffect(() => {
     let cancelled = false;
@@ -187,7 +191,10 @@ export default function AlertsScreen() {
         const subscribed = await hasPushSubscription();
         if (!cancelled) {
           setPushSupported(true);
-          setPushEnabled(subscribed);
+          if (subscribed) {
+            const prefs = await loadStoredNotifications();
+            syncWebPushPreferences(prefs).catch(() => {});
+          }
         }
       } catch {
         if (!cancelled) setPushSupported(false);
@@ -204,22 +211,31 @@ export default function AlertsScreen() {
     (key, value) => {
       const updated = { ...thresholds, [key]: value };
       setThresholds(updated);
-      AsyncStorage.setItem(THRESHOLDS_KEY, JSON.stringify(updated)).catch(() => {});
+      saveStoredThresholds(updated).catch(() => {});
     },
     [thresholds]
   );
 
   // Persist notifications
   const updateNotification = useCallback(
-    (key, value) => {
+    async (key, value) => {
       const updated = { ...notifications, [key]: value };
       setNotifications(updated);
-      AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated)).catch(() => {});
-      if (Platform.OS === 'web' && pushEnabled) {
-        syncWebPushPreferences(updated).catch(() => {});
+      saveStoredNotifications(updated).catch(() => {});
+
+      if (value) {
+        ensureLocalNotificationPermission({ prompt: true }).catch(() => {});
+      }
+
+      if (Platform.OS === 'web' && isWebPushSupported()) {
+        if (value) {
+          ensureWebPush(updated, { prompt: true }).catch(() => {});
+        } else {
+          syncWebPushPreferences(updated).catch(() => {});
+        }
       }
     },
-    [notifications, pushEnabled]
+    [notifications]
   );
 
   /* ---------- Tab Bar ---------- */
@@ -339,49 +355,14 @@ export default function AlertsScreen() {
       { key: 'severeAqiWarnings', label: 'Severe AQI Warnings', desc: 'Important alerts when air quality becomes unhealthy enough to change outdoor plans.' },
       { key: 'dailySummary', label: 'Daily AQI Summary', desc: 'Receive a morning summary of air quality in your city.' },
       { key: 'smogAlerts', label: 'Smog Season Alerts', desc: 'Get notified when smog season conditions are detected.' },
-      { key: 'rainAlerts', label: 'Rain Alerts', desc: 'Be alerted when rain is expected in your area.' },
+      { key: 'rainAlerts', label: 'Rain Alerts', desc: 'Get notified when active rain could affect outdoor plans or driving.' },
+      { key: 'thunderstormAlerts', label: 'Thunderstorm Alerts', desc: 'Important warnings for lightning and severe storm risk.' },
+      { key: 'windAlerts', label: 'Wind Alerts', desc: 'Alerts when gusty conditions can disrupt outdoor activity or travel.' },
+      { key: 'pollenAlerts', label: 'High Pollen Alerts', desc: 'Warnings for allergy-heavy days with elevated pollen levels.' },
+      { key: 'heatAlerts', label: 'Extreme Heat Alerts', desc: 'Warnings when feels-like heat becomes unsafe for longer exposure.' },
       { key: 'fogWarnings', label: 'Motorway Fog Warnings', desc: 'Warnings for dangerous fog conditions on motorways.' },
       { key: 'routeClosureAlerts', label: 'Major Route Closures', desc: 'Important alerts for serious motorway and corridor closures.' },
     ];
-
-    const handlePushToggle = async () => {
-      if (!pushSupported) return;
-
-      setPushBusy(true);
-      setPushMessage('');
-      try {
-        if (pushEnabled) {
-          await disableWebPush();
-          setPushEnabled(false);
-          setPushMessage('Web push notifications are now off for this browser.');
-        } else {
-          await enableWebPush(notifications);
-          setPushEnabled(true);
-          setPushMessage('Web push notifications are now enabled for this browser.');
-        }
-      } catch (error) {
-        setPushMessage(error.message || 'Could not update push notification status.');
-      } finally {
-        setPushBusy(false);
-      }
-    };
-
-    const handleSendTest = async () => {
-      setPushBusy(true);
-      setPushMessage('');
-      try {
-        const result = await sendWebPushTest('severeAqi');
-        setPushMessage(
-          result?.sent
-            ? `Sent severe AQI test notification to ${result.sent} subscribed browser${result.sent > 1 ? 's' : ''}.`
-            : 'No subscribed browsers were available for a test notification.'
-        );
-      } catch (error) {
-        setPushMessage(error.message || 'Could not send a test notification.');
-      } finally {
-        setPushBusy(false);
-      }
-    };
 
     return (
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -413,63 +394,15 @@ export default function AlertsScreen() {
 
         <Text style={[styles.sectionLabel, { color: colors.text, marginTop: 24 }]}>Notifications</Text>
         <Text style={[styles.sectionDesc, { color: colors.textSecondary }]}>
-          Saved alert preferences control what matters most to you. On supported browsers, you can also turn on real web push notifications below.
+          These preferences control the alerts OutdoorAdvisor should watch for. On supported browsers, notification permission is handled automatically when you turn alerts on.
         </Text>
-
-        <View style={[styles.pushCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={styles.pushCardHeader}>
-            <View style={styles.pushCardInfo}>
-              <Text style={[styles.pushCardTitle, { color: colors.text }]}>Web Push Notifications</Text>
-              <Text style={[styles.pushCardBody, { color: colors.textSecondary }]}>
-                {Platform.OS !== 'web'
-                  ? 'Push controls are currently available on the web app. Mobile still saves your alert interests locally.'
-                  : pushSupported
-                  ? pushEnabled
-                    ? 'This browser is subscribed and can receive real OutdoorAdvisor alerts.'
-                    : 'Enable browser notifications to receive important OutdoorAdvisor alerts here.'
-                  : 'This browser does not support the current web push setup.'}
-              </Text>
-            </View>
-            {pushBusy && <ActivityIndicator size="small" color={colors.primary} />}
-          </View>
-
-          {Platform.OS === 'web' && pushSupported && (
-            <View style={styles.pushActionRow}>
-              <TouchableOpacity
-                style={[
-                  styles.pushActionBtn,
-                  { backgroundColor: pushEnabled ? '#EF4444' + '15' : colors.primary + '15' },
-                ]}
-                onPress={handlePushToggle}
-                activeOpacity={0.75}
-                disabled={pushBusy}
-              >
-                <Text style={[styles.pushActionBtnText, { color: pushEnabled ? '#EF4444' : colors.primary }]}>
-                  {pushEnabled ? 'Disable Push' : 'Enable Push'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.pushActionBtn,
-                  { backgroundColor: colors.primary + '15', opacity: pushEnabled ? 1 : 0.5 },
-                ]}
-                onPress={handleSendTest}
-                activeOpacity={0.75}
-                disabled={!pushEnabled || pushBusy}
-              >
-                <Text style={[styles.pushActionBtnText, { color: colors.primary }]}>
-                  Send Severe AQI Test
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {!!pushMessage && (
-            <Text style={[styles.pushStatusText, { color: colors.textSecondary }]}>
-              {pushMessage}
-            </Text>
-          )}
-        </View>
+        {Platform.OS === 'web' && (
+          <Text style={[styles.notificationHint, { color: colors.textSecondary }]}>
+            {pushSupported
+              ? 'Browser alerts will be requested the first time you turn on a notification that needs them.'
+              : 'This browser cannot receive the current web notification setup, but your alert preferences are still saved.'}
+          </Text>
+        )}
 
         {items.map((item) => (
           <View
@@ -708,7 +641,33 @@ export default function AlertsScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.screenTitle, { color: colors.text }]}>Settings & Alerts</Text>
+      <Text style={[styles.screenTitle, { color: colors.text }]}>Settings</Text>
+      <View style={[styles.accountCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.accountCopy}>
+          <Text style={[styles.accountTitle, { color: colors.text }]}>
+            {mockAccount ? 'Mock account connected' : 'Mock sign in'}
+          </Text>
+          <Text style={[styles.accountBody, { color: colors.textSecondary }]}>
+            {mockAccount
+              ? `${mockAccount.email} is currently linked to this device for saved preferences and future account setup.`
+              : 'Use a temporary profile for now. We can wire real authentication later without changing the app flow.'}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.accountBtn, { backgroundColor: mockAccount ? '#EF4444' + '18' : colors.primary + '16' }]}
+          onPress={handleMockSignIn}
+          activeOpacity={0.8}
+          disabled={accountBusy}
+        >
+          {accountBusy ? (
+            <ActivityIndicator size="small" color={mockAccount ? '#EF4444' : colors.primary} />
+          ) : (
+            <Text style={[styles.accountBtnText, { color: mockAccount ? '#EF4444' : colors.primary }]}>
+              {mockAccount ? 'Sign out' : 'Mock sign in'}
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
       {renderTabBar()}
       {tabContent[activeTab]()}
     </SafeAreaView>
@@ -724,7 +683,41 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 8,
+    paddingBottom: 10,
+  },
+  accountCard: {
+    marginHorizontal: 20,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  accountCopy: {
+    flex: 1,
+  },
+  accountTitle: {
+    fontSize: typography.body,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  accountBody: {
+    fontSize: typography.caption,
+    lineHeight: 18,
+  },
+  accountBtn: {
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 108,
+  },
+  accountBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 
   /* Tab Bar */
@@ -951,49 +944,10 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     lineHeight: 18,
   },
-  pushCard: {
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
-  },
-  pushCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  pushCardInfo: {
-    flex: 1,
-  },
-  pushCardTitle: {
-    fontSize: typography.body,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  pushCardBody: {
+  notificationHint: {
     fontSize: typography.caption,
     lineHeight: 18,
-  },
-  pushActionRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
-  },
-  pushActionBtn: {
-    flex: 1,
-    borderRadius: 12,
-    paddingVertical: 11,
-    alignItems: 'center',
-  },
-  pushActionBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  pushStatusText: {
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 12,
+    marginBottom: 14,
   },
 
   /* About */
