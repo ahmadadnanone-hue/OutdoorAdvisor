@@ -499,7 +499,7 @@ export default function AlertsScreen() {
         <View style={[styles.layoutHintCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.layoutHintTitle, { color: colors.text }]}>Recommended order</Text>
           <Text style={[styles.layoutHintBody, { color: colors.textSecondary }]}>
-            Lead with decision-making first, then travel and AQI, followed by forecast and supporting details.
+            Lead with live conditions first, then the decision answer, activities, travel, forecast, and supporting details.
           </Text>
           <TouchableOpacity
             style={[styles.resetLayoutBtn, { backgroundColor: colors.primary + '15' }]}
