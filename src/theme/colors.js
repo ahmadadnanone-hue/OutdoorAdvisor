@@ -59,8 +59,11 @@ export function getActivityStatus(aqi) {
   if (aqi <= 100) {
     return { label: 'Safe', color: aqiColors.good };
   }
-  if (aqi <= 200) {
+  if (aqi <= 175) {
     return { label: 'Caution', color: aqiColors.unhealthySensitive };
   }
-  return { label: 'Avoid', color: aqiColors.unhealthy };
+  if (aqi <= 300) {
+    return { label: 'Limit', color: aqiColors.unhealthy };
+  }
+  return { label: 'Avoid', color: aqiColors.hazardous };
 }

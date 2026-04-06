@@ -29,35 +29,40 @@ function getSmartAdvisory(activity, aqi, weather) {
   const feelsLike = weather?.feelsLike;
 
   const isRaining = weatherCode && [51, 53, 55, 61, 63, 65, 80, 81, 82].includes(weatherCode);
+  const isHeavyRain = weatherCode && [65, 82].includes(weatherCode);
   const isStormy = weatherCode && [95, 96, 99].includes(weatherCode);
   const isFoggy = weatherCode && [45, 48].includes(weatherCode);
-  const isExtremeHeat = temp != null && temp >= 40;
-  const isVeryHot = temp != null && temp >= 35;
+  const heatValue = feelsLike ?? temp;
+  const isExtremeHeat = heatValue != null && heatValue >= 47;
+  const isVeryHot = heatValue != null && heatValue >= 38;
   const isCold = temp != null && temp <= 10;
   const isHighHumidity = humidity != null && humidity >= 85;
   const isHighWind = windSpeed != null && windSpeed >= 30;
   const isSmoggy = aqi > 150;
+  const isHazardousAir = aqi > 300;
+  const isVeryUnhealthyAir = aqi > 200;
 
   const recs = [];
-  if (aqi <= 50) recs.push('Air quality is excellent right now.');
-  else if (aqi <= 100) recs.push('Air quality is acceptable. Sensitive individuals should be cautious.');
-  else if (aqi <= 150) recs.push('Air is unhealthy for sensitive groups. Reduce prolonged outdoor effort.');
-  else if (aqi <= 200) recs.push('Air is unhealthy. Limit outdoor exposure and consider moving indoors.');
-  else if (aqi <= 300) recs.push('Air is very unhealthy. Avoid all outdoor activities if possible.');
-  else recs.push('HAZARDOUS air quality! Stay indoors with windows closed and air filtration running.');
+  if (aqi <= 50) recs.push('Air quality is excellent right now, so most outdoor plans should feel comfortable.');
+  else if (aqi <= 100) recs.push('Air quality is generally fine for going out. Sensitive users may want lighter effort near busy roads.');
+  else if (aqi <= 150) recs.push('Air quality is elevated, but most people can still go out if they keep sessions moderate and avoid high-traffic routes.');
+  else if (aqi <= 200) recs.push('Air quality is poor enough to plan smart: shorten hard workouts, choose cleaner areas, and wear an N95 mask if you are sensitive or staying out for long.');
+  else if (aqi <= 300) recs.push('Air quality is very poor. Keep outdoor time brief and light, use a well-fitted N95 mask, and move intense exercise indoors.');
+  else recs.push('Air quality is hazardous right now. Go outside only if necessary, keep exposure short, and use a well-fitted N95 mask.');
 
-  if (isExtremeHeat) recs.push(`Extreme heat at ${Math.round(temp)}°C (feels like ${Math.round(feelsLike)}°C). High risk of heatstroke — avoid outdoor exertion.`);
-  else if (isVeryHot) recs.push(`It's very hot at ${Math.round(temp)}°C. Stay hydrated and take frequent shade breaks.`);
-  if (isCold) recs.push(`Cold conditions at ${Math.round(temp)}°C. Warm up properly before activity and layer clothing.`);
-  if (isStormy) recs.push('Thunderstorms detected — stay indoors. Lightning poses a serious danger outdoors.');
-  else if (isRaining) recs.push('Rain is expected. Surfaces will be slippery — use caution or postpone outdoor activities.');
-  if (isFoggy) recs.push('Fog is reducing visibility. Outdoor activities near roads are risky.');
-  if (isHighHumidity && isVeryHot) recs.push(`Humidity is ${humidity}% — combined with heat, sweating won't cool you effectively. Risk of heat exhaustion is high.`);
-  else if (isHighHumidity) recs.push(`Humidity is high at ${humidity}%. You may feel more fatigued than usual during exercise.`);
+  if (isExtremeHeat) recs.push(`Heat is the bigger risk right now at feels-like ${Math.round(heatValue)}°C. Save outdoor activity for early or late hours, keep trips short, and avoid hard exertion.`);
+  else if (isVeryHot) recs.push(`It is hot enough to plan around the heat. Go earlier or later in the day, drink water often, and take shade breaks.`);
+  if (isCold) recs.push(`Cold conditions at ${Math.round(temp)}°C can tighten airways, so layer up and give yourself a longer warm-up.`);
+  if (isStormy) recs.push('Thunderstorms are a real safety risk. Wait for the storm to pass before heading out.');
+  else if (isHeavyRain) recs.push('Heavy rain can still work for necessary trips, but use waterproof gear, slow down, and avoid flooded or low-visibility stretches.');
+  else if (isRaining) recs.push('Light rain is manageable with waterproof gear and good grip, especially for shorter outdoor plans.');
+  if (isFoggy) recs.push('Fog lowers visibility, so stick to parks or quieter roads and avoid fast traffic corridors.');
+  if (isHighHumidity && isVeryHot) recs.push(`Humidity is ${humidity}%, which makes the heat feel heavier. Take cooling breaks and do less than you normally would.`);
+  else if (isHighHumidity) recs.push(`Humidity is high at ${humidity}%, so effort may feel tougher than usual even if the temperature looks manageable.`);
   if (isHighWind) recs.push(`Strong winds at ${Math.round(windSpeed)} km/h. Cycling, tennis, and cricket may be significantly affected.`);
 
   if (recs.length === 1 && aqi <= 50 && !isVeryHot && !isCold && !isRaining) {
-    recs.push('Weather conditions are favorable — great time to be outdoors!');
+    recs.push('Weather conditions are favorable, so this is a good window for outdoor plans.');
   }
 
   const tips = [...activity.tips];
@@ -66,20 +71,23 @@ function getSmartAdvisory(activity, aqi, weather) {
     tips.unshift('Wear light-colored, breathable clothing and apply sunscreen SPF 50+.');
   }
   if (isCold) tips.unshift('Wear layered clothing and cover extremities. Warm up for 10+ minutes before starting.');
-  if (isRaining) tips.unshift('Wear waterproof gear and shoes with good grip. Avoid metal surfaces and flooded areas.');
-  if (isSmoggy) tips.unshift('Wear an N95 mask if you must go outside. Limit session to under 20 minutes.');
+  if (isRaining) tips.unshift('Wear waterproof gear and shoes with good grip. Avoid flooded areas and give yourself extra travel time.');
+  if (isSmoggy) tips.unshift('Wear an N95 mask, choose a cleaner route, and keep the session shorter than usual.');
   if (isHighHumidity && isVeryHot) tips.unshift('Take breaks in air-conditioned spaces every 15 minutes to prevent heat exhaustion.');
 
   let healthImpact = activity.healthImpact;
-  if (isSmoggy) healthImpact += ` Current smog conditions (AQI ${aqi}) mean the air contains dangerously high levels of PM2.5 particles that penetrate deep into your lungs and enter the bloodstream.`;
-  if (isExtremeHeat) healthImpact += ` With temperatures at ${Math.round(temp)}°C, your body's cooling system is under extreme stress.`;
-  if (isHighHumidity && isVeryHot) healthImpact += ` High humidity (${humidity}%) prevents sweat from evaporating, making your body unable to cool down naturally.`;
+  if (isHazardousAir) healthImpact += ` Current AQI (${aqi}) is hazardous, so even brief exposure can aggravate breathing and cardiovascular symptoms.`;
+  else if (isVeryUnhealthyAir) healthImpact += ` Current AQI (${aqi}) will noticeably increase your particle intake, so shorter sessions, a mask, and cleaner routes matter much more than usual.`;
+  else if (isSmoggy) healthImpact += ` Current AQI (${aqi}) is high enough that harder breathing will pull more particles into the lungs, especially during longer or higher-intensity sessions.`;
+  if (isExtremeHeat) healthImpact += ` With feels-like conditions near ${Math.round(heatValue)}°C, your body's cooling system is under heavy stress.`;
+  if (isHighHumidity && isVeryHot) healthImpact += ` High humidity (${humidity}%) slows sweat evaporation, so you heat up faster and recover more slowly.`;
   if (isCold) healthImpact += ` Cold air at ${Math.round(temp)}°C can constrict airways and trigger exercise-induced asthma.`;
 
   let indoorAlt = activity.indoorAlt;
-  if (isRaining || isStormy) indoorAlt = 'With rain/storms outside, ' + indoorAlt.charAt(0).toLowerCase() + indoorAlt.slice(1);
-  else if (isExtremeHeat) indoorAlt = 'Given the extreme heat, indoor activity is strongly recommended. ' + indoorAlt;
-  else if (aqi > 200) indoorAlt = 'With hazardous air quality, indoor options are essential. ' + indoorAlt;
+  if (isStormy) indoorAlt = 'While the storm is active, indoor options are the safer call. ' + indoorAlt;
+  else if (isExtremeHeat) indoorAlt = 'If you still want activity today, indoor options are the cooler and safer call. ' + indoorAlt;
+  else if (isHazardousAir) indoorAlt = 'With hazardous air quality, indoor options are strongly recommended right now. ' + indoorAlt;
+  else if (isVeryUnhealthyAir) indoorAlt = 'If you want to avoid heavy smoke exposure, indoor options are the better choice for longer or harder sessions. ' + indoorAlt;
 
   return {
     recommendation: recs.join(' '),
