@@ -925,25 +925,45 @@ export default function HomeScreen({ navigation }) {
                       </Text>
                       <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>Temp</Text>
                     </View>
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      style={[styles.detailCard, { backgroundColor: colors.card }, cardShadow, cardBorder]}
-                      onPress={() =>
-                        setInsightModal({
-                          title: 'Pollen Insight',
-                          body: getPollenInsight(pollenPrimary, pollenTypes),
-                        })
-                      }
-                    >
-                      <Text style={styles.detailIcon}>🌼</Text>
-                      <Text style={[styles.detailValue, { color: pollenColor }]}>
+                  </View>
+                </View>
+              );
+            case 'pollen':
+              return (
+                <View key="pollen" style={styles.section}>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>Pollen Level</Text>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={[styles.pollenBanner, { backgroundColor: colors.card }, cardShadow, cardBorder]}
+                    onPress={() =>
+                      setInsightModal({
+                        title: 'Pollen Insight',
+                        body: getPollenInsight(pollenPrimary, pollenTypes),
+                      })
+                    }
+                  >
+                    <View style={styles.pollenBannerLeft}>
+                      <View style={[styles.pollenBadge, { backgroundColor: pollenColor + '16' }]}>
+                        <Text style={[styles.pollenBadgeText, { color: pollenColor }]}>Allergy watch</Text>
+                      </View>
+                      <Text style={[styles.pollenBannerTitle, { color: colors.text }]}>
+                        {pollenDisplayName}
+                      </Text>
+                      <Text style={[styles.pollenBannerBody, { color: colors.textSecondary }]}>
+                        {pollenValue != null
+                          ? `${pollenCategory} right now. Tap for the full pollen read and top contributing types.`
+                          : 'Pollen data is not available for this location right now.'}
+                      </Text>
+                    </View>
+                    <View style={styles.pollenBannerRight}>
+                      <Text style={[styles.pollenBannerValue, { color: pollenColor }]}>
                         {pollenValue != null ? pollenValue : '--'}
                       </Text>
-                      <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                        {pollenDisplayName}: {pollenCategory}
+                      <Text style={[styles.pollenBannerLabel, { color: colors.textSecondary }]}>
+                        {pollenCategory}
                       </Text>
-                    </TouchableOpacity>
-                  </View>
+                    </View>
+                  </TouchableOpacity>
                 </View>
               );
             case 'forecast':
@@ -1540,6 +1560,51 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 6,
     fontWeight: '500',
+  },
+  pollenBanner: {
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pollenBannerLeft: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  pollenBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 10,
+  },
+  pollenBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  pollenBannerTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  pollenBannerBody: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  pollenBannerRight: {
+    alignItems: 'flex-end',
+  },
+  pollenBannerValue: {
+    fontSize: 34,
+    fontWeight: '800',
+    lineHeight: 34,
+  },
+  pollenBannerLabel: {
+    fontSize: 12,
+    marginTop: 4,
   },
 
   /* ---- Activity Grid ---- */

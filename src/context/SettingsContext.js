@@ -52,7 +52,7 @@ function normalizeHomeSections(homeSections) {
   ) {
     return DEFAULT_HOME_SECTIONS;
   }
-  const known = new Set([...DEFAULT_HOME_SECTIONS, 'forecast', 'details', 'wind']);
+  const known = new Set([...DEFAULT_HOME_SECTIONS, 'forecast', 'details', 'wind', 'pollen']);
   const cleaned = incoming.filter((key) => known.has(key));
   const missingDefaults = DEFAULT_HOME_SECTIONS.filter((key) => !cleaned.includes(key));
   return [...cleaned, ...missingDefaults];

@@ -38,9 +38,10 @@ const TABS = ['Thresholds', 'Notifications', 'Customize', 'About'];
 const SECTION_META = {
   decision: { label: 'Outdoor Decision', icon: '🧭', desc: 'Plain-language go / go with care / limit exposure answer' },
   travel: { label: 'Travel Quick Checks', icon: '🛣️', desc: 'Fast access to Murree and M2 route conditions' },
-  aqi: { label: 'Live Conditions Hero', icon: '🌤️', desc: 'Weather-led hero card with location, motion, and AQI context' },
+  aqi: { label: 'Live Conditions', icon: '🌤️', desc: 'Primary live conditions card with AQI and targeted quick taps' },
+  pollen: { label: 'Pollen Level', icon: '🌼', desc: 'Separate allergy and pollen snapshot for users who want it visible' },
   wind: { label: 'Wind', icon: '💨', desc: 'Wind speed, gusts & direction' },
-  details: { label: 'Current Details', icon: '📊', desc: 'Feels like, PM2.5, temp, and pollen' },
+  details: { label: 'Current Details', icon: '📊', desc: 'Feels like, PM2.5, and temperature summary cards' },
   forecast: { label: '7-Day Forecast', icon: '📅', desc: 'Weekly weather outlook' },
   activities: { label: 'Activity Advisory', icon: '🏃', desc: 'Outdoor activity recommendations' },
 };
@@ -688,11 +689,10 @@ export default function AlertsScreen() {
 
   /* ---------- About Tab ---------- */
   const renderAbout = () => {
-    const sdkVersion = '55';
     const platformHighlights = [
-      { label: 'Coverage', value: 'Pakistan-first' },
-      { label: 'Feeds', value: 'Google + NHMP + PMD' },
-      { label: 'Experience', value: 'Expo web + mobile' },
+      { label: 'Coverage', value: 'Pakistan' },
+      { label: 'Focus', value: 'Outdoor decisions' },
+      { label: 'Experience', value: 'Mobile-first' },
     ];
 
     return (
@@ -715,58 +715,16 @@ export default function AlertsScreen() {
         </View>
 
         <View style={[styles.aboutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.aboutCardTitle, { color: colors.primary }]}>What It Covers</Text>
-          <View style={styles.aboutRow}>
-            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>AQI, weather, pollen, and route conditions in one place</Text>
-          </View>
-          <View style={styles.aboutRow}>
-            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>Pakistan-focused guidance for daily outdoor plans and travel</Text>
-          </View>
-          <View style={styles.aboutRow}>
-            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>Clickable insights that explain what the conditions mean</Text>
-          </View>
-        </View>
-
-        <View style={[styles.aboutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.aboutCardTitle, { color: colors.primary }]}>Live Data & Stack</Text>
-          <View style={styles.aboutRow}>
-            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>Google APIs power AQI, weather, pollen, maps, and location search</Text>
-          </View>
-          <View style={styles.aboutRow}>
-            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>NHMP and PMD advisories are surfaced through Vercel serverless routes</Text>
-          </View>
-          <View style={styles.aboutRow}>
-            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>Expo SDK {sdkVersion} with web push support on compatible browsers</Text>
-          </View>
-        </View>
-
-        <View style={[styles.aboutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.aboutCardTitle, { color: colors.primary }]}>Developer</Text>
+          <Text style={[styles.aboutCardTitle, { color: colors.primary }]}>OutdoorAdvisor</Text>
           <Text style={[styles.aboutBodyText, { color: colors.text }]}>
-            Built with ❤️ in Pakistan
+            OutdoorAdvisor helps people make better daily outdoor decisions with a calm, practical view of current conditions, activity timing, and important travel context.
           </Text>
-        </View>
-
-        <View style={[styles.aboutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.aboutCardTitle, { color: colors.primary }]}>Product Direction</Text>
-          <View style={styles.aboutRow}>
-            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>Plain-language outdoor decisions instead of raw-data overload</Text>
-          </View>
-          <View style={styles.aboutRow}>
-            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>Fast route confidence for Murree, M2, Hazara, and other high-friction corridors</Text>
-          </View>
-          <View style={styles.aboutRow}>
-            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
-            <Text style={[styles.aboutRowText, { color: colors.text }]}>Higher reliability summaries, better local precision, and a cleaner mobile-first UI</Text>
-          </View>
+          <Text style={[styles.aboutBodyText, { color: colors.text, marginTop: 12 }]}>
+            The product is designed to keep guidance simple: what conditions mean right now, when to go, when to be careful, and which routes deserve a second look before leaving.
+          </Text>
+          <Text style={[styles.aboutBodyText, { color: colors.text, marginTop: 12 }]}>
+            Built in Pakistan for Pakistan, with a strong focus on clarity, reliability, and a mobile-first experience that feels easy to trust at a glance.
+          </Text>
         </View>
       </ScrollView>
     );
