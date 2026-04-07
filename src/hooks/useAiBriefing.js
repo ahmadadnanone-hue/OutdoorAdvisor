@@ -2,11 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchApiJson } from '../config/api';
 import * as persistentCache from '../utils/persistentCache';
 
-const CACHE_NS = 'ai_briefing';
-const CACHE_TTL = 20 * 60 * 1000;
+const CACHE_NS = 'ai_briefing_v2';
+const GEMINI_CACHE_TTL = 20 * 60 * 1000;
+const FALLBACK_CACHE_TTL = 2 * 60 * 1000;
 
 function getCacheKey(kind, signature) {
   return `${kind}:${signature}`;
+}
+
+function getCacheTtl(result) {
+  return result?.provider === 'gemini' ? GEMINI_CACHE_TTL : FALLBACK_CACHE_TTL;
 }
 
 export default function useAiBriefing({ kind, signature, payload, enabled = true }) {
@@ -26,7 +31,11 @@ export default function useAiBriefing({ kind, signature, payload, enabled = true
 
     const { force = false } = options;
     const cacheKey = getCacheKey(kind, signature);
-    const cached = !force ? persistentCache.get(CACHE_NS, cacheKey, CACHE_TTL) : null;
+    const cachedEntry = !force ? persistentCache.getEntry(CACHE_NS, cacheKey) : null;
+    const cached =
+      cachedEntry && Date.now() - cachedEntry.timestamp < getCacheTtl(cachedEntry.data)
+        ? cachedEntry.data
+        : null;
 
     if (cached) {
       setData(cached);
