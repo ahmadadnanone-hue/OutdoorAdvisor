@@ -1,8 +1,17 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { isSupabaseConfigured, setSupabaseAutoRefresh, supabase } from '../lib/supabase';
 
 const AuthContext = createContext();
+const DEFAULT_WEB_AUTH_REDIRECT = 'https://outdooradvisor.vercel.app';
+
+function getEmailRedirectTo() {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+
+  return process.env.EXPO_PUBLIC_SITE_URL?.trim() || DEFAULT_WEB_AUTH_REDIRECT;
+}
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
@@ -59,7 +68,13 @@ export function AuthProvider({ children }) {
     if (!supabase) {
       throw new Error('Sign-in is not configured yet.');
     }
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: getEmailRedirectTo(),
+      },
+    });
     if (error) throw error;
 
     if (!data.session) {
