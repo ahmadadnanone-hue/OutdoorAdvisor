@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
 import typography from '../theme/typography';
 import {
   ensureWebPush,
@@ -24,10 +25,8 @@ import {
 import {
   DEFAULT_NOTIFICATIONS,
   DEFAULT_THRESHOLDS,
-  loadMockAccount,
   loadStoredNotifications,
   loadStoredThresholds,
-  saveMockAccount,
   saveStoredNotifications,
   saveStoredThresholds,
 } from '../utils/alertPreferences';
@@ -142,6 +141,7 @@ export default function AlertsScreen() {
   const themeCtx = useTheme();
   const { colors } = themeCtx;
   const settings = useSettings();
+  const { configured, isSignedIn, loading: authLoading, signIn, signOut, signUp, user } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
 
   // Thresholds state
@@ -153,40 +153,71 @@ export default function AlertsScreen() {
   const [notificationState, setNotificationState] = useState({
     tone: 'neutral',
     title: 'Checking alert delivery',
-    body: 'We are checking whether this device can receive alerts directly or save them locally for later.',
+      body: 'We are checking whether this device can receive alerts directly or save them locally for later.',
   });
-  const [mockAccount, setMockAccount] = useState(null);
-  const [accountBusy, setAccountBusy] = useState(false);
+  const [authMode, setAuthMode] = useState('signin');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authMessage, setAuthMessage] = useState('');
+  const [authError, setAuthError] = useState('');
 
   // Load persisted data on mount
   useEffect(() => {
     (async () => {
       setThresholds(await loadStoredThresholds());
       setNotifications(await loadStoredNotifications());
-      setMockAccount(await loadMockAccount());
     })();
   }, []);
 
-  const handleMockSignIn = useCallback(async () => {
-    setAccountBusy(true);
-    try {
-      if (mockAccount) {
-        await saveMockAccount(null);
-        setMockAccount(null);
-        return;
-      }
-
-      const account = {
-        name: 'Guest Explorer',
-        email: 'guest@outdooradvisor.app',
-        provider: 'Mock',
-      };
-      await saveMockAccount(account);
-      setMockAccount(account);
-    } finally {
-      setAccountBusy(false);
+  const handleAuthSubmit = useCallback(async () => {
+    if (!authEmail.trim() || !authPassword.trim()) {
+      setAuthError('Enter both email and password.');
+      return;
     }
-  }, [mockAccount]);
+
+    setAuthBusy(true);
+    setAuthError('');
+    setAuthMessage('');
+    try {
+      if (authMode === 'signup') {
+        const result = await signUp({
+          email: authEmail.trim(),
+          password: authPassword,
+        });
+        setAuthMessage(result?.message || 'Account created.');
+        if (!result?.needsEmailConfirmation) {
+          setAuthPassword('');
+        }
+      } else {
+        await signIn({
+          email: authEmail.trim(),
+          password: authPassword,
+        });
+        setAuthMessage('Signed in successfully.');
+        setAuthPassword('');
+      }
+    } catch (error) {
+      setAuthError(error.message || 'Could not complete sign-in.');
+    } finally {
+      setAuthBusy(false);
+    }
+  }, [authEmail, authMode, authPassword, signIn, signUp]);
+
+  const handleAuthSignOut = useCallback(async () => {
+    setAuthBusy(true);
+    setAuthError('');
+    setAuthMessage('');
+    try {
+      await signOut();
+      setAuthPassword('');
+      setAuthMessage('Signed out.');
+    } catch (error) {
+      setAuthError(error.message || 'Could not sign out.');
+    } finally {
+      setAuthBusy(false);
+    }
+  }, [signOut]);
 
   useEffect(() => {
     let cancelled = false;
@@ -737,30 +768,108 @@ export default function AlertsScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <Text style={[styles.screenTitle, { color: colors.text }]}>Settings</Text>
       <View style={[styles.accountCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <View style={styles.accountCopy}>
-          <Text style={[styles.accountTitle, { color: colors.text }]}>
-            {mockAccount ? 'Mock account connected' : 'Mock sign in'}
-          </Text>
-          <Text style={[styles.accountBody, { color: colors.textSecondary }]}>
-            {mockAccount
-              ? `${mockAccount.email} is currently linked to this device for saved preferences and future account setup.`
-              : 'Use a temporary profile for now. We can wire real authentication later without changing the app flow.'}
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={[styles.accountBtn, { backgroundColor: mockAccount ? '#EF4444' + '18' : colors.primary + '16' }]}
-          onPress={handleMockSignIn}
-          activeOpacity={0.8}
-          disabled={accountBusy}
-        >
-          {accountBusy ? (
-            <ActivityIndicator size="small" color={mockAccount ? '#EF4444' : colors.primary} />
-          ) : (
-            <Text style={[styles.accountBtnText, { color: mockAccount ? '#EF4444' : colors.primary }]}>
-              {mockAccount ? 'Sign out' : 'Mock sign in'}
+        {!configured ? (
+          <View style={styles.accountCopy}>
+            <Text style={[styles.accountTitle, { color: colors.text }]}>Account sign-in</Text>
+            <Text style={[styles.accountBody, { color: colors.textSecondary }]}>
+              Sign-in UI is ready. Add `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` to enable real accounts.
             </Text>
-          )}
-        </TouchableOpacity>
+          </View>
+        ) : isSignedIn ? (
+          <>
+            <View style={styles.accountCopy}>
+              <Text style={[styles.accountTitle, { color: colors.text }]}>Signed in</Text>
+              <Text style={[styles.accountBody, { color: colors.textSecondary }]}>
+                {user?.email || 'Your account is connected on this device.'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.accountBtn, { backgroundColor: '#EF4444' + '18' }]}
+              onPress={handleAuthSignOut}
+              activeOpacity={0.8}
+              disabled={authBusy || authLoading}
+            >
+              {authBusy ? (
+                <ActivityIndicator size="small" color="#EF4444" />
+              ) : (
+                <Text style={[styles.accountBtnText, { color: '#EF4444' }]}>Sign out</Text>
+              )}
+            </TouchableOpacity>
+          </>
+        ) : (
+          <View style={styles.accountPanel}>
+            <View style={styles.accountHeaderRow}>
+              <View style={styles.accountCopy}>
+                <Text style={[styles.accountTitle, { color: colors.text }]}>Optional account</Text>
+                <Text style={[styles.accountBody, { color: colors.textSecondary }]}>
+                  Create an account to sync preferences across devices later. The app can still be used without signing in.
+                </Text>
+              </View>
+              <View style={[styles.authModeSwitch, { backgroundColor: colors.background }]}>
+                {[
+                  { key: 'signin', label: 'Sign in' },
+                  { key: 'signup', label: 'Create' },
+                ].map((item) => {
+                  const active = authMode === item.key;
+                  return (
+                    <TouchableOpacity
+                      key={item.key}
+                      style={[
+                        styles.authModeButton,
+                        active && { backgroundColor: colors.primary + '18' },
+                      ]}
+                      onPress={() => {
+                        setAuthMode(item.key);
+                        setAuthError('');
+                        setAuthMessage('');
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.authModeText, { color: active ? colors.primary : colors.textSecondary }]}>
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+            <TextInput
+              value={authEmail}
+              onChangeText={setAuthEmail}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              placeholder="Email"
+              placeholderTextColor={colors.textSecondary}
+              style={[styles.authInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+            />
+            <TextInput
+              value={authPassword}
+              onChangeText={setAuthPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              placeholder="Password"
+              placeholderTextColor={colors.textSecondary}
+              style={[styles.authInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+            />
+            {!!authError && <Text style={[styles.authError, { color: '#DC2626' }]}>{authError}</Text>}
+            {!!authMessage && <Text style={[styles.authMessage, { color: colors.primary }]}>{authMessage}</Text>}
+            <TouchableOpacity
+              style={[styles.accountBtn, styles.authSubmitBtn, { backgroundColor: colors.primary }]}
+              onPress={handleAuthSubmit}
+              activeOpacity={0.85}
+              disabled={authBusy || authLoading}
+            >
+              {authBusy ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={[styles.accountBtnText, { color: '#FFFFFF' }]}>
+                  {authMode === 'signup' ? 'Create account' : 'Sign in'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
       {renderTabBar()}
       {tabContent[activeTab]()}
@@ -785,9 +894,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 18,
     padding: 16,
+  },
+  accountPanel: {
+    width: '100%',
+  },
+  accountHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 14,
   },
   accountCopy: {
     flex: 1,
@@ -812,6 +927,44 @@ const styles = StyleSheet.create({
   accountBtnText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  authModeSwitch: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    padding: 4,
+  },
+  authModeButton: {
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  authModeText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  authInput: {
+    width: '100%',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: typography.body,
+    marginBottom: 10,
+  },
+  authError: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  authMessage: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  authSubmitBtn: {
+    minWidth: 0,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 18,
   },
 
   /* Tab Bar */
