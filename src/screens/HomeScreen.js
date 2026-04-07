@@ -750,12 +750,6 @@ export default function HomeScreen({ navigation }) {
                     <Text style={[styles.aiBriefingTitle, { color: colors.text }]}>
                       {homeAiLoading && !homeAiBriefing ? 'Writing a quick read of today’s conditions…' : homeAiBriefing?.headline || 'Today’s conditions summary will appear here.'}
                     </Text>
-                    {!!homeAiBriefing?.summary && (
-                      <Text style={[styles.aiBriefingBody, { color: colors.textSecondary }]}>{homeAiBriefing.summary}</Text>
-                    )}
-                    {!!homeAiBriefing?.tip && (
-                      <Text style={[styles.aiBriefingTip, { color: colors.text }]}>{homeAiBriefing.tip}</Text>
-                    )}
                   </TouchableOpacity>
                 </View>
               );
@@ -1402,20 +1396,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   aiBriefingTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
-    lineHeight: 23,
-    marginBottom: 8,
-  },
-  aiBriefingBody: {
-    fontSize: 14,
-    lineHeight: 21,
-    marginBottom: 8,
-  },
-  aiBriefingTip: {
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '600',
+    lineHeight: 22,
   },
   tripActionStack: {
     gap: 10,
