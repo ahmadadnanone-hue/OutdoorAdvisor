@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
 import { TRAVEL_ROUTES } from '../data/cities';
 import { fetchWeatherForLocation } from '../hooks/useWeather';
 import { fetchAqiForLocation } from '../hooks/useAQI';
@@ -252,6 +253,7 @@ function StopRow({ stop, colors, formatTempShort }) {
 export default function TravelScreen({ route }) {
   const { colors, isDark } = useTheme();
   const { formatTempShort } = useSettings();
+  const { isPremium } = useAuth();
   const [expandedMotorway, setExpandedMotorway] = useState(null);
   const [stopData, setStopData] = useState({});
   const fetchingRef = useRef({});
@@ -420,9 +422,11 @@ export default function TravelScreen({ route }) {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       if (expandedMotorway === index) { setExpandedMotorway(null); return; }
       setExpandedMotorway(index);
-      loadRouteStops(index);
+      if (isPremium) {
+        loadRouteStops(index);
+      }
     },
-    [expandedMotorway, loadRouteStops]
+    [expandedMotorway, isPremium, loadRouteStops]
   );
 
   useEffect(() => {
@@ -435,7 +439,9 @@ export default function TravelScreen({ route }) {
 
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedMotorway(routeIndex);
-    loadRouteStops(routeIndex);
+    if (isPremium) {
+      loadRouteStops(routeIndex);
+    }
     const timer = setTimeout(() => {
       const y = routeOffsetsRef.current[routeIndex];
       if (scrollRef.current && typeof y === 'number') {
@@ -447,7 +453,7 @@ export default function TravelScreen({ route }) {
     }, 220);
 
     return () => clearTimeout(timer);
-  }, [route?.params?.highlightRoute, route?.params?.requestKey, loadRouteStops]);
+  }, [route?.params?.highlightRoute, route?.params?.requestKey, isPremium, loadRouteStops]);
 
   const isLoading = (index) => expandedMotorway === index && !stopData[index];
 
@@ -513,7 +519,7 @@ export default function TravelScreen({ route }) {
     kind: 'travel',
     signature: travelAiSignature,
     payload: travelAiPayload,
-    enabled: nhmpData.length > 0 || pmdAlerts.length > 0,
+    enabled: isPremium && (nhmpData.length > 0 || pmdAlerts.length > 0),
   });
   const sortedRoutes = useMemo(
     () =>
@@ -770,7 +776,11 @@ export default function TravelScreen({ route }) {
       <View style={[styles.aiTravelCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.aiTravelEyebrow, { color: colors.primary }]}>Trip insight</Text>
         <Text style={[styles.aiTravelTitle, { color: colors.text }]}>
-          {travelAiLoading && !travelAiBriefing ? 'Writing a quick route read…' : travelAiBriefing?.headline || 'Live route guidance will appear here.'}
+          {!isPremium
+            ? 'Premium unlock: AI trip insight with a smarter route read before you leave.'
+            : travelAiLoading && !travelAiBriefing
+            ? 'Writing a quick route read…'
+            : travelAiBriefing?.headline || 'Live route guidance will appear here.'}
         </Text>
         {!!travelAiBriefing?.summary && (
           <Text style={[styles.aiTravelBody, { color: colors.textSecondary }]}>{travelAiBriefing.summary}</Text>
@@ -866,6 +876,23 @@ export default function TravelScreen({ route }) {
                 <Text style={[styles.routeSourceText, { color: colors.textSecondary }]}>
                   {sourceSummary}
                 </Text>
+                {!isPremium ? (
+                  <View
+                    style={[
+                      styles.routePremiumGate,
+                      {
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC',
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.routePremiumTitle, { color: colors.text }]}>Premium route scan</Text>
+                    <Text style={[styles.routePremiumBody, { color: colors.textSecondary }]}>
+                      Unlock stop-by-stop weather, AQI, and route-level scan details for this corridor.
+                    </Text>
+                  </View>
+                ) : (
+                  <>
                 {matchedPmdAlerts.length > 0 && (
                   <View style={[styles.routeAlertNote, { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.18)' }]}>
                     <Text style={[styles.routeAlertTitle, { color: '#EF4444' }]}>PMD note</Text>
@@ -889,6 +916,8 @@ export default function TravelScreen({ route }) {
                   <Text style={[styles.noDataText, { color: colors.textSecondary }]}>
                     Unable to load conditions. Collapse and try again.
                   </Text>
+                )}
+                  </>
                 )}
               </View>
             )}
@@ -1062,6 +1091,9 @@ const styles = StyleSheet.create({
   routeAlertNote: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
   routeAlertTitle: { fontSize: 11, fontWeight: '800', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
   routeAlertBody: { fontSize: 12, lineHeight: 18, marginBottom: 4 },
+  routePremiumGate: { borderWidth: 1, borderRadius: 14, padding: 14, marginTop: 2 },
+  routePremiumTitle: { fontSize: 14, fontWeight: '700', marginBottom: 6 },
+  routePremiumBody: { fontSize: 13, lineHeight: 19 },
   loadingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 20 },
   loadingText: { fontSize: typography.body, marginLeft: 10 },
   noDataText: { fontSize: typography.body, textAlign: 'center', paddingVertical: 16 },

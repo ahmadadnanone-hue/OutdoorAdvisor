@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { isSupabaseConfigured, setSupabaseAutoRefresh, supabase } from '../lib/supabase';
+import { derivePremiumState } from '../lib/premium';
 
 const AuthContext = createContext();
 const DEFAULT_WEB_AUTH_REDIRECT = 'https://outdooradvisor.vercel.app';
@@ -97,16 +98,20 @@ export function AuthProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({
-      configured: isSupabaseConfigured,
-      loading,
-      session,
-      user,
-      isSignedIn: Boolean(user),
-      signIn,
-      signUp,
-      signOut,
-    }),
+    () => {
+      const premiumState = derivePremiumState(user);
+      return {
+        configured: isSupabaseConfigured,
+        loading,
+        session,
+        user,
+        isSignedIn: Boolean(user),
+        ...premiumState,
+        signIn,
+        signUp,
+        signOut,
+      };
+    },
     [loading, session, user, signIn, signUp, signOut]
   );
 

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
 import useAQI from '../hooks/useAQI';
 import useWeather from '../hooks/useWeather';
 import useLocation from '../hooks/useLocation';
@@ -108,6 +109,7 @@ function getSmartAdvisory(activity, aqi, weather) {
 export default function ActivitiesScreen() {
   const { colors } = useTheme();
   const { enabledActivities, addActivity, removeActivity } = useSettings();
+  const { isPremium } = useAuth();
   const { city, location, loading: locLoading } = useLocation();
   const { aqi, loading: aqiLoading } = useAQI(location.lat, location.lon);
   const { current: weatherCurrent, hourly } = useWeather(location.lat, location.lon);
@@ -431,14 +433,23 @@ export default function ActivitiesScreen() {
 
                 {/* Nearby Places — powered by Google Places */}
                 {selectedActivity.placesQuery && location?.lat != null && (
-                  <NearbyPlaces
-                    lat={location.lat}
-                    lon={location.lon}
-                    keyword={selectedActivity.placesQuery}
-                    type={selectedActivity.placesType}
-                    colors={colors}
-                    title={`Nearby ${selectedActivity.name}`}
-                  />
+                  isPremium ? (
+                    <NearbyPlaces
+                      lat={location.lat}
+                      lon={location.lon}
+                      keyword={selectedActivity.placesQuery}
+                      type={selectedActivity.placesType}
+                      colors={colors}
+                      title={`Nearby ${selectedActivity.name}`}
+                    />
+                  ) : (
+                    <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      <Text style={[styles.sectionTitle, { color: colors.primary }]}>Nearby {selectedActivity.name}</Text>
+                      <Text style={[styles.sectionBody, { color: colors.textSecondary }]}>
+                        Premium unlock: nearby venue suggestions with live local context for this activity.
+                      </Text>
+                    </View>
+                  )
                 )}
 
                 <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>

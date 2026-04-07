@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
 import useLocation from '../hooks/useLocation';
 import useAQI from '../hooks/useAQI';
 import useWeather from '../hooks/useWeather';
@@ -269,6 +270,7 @@ function getHomeDecision({ aqi, temp, feelsLike, weatherCode, pollenValue, windS
 export default function HomeScreen({ navigation }) {
   const { colors, isDark } = useTheme();
   const settings = useSettings();
+  const { isPremium } = useAuth();
   const {
     location,
     city,
@@ -516,10 +518,13 @@ export default function HomeScreen({ navigation }) {
     signature: homeAiSignature,
     payload: homeAiPayload,
     enabled:
-      aqi != null ||
-      weatherCurrent?.weatherCode != null ||
-      weatherCurrent?.temp != null ||
-      pollenValue != null,
+      isPremium &&
+      (
+        aqi != null ||
+        weatherCurrent?.weatherCode != null ||
+        weatherCurrent?.temp != null ||
+        pollenValue != null
+      ),
   });
 
   useEffect(() => {
@@ -744,11 +749,15 @@ export default function HomeScreen({ navigation }) {
                         body: `${homeAiBriefing.headline} ${homeAiBriefing.summary} ${homeAiBriefing.tip}`,
                       })
                     }
-                    disabled={!homeAiBriefing}
+                    disabled={!homeAiBriefing || !isPremium}
                   >
                     <Text style={[styles.aiBriefingEyebrow, { color: colors.primary }]}>What today means</Text>
                     <Text style={[styles.aiBriefingTitle, { color: colors.text }]}>
-                      {homeAiLoading && !homeAiBriefing ? 'Writing a quick read of today’s conditions…' : homeAiBriefing?.headline || 'Today’s conditions summary will appear here.'}
+                      {!isPremium
+                        ? 'Premium unlock: AI daily briefings with a sharper read of today’s conditions.'
+                        : homeAiLoading && !homeAiBriefing
+                        ? 'Writing a quick read of today’s conditions…'
+                        : homeAiBriefing?.headline || 'Today’s conditions summary will appear here.'}
                     </Text>
                   </TouchableOpacity>
                 </View>

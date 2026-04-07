@@ -141,7 +141,7 @@ export default function AlertsScreen() {
   const themeCtx = useTheme();
   const { colors } = themeCtx;
   const settings = useSettings();
-  const { configured, isSignedIn, loading: authLoading, signIn, signOut, signUp, user } = useAuth();
+  const { configured, isSignedIn, isPremium, plan, loading: authLoading, signIn, signOut, signUp, user } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
 
   // Thresholds state
@@ -229,7 +229,7 @@ export default function AlertsScreen() {
         const subscribed = await hasPushSubscription();
         if (!cancelled) {
           setPushSupported(true);
-          if (subscribed) {
+          if (subscribed && isPremium) {
             const prefs = await loadStoredNotifications();
             syncWebPushPreferences(prefs).catch(() => {});
           }
@@ -242,7 +242,7 @@ export default function AlertsScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isPremium]);
 
   useEffect(() => {
     let cancelled = false;
@@ -288,7 +288,7 @@ export default function AlertsScreen() {
             return;
           }
 
-          if (subscribed) {
+          if (subscribed && isPremium) {
             setNotificationState({
               tone: 'ready',
               title: 'Alerts are live on this browser',
@@ -297,11 +297,20 @@ export default function AlertsScreen() {
             return;
           }
 
-          if (permission === 'granted') {
+          if (permission === 'granted' && isPremium) {
             setNotificationState({
               tone: 'soft',
               title: 'Browser permission is ready',
               body: 'The next enabled alert will finish browser registration automatically and keep this device in sync.',
+            });
+            return;
+          }
+
+          if (permission === 'granted' && !isPremium) {
+            setNotificationState({
+              tone: 'soft',
+              title: 'Alerts stay local on free',
+              body: 'This browser can show local alerts, while cross-device browser push is reserved for premium accounts.',
             });
             return;
           }
@@ -353,7 +362,7 @@ export default function AlertsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, notifications]);
+  }, [activeTab, isPremium, notifications]);
 
   // Persist thresholds
   const updateThreshold = useCallback(
@@ -376,7 +385,7 @@ export default function AlertsScreen() {
         ensureLocalNotificationPermission({ prompt: true }).catch(() => {});
       }
 
-      if (Platform.OS === 'web' && isWebPushSupported()) {
+      if (Platform.OS === 'web' && isWebPushSupported() && isPremium) {
         if (value) {
           ensureWebPush(updated, { prompt: true }).catch(() => {});
         } else {
@@ -384,7 +393,7 @@ export default function AlertsScreen() {
         }
       }
     },
-    [notifications]
+    [isPremium, notifications]
   );
 
   /* ---------- Tab Bar ---------- */
@@ -515,6 +524,15 @@ export default function AlertsScreen() {
 
     return (
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {Platform.OS === 'web' && !isPremium && (
+          <View style={[styles.notificationsPremiumCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.notificationsPremiumTitle, { color: colors.text }]}>Free plan keeps alerts local</Text>
+            <Text style={[styles.notificationsPremiumBody, { color: colors.textSecondary }]}>
+              Browser push sync is a premium feature. Your selected alerts still work locally on this device.
+            </Text>
+          </View>
+        )}
+
         {/* Theme Mode Picker */}
         <Text style={[styles.sectionLabel, { color: colors.text }]}>Appearance</Text>
         <View style={[styles.themePicker, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -782,6 +800,9 @@ export default function AlertsScreen() {
               <Text style={[styles.accountBody, { color: colors.textSecondary }]}>
                 {user?.email || 'Your account is connected on this device.'}
               </Text>
+              <Text style={[styles.accountPlan, { color: colors.primary }]}>
+                {isPremium ? 'Premium active' : `Plan: ${plan || 'free'}`}
+              </Text>
             </View>
             <TouchableOpacity
               style={[styles.accountBtn, { backgroundColor: '#EF4444' + '18' }]}
@@ -916,6 +937,12 @@ const styles = StyleSheet.create({
     fontSize: typography.caption,
     lineHeight: 18,
   },
+  accountPlan: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 8,
+    textTransform: 'capitalize',
+  },
   accountBtn: {
     borderRadius: 12,
     paddingHorizontal: 14,
@@ -996,6 +1023,21 @@ const styles = StyleSheet.create({
     fontSize: typography.body,
     marginBottom: 16,
     lineHeight: 22,
+  },
+  notificationsPremiumCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+  },
+  notificationsPremiumTitle: {
+    fontSize: typography.body,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  notificationsPremiumBody: {
+    fontSize: typography.caption,
+    lineHeight: 18,
   },
 
   /* Thresholds */
