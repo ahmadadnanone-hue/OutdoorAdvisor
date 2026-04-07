@@ -22,6 +22,13 @@ import typography from '../theme/typography';
 import NearbyPlaces from '../components/NearbyPlaces';
 import { ACTIVITY_CATALOG, getActivityById } from '../data/activities';
 
+function getScoreBand(score) {
+  if (score >= 75) return 'Great now';
+  if (score >= 60) return 'Usable window';
+  if (score >= 45) return 'Go with care';
+  return 'Better later';
+}
+
 function getSmartAdvisory(activity, aqi, weather) {
   const temp = weather?.temp;
   const humidity = weather?.humidity;
@@ -111,15 +118,25 @@ export default function ActivitiesScreen() {
   const currentAqi = aqi ?? 0;
 
   // The activities the user has enabled, in order
-  const activeActivities = useMemo(
-    () => enabledActivities.map((id) => getActivityById(id)).filter(Boolean),
-    [enabledActivities]
+  const rankedActivities = useMemo(
+    () =>
+      enabledActivities
+        .map((id) => {
+          const activity = getActivityById(id);
+          if (!activity) return null;
+          const summary = getActivitySummary(activity, currentAqi, weatherCurrent, hourly);
+          return { ...activity, summary };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.summary.score - a.summary.score),
+    [enabledActivities, currentAqi, weatherCurrent, hourly]
   );
+  const featuredActivities = rankedActivities.slice(0, 2);
 
   // Grid data = enabled activities + a synthetic "add" card at the end
   const gridData = useMemo(
-    () => [...activeActivities, { id: '__add__', isAddCard: true }],
-    [activeActivities]
+    () => [...rankedActivities, { id: '__add__', isAddCard: true }],
+    [rankedActivities]
   );
 
   const renderCard = ({ item }) => {
@@ -135,15 +152,24 @@ export default function ActivitiesScreen() {
         </TouchableOpacity>
       );
     }
-    const activitySummary = getActivitySummary(item, currentAqi, weatherCurrent, hourly);
+    const activitySummary = item.summary;
+    const rank = rankedActivities.findIndex((activity) => activity.id === item.id) + 1;
     return (
       <TouchableOpacity
-        style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+        style={[
+          styles.card,
+          { backgroundColor: colors.card, borderColor: rank <= 2 ? activitySummary.color + '55' : colors.border },
+        ]}
         activeOpacity={0.7}
         onPress={() => setSelectedActivity(item)}
       >
-        <Text style={styles.cardEmoji}>{item.emoji}</Text>
-        <Text style={[styles.cardName, { color: colors.text }]} numberOfLines={1}>
+        <View style={styles.cardTopRow}>
+          <Text style={styles.cardEmoji}>{item.emoji}</Text>
+          <View style={[styles.rankPill, { backgroundColor: activitySummary.color + '18' }]}>
+            <Text style={[styles.rankPillText, { color: activitySummary.color }]}>#{rank}</Text>
+          </View>
+        </View>
+        <Text style={[styles.cardName, { color: colors.text }]} numberOfLines={2}>
           {item.name}
         </Text>
         <Text style={[styles.cardScore, { color: activitySummary.color }]}>
@@ -152,7 +178,10 @@ export default function ActivitiesScreen() {
         <Text style={[styles.cardHint, { color: colors.textSecondary }]} numberOfLines={1}>
           Best {activitySummary.bestTime}
         </Text>
-        <View style={[styles.badge, { backgroundColor: activitySummary.color + '22' }]}>
+        <Text style={[styles.cardSubHint, { color: colors.textSecondary }]} numberOfLines={1}>
+          {getScoreBand(activitySummary.score)}
+        </Text>
+        <View style={[styles.badge, { backgroundColor: activitySummary.color + '16' }]}>
           <Text style={[styles.badgeText, { color: activitySummary.color }]}>{activitySummary.label}</Text>
         </View>
       </TouchableOpacity>
@@ -183,6 +212,47 @@ export default function ActivitiesScreen() {
           </View>
         </View>
       </View>
+
+      {featuredActivities.length > 0 && (
+        <View style={styles.featuredWrap}>
+          <Text style={[styles.featuredEyebrow, { color: colors.textSecondary }]}>Best right now</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.featuredScroll}
+          >
+            {featuredActivities.map((activity, index) => (
+              <TouchableOpacity
+                key={activity.id}
+                style={[
+                  styles.featuredCard,
+                  { backgroundColor: colors.card, borderColor: activity.summary.color + '45' },
+                ]}
+                activeOpacity={0.8}
+                onPress={() => setSelectedActivity(activity)}
+              >
+                <View style={styles.featuredHeader}>
+                  <Text style={styles.featuredEmoji}>{activity.emoji}</Text>
+                  <View style={[styles.featuredBadge, { backgroundColor: activity.summary.color + '16' }]}>
+                    <Text style={[styles.featuredBadgeText, { color: activity.summary.color }]}>
+                      #{index + 1}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={[styles.featuredName, { color: colors.text }]} numberOfLines={1}>
+                  {activity.name}
+                </Text>
+                <Text style={[styles.featuredScore, { color: activity.summary.color }]}>
+                  {activity.summary.score}/100
+                </Text>
+                <Text style={[styles.featuredMeta, { color: colors.textSecondary }]} numberOfLines={2}>
+                  Best {activity.summary.bestTime}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       <FlatList
         data={gridData}
@@ -402,6 +472,40 @@ const styles = StyleSheet.create({
   cityLabel: { fontSize: typography.body, flexShrink: 1 },
   aqiBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   aqiBadgeText: { fontSize: typography.caption, fontWeight: '700' },
+  featuredWrap: { paddingHorizontal: 16, marginBottom: 6 },
+  featuredEyebrow: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  featuredScroll: { paddingRight: 8, gap: 10 },
+  featuredCard: {
+    width: 188,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    padding: 16,
+  },
+  featuredHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  featuredEmoji: { fontSize: 34 },
+  featuredBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  featuredBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  featuredName: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
+  featuredScore: { fontSize: 28, fontWeight: '800', marginBottom: 6 },
+  featuredMeta: { fontSize: 12, lineHeight: 18 },
   grid: { paddingHorizontal: 12, paddingBottom: 24 },
   row: { justifyContent: 'space-between', paddingHorizontal: 4 },
   card: {
@@ -413,19 +517,30 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     paddingHorizontal: 12,
     alignItems: 'center',
+    minHeight: 190,
+  },
+  cardTopRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
   addCard: {
     borderStyle: 'dashed',
     borderWidth: 2,
     justifyContent: 'center',
-    minHeight: 132,
+    minHeight: 190,
   },
   addPlus: { fontSize: 44, fontWeight: '300', lineHeight: 48, marginBottom: 4 },
-  cardEmoji: { fontSize: 40, marginBottom: 8 },
-  cardName: { fontSize: typography.body, fontWeight: '600', marginBottom: 8, textAlign: 'center' },
+  cardEmoji: { fontSize: 38 },
+  rankPill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  rankPillText: { fontSize: 11, fontWeight: '700' },
+  cardName: { fontSize: typography.body, fontWeight: '700', marginBottom: 10, textAlign: 'center', minHeight: 42 },
   cardScore: { fontSize: 20, fontWeight: '800', marginBottom: 4 },
-  cardHint: { fontSize: 11, marginBottom: 8, textAlign: 'center' },
-  badge: { paddingHorizontal: 14, paddingVertical: 4, borderRadius: 12 },
+  cardHint: { fontSize: 11, marginBottom: 4, textAlign: 'center' },
+  cardSubHint: { fontSize: 11, marginBottom: 10, textAlign: 'center' },
+  badge: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 12 },
   badgeText: { fontSize: typography.caption, fontWeight: '700' },
 
   /* Add Modal */

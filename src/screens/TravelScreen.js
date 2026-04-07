@@ -426,6 +426,11 @@ export default function TravelScreen({ route }) {
   const activeAlerts = nhmpData.filter((a) => a.severity !== 'clear');
   const clearRoutes = nhmpData.filter((a) => a.severity === 'clear');
   const travelSummary = getTravelRiskSummary({ nhmpData, pmdAlerts });
+  const travelSnapshotStats = [
+    { label: 'Alerts', value: activeAlerts.length, tone: activeAlerts.length > 0 ? '#EF4444' : colors.textSecondary },
+    { label: 'Clear', value: clearRoutes.length, tone: '#22C55E' },
+    { label: 'PMD', value: pmdAlerts.length, tone: pmdAlerts.length > 0 ? '#F97316' : colors.textSecondary },
+  ];
   const focusRoute =
     expandedMotorway != null
       ? TRAVEL_ROUTES[expandedMotorway]
@@ -531,7 +536,7 @@ export default function TravelScreen({ route }) {
           <>
             {activeAlerts.length > 0 && (
               <>
-                <Text style={[styles.subTitle, { color: '#EF4444' }]}>Active Alerts ({activeAlerts.length})</Text>
+                <Text style={[styles.subTitle, { color: colors.text }]}>Routes to review first</Text>
                 {activeAlerts.map((a, i) => (
                   <NHMPAdvisory key={`alert-${i}`} advisory={a} colors={colors} isDark={isDark} />
                 ))}
@@ -688,6 +693,20 @@ export default function TravelScreen({ route }) {
         <Text style={[styles.travelSummaryBody, { color: colors.text }]}>
           {travelSummary.body}
         </Text>
+        <View style={styles.travelSnapshotStats}>
+          {travelSnapshotStats.map((item) => (
+            <View
+              key={item.label}
+              style={[
+                styles.travelSnapshotStat,
+                { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFFB8', borderColor: travelSummary.border },
+              ]}
+            >
+              <Text style={[styles.travelSnapshotValue, { color: item.tone }]}>{item.value}</Text>
+              <Text style={[styles.travelSnapshotLabel, { color: colors.textSecondary }]}>{item.label}</Text>
+            </View>
+          ))}
+        </View>
         <View style={styles.travelSummaryChips}>
           {travelSummary.chips.map((chip) => (
             <View
@@ -743,7 +762,16 @@ export default function TravelScreen({ route }) {
         return (
           <View
             key={motorway.id}
-            style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={[
+              styles.card,
+              {
+                backgroundColor: colors.card,
+                borderColor:
+                  sourceBadge.label === 'PMD Alert' || matchedAdvisory?.severity === 'closed'
+                    ? 'rgba(239,68,68,0.20)'
+                    : colors.border,
+              },
+            ]}
             onLayout={(event) => {
               routeOffsetsRef.current[index] = event.nativeEvent.layout.y;
             }}
@@ -827,7 +855,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   contentContainer: { padding: 16, paddingBottom: 32 },
   title: { fontSize: typography.title, fontWeight: '700', marginBottom: 4 },
-  subTitle: { fontSize: 14, fontWeight: '700', marginTop: 12, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  subTitle: { fontSize: 16, fontWeight: '700', marginTop: 12, marginBottom: 10 },
 
   /* NHMP Section */
   nhmpSection: { marginBottom: 8 },
@@ -879,7 +907,7 @@ const styles = StyleSheet.create({
   pmdDayTemp: { fontSize: 12, fontWeight: '700', flex: 1, textAlign: 'right' },
 
   /* Motorway Cards */
-  card: { borderRadius: 12, borderWidth: 1, marginBottom: 12, overflow: 'hidden' },
+  card: { borderRadius: 18, borderWidth: 1, marginBottom: 12, overflow: 'hidden' },
   routeSubtitle: { fontSize: 13, marginBottom: 12, lineHeight: 18 },
   travelSummaryCard: {
     borderWidth: 1,
@@ -902,6 +930,29 @@ const styles = StyleSheet.create({
   travelSummaryBody: {
     fontSize: 14,
     lineHeight: 21,
+  },
+  travelSnapshotStats: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  travelSnapshotStat: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  travelSnapshotValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  travelSnapshotLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
   travelSummaryChips: {
     flexDirection: 'row',
@@ -948,11 +999,11 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     fontWeight: '600',
   },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18 },
   cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   roadEmoji: { fontSize: 22, marginRight: 10 },
   routeTitleWrap: { flex: 1 },
-  motorwayName: { fontSize: typography.subtitle, fontWeight: '600', flexShrink: 1 },
+  motorwayName: { fontSize: typography.subtitle, fontWeight: '700', flexShrink: 1 },
   routeBadgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
   routeKindBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, marginTop: 6 },
   routeKindText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },

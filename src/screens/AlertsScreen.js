@@ -726,15 +726,30 @@ export default function AlertsScreen() {
   /* ---------- About Tab ---------- */
   const renderAbout = () => {
     const sdkVersion = '55';
+    const platformHighlights = [
+      { label: 'Coverage', value: 'Pakistan-first' },
+      { label: 'Feeds', value: 'Google + NHMP + PMD' },
+      { label: 'Experience', value: 'Expo web + mobile' },
+    ];
 
     return (
       <ScrollView contentContainerStyle={[styles.scrollContent, styles.aboutContainer]} showsVerticalScrollIndicator={false}>
-        <Text style={styles.aboutEmoji}>🌬️</Text>
-        <Text style={[styles.aboutAppName, { color: colors.text }]}>OutdoorAdvisor</Text>
-        <Text style={[styles.aboutVersion, { color: colors.textSecondary }]}>Version 1.0.0</Text>
-        <Text style={[styles.aboutTagline, { color: colors.accent }]}>
-          Your smart guide to outdoor safety — real-time AQI, weather & travel conditions across Pakistan.
-        </Text>
+        <View style={[styles.aboutHero, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={styles.aboutEmoji}>🌬️</Text>
+          <Text style={[styles.aboutAppName, { color: colors.text }]}>OutdoorAdvisor</Text>
+          <Text style={[styles.aboutVersion, { color: colors.textSecondary }]}>Version 1.0.0</Text>
+          <Text style={[styles.aboutTagline, { color: colors.accent }]}>
+            Your smart guide to outdoor safety with practical local context, live conditions, and travel checks across Pakistan.
+          </Text>
+          <View style={styles.aboutHighlightRow}>
+            {platformHighlights.map((item) => (
+              <View key={item.label} style={[styles.aboutHighlightChip, { backgroundColor: colors.primary + '12' }]}>
+                <Text style={[styles.aboutHighlightLabel, { color: colors.textSecondary }]}>{item.label}</Text>
+                <Text style={[styles.aboutHighlightValue, { color: colors.text }]}>{item.value}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
 
         <View style={[styles.aboutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.aboutCardTitle, { color: colors.primary }]}>What It Covers</Text>
@@ -773,6 +788,22 @@ export default function AlertsScreen() {
           <Text style={[styles.aboutBodyText, { color: colors.text }]}>
             Built with ❤️ in Pakistan
           </Text>
+        </View>
+
+        <View style={[styles.aboutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.aboutCardTitle, { color: colors.primary }]}>Product Direction</Text>
+          <View style={styles.aboutRow}>
+            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
+            <Text style={[styles.aboutRowText, { color: colors.text }]}>Plain-language outdoor decisions instead of raw-data overload</Text>
+          </View>
+          <View style={styles.aboutRow}>
+            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
+            <Text style={[styles.aboutRowText, { color: colors.text }]}>Fast route confidence for Murree, M2, Hazara, and other high-friction corridors</Text>
+          </View>
+          <View style={styles.aboutRow}>
+            <Text style={[styles.aboutDot, { color: colors.accent }]}>•</Text>
+            <Text style={[styles.aboutRowText, { color: colors.text }]}>Higher reliability summaries, better local precision, and a cleaner mobile-first UI</Text>
+          </View>
         </View>
       </ScrollView>
     );
@@ -1111,6 +1142,14 @@ const styles = StyleSheet.create({
   aboutContainer: {
     alignItems: 'center',
   },
+  aboutHero: {
+    width: '100%',
+    borderWidth: 1,
+    borderRadius: 24,
+    padding: 22,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
   aboutEmoji: {
     fontSize: 64,
     marginBottom: 8,
@@ -1124,11 +1163,32 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   aboutTagline: {
-    fontSize: typography.subtitle,
+    fontSize: typography.body,
     fontWeight: '600',
     marginTop: 8,
-    marginBottom: 24,
+    marginBottom: 18,
     textAlign: 'center',
+    lineHeight: 24,
+  },
+  aboutHighlightRow: {
+    width: '100%',
+    gap: 10,
+  },
+  aboutHighlightChip: {
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  aboutHighlightLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  aboutHighlightValue: {
+    fontSize: 15,
+    fontWeight: '700',
   },
   aboutCard: {
     width: '100%',
