@@ -1,5 +1,52 @@
+import { createClient } from '@supabase/supabase-js';
+import { derivePremiumState } from '../../src/lib/premium.js';
+
 function sendJson(res, status, payload) {
   res.status(status).json(payload);
+}
+
+function getSupabaseServerClient() {
+  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
+  const supabaseKey =
+    process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
+    process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
+    '';
+
+  if (!supabaseUrl || !supabaseKey) {
+    return null;
+  }
+
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
+async function getRequestPremiumState(req) {
+  const authHeader = req.headers?.authorization || '';
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  const token = match?.[1];
+
+  if (!token) {
+    return { isPremium: false, plan: 'free' };
+  }
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) {
+    return { isPremium: false, plan: 'free' };
+  }
+
+  try {
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) {
+      return { isPremium: false, plan: 'free' };
+    }
+    return derivePremiumState(data.user);
+  } catch {
+    return { isPremium: false, plan: 'free' };
+  }
 }
 
 function extractTextFromResponse(json) {
@@ -160,7 +207,7 @@ async function callGemini(model, apiKey, prompt) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=1800');
 
   if (req.method === 'OPTIONS') {
@@ -179,8 +226,9 @@ export default async function handler(req, res) {
   const fallback = kind === 'travel' ? travelFallback(payload) : homeFallback(payload);
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '';
   const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite';
+  const premiumState = await getRequestPremiumState(req);
 
-  if (!apiKey) {
+  if (!apiKey || !premiumState.isPremium) {
     return sendJson(res, 200, fallback);
   }
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchApiJson } from '../config/api';
+import { supabase } from '../lib/supabase';
 import * as persistentCache from '../utils/persistentCache';
 
 const CACHE_NS = 'ai_briefing_v2';
@@ -48,9 +49,14 @@ export default function useAiBriefing({ kind, signature, payload, enabled = true
     setError(null);
 
     try {
+      const session = supabase ? await supabase.auth.getSession() : { data: { session: null } };
+      const accessToken = session?.data?.session?.access_token || '';
       const result = await fetchApiJson('/api/ai/briefing', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify({
           kind,
           payload: payloadRef.current,
