@@ -481,15 +481,6 @@ export default function AlertsScreen() {
       { key: 'routeClosureAlerts', label: 'Major Route Closures', desc: 'Important alerts for serious motorway and corridor closures.' },
     ];
 
-    const stateAccent =
-      notificationState.tone === 'ready'
-        ? { bg: '#22C55E15', border: '#22C55E33', text: '#15803D' }
-        : notificationState.tone === 'warning'
-        ? { bg: '#F9731615', border: '#F9731633', text: '#C2410C' }
-        : notificationState.tone === 'soft'
-        ? { bg: colors.primary + '10', border: colors.primary + '24', text: colors.primary }
-        : { bg: colors.card, border: colors.border, text: colors.text };
-
     return (
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Theme Mode Picker */}
@@ -517,34 +508,6 @@ export default function AlertsScreen() {
             );
           })}
         </View>
-
-        <Text style={[styles.sectionLabel, { color: colors.text, marginTop: 24 }]}>Notifications</Text>
-        <Text style={[styles.sectionDesc, { color: colors.textSecondary }]}>
-          These preferences control the alerts OutdoorAdvisor should watch for. On supported browsers, notification permission is handled automatically when you turn alerts on.
-        </Text>
-        <View
-          style={[
-            styles.notificationStatusCard,
-            {
-              backgroundColor: stateAccent.bg,
-              borderColor: stateAccent.border,
-            },
-          ]}
-        >
-          <Text style={[styles.notificationStatusTitle, { color: stateAccent.text }]}>
-            {notificationState.title}
-          </Text>
-          <Text style={[styles.notificationStatusBody, { color: colors.textSecondary }]}>
-            {notificationState.body}
-          </Text>
-        </View>
-        {Platform.OS === 'web' && (
-          <Text style={[styles.notificationHint, { color: colors.textSecondary }]}>
-            {pushSupported
-              ? 'Web push and local browser alerts work best when this site is allowed to send notifications.'
-              : 'This browser can still save your alert interests even when direct web push is unavailable.'}
-          </Text>
-        )}
 
         {items.map((item) => (
           <View
@@ -641,7 +604,7 @@ export default function AlertsScreen() {
         <View style={[styles.layoutHintCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.layoutHintTitle, { color: colors.text }]}>Recommended order</Text>
           <Text style={[styles.layoutHintBody, { color: colors.textSecondary }]}>
-            Lead with live conditions first, then the decision answer, activities, travel, forecast, and supporting details.
+            Lead with live conditions first, then the decision answer, activities, and travel. Forecast, wind, and details can stay optional.
           </Text>
           <TouchableOpacity
             style={[styles.resetLayoutBtn, { backgroundColor: colors.primary + '15' }]}

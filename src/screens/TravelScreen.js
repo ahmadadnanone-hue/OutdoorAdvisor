@@ -159,6 +159,35 @@ function getRouteSourceSummary(route, advisory, matchedAlerts) {
 function isFog(weatherCode) { return weatherCode === 45 || weatherCode === 48; }
 function isRain(weatherCode) { return weatherCode >= 61 && weatherCode <= 82; }
 
+function getStopRiskScore(stops) {
+  return (stops || []).reduce((score, stop) => {
+    let next = score;
+    if (stop?.aqi != null) {
+      if (stop.aqi >= 200) next += 18;
+      else if (stop.aqi >= 150) next += 12;
+      else if (stop.aqi >= 100) next += 6;
+    }
+    if (isFog(stop?.weatherCode)) next += 12;
+    else if (isRain(stop?.weatherCode)) next += 7;
+    if ((stop?.windSpeed ?? 0) >= 28) next += 5;
+    return next;
+  }, 0);
+}
+
+function getRouteRiskScore(route, advisory, matchedAlerts, stops) {
+  let score = 0;
+  if (advisory?.severity === 'closed') score += 100;
+  else if (advisory?.severity === 'fog') score += 72;
+  else if (advisory?.severity === 'rain') score += 54;
+  else if (advisory?.severity === 'warning') score += 46;
+  else if (advisory?.severity === 'clear') score -= 18;
+
+  score += Math.min(30, (matchedAlerts?.length || 0) * 10);
+  score += getStopRiskScore(stops);
+  if (route.kind === 'northern') score += 4;
+  return score;
+}
+
 /* ===== NHMP Advisory Card ===== */
 function NHMPAdvisory({ advisory, colors, isDark }) {
   const config = SEVERITY_CONFIG[advisory.severity] || SEVERITY_CONFIG.clear;
@@ -486,6 +515,22 @@ export default function TravelScreen({ route }) {
     payload: travelAiPayload,
     enabled: nhmpData.length > 0 || pmdAlerts.length > 0,
   });
+  const sortedRoutes = useMemo(
+    () =>
+      TRAVEL_ROUTES.map((route, sourceIndex) => {
+        const matchedAdvisory = route.kind === 'motorway' ? findNhmpRouteMatch(route, nhmpData) : null;
+        const matchedPmdAlerts = findRelevantPmdAlerts(route, pmdAlerts);
+        const stops = stopData[sourceIndex] || [];
+        return {
+          route,
+          sourceIndex,
+          matchedAdvisory,
+          matchedPmdAlerts,
+          riskScore: getRouteRiskScore(route, matchedAdvisory, matchedPmdAlerts, stops),
+        };
+      }).sort((a, b) => b.riskScore - a.riskScore || a.route.name.localeCompare(b.route.name)),
+    [nhmpData, pmdAlerts, stopData]
+  );
 
   return (
     <ScrollView
@@ -743,10 +788,8 @@ export default function TravelScreen({ route }) {
         Includes motorways, northern highways, and mountain access corridors.
       </Text>
 
-      {TRAVEL_ROUTES.map((motorway, index) => {
-        const isExpanded = expandedMotorway === index;
-        const matchedAdvisory = motorway.kind === 'motorway' ? findNhmpRouteMatch(motorway, nhmpData) : null;
-        const matchedPmdAlerts = findRelevantPmdAlerts(motorway, pmdAlerts);
+      {sortedRoutes.map(({ route: motorway, sourceIndex, matchedAdvisory, matchedPmdAlerts, riskScore }) => {
+        const isExpanded = expandedMotorway === sourceIndex;
         const sourceSummary = getRouteSourceSummary(motorway, matchedAdvisory, matchedPmdAlerts);
         const sourceBadge =
           motorway.kind === 'motorway'
@@ -773,12 +816,12 @@ export default function TravelScreen({ route }) {
               },
             ]}
             onLayout={(event) => {
-              routeOffsetsRef.current[index] = event.nativeEvent.layout.y;
+              routeOffsetsRef.current[sourceIndex] = event.nativeEvent.layout.y;
             }}
           >
             <TouchableOpacity
               style={styles.cardHeader}
-              onPress={() => toggleMotorway(index)}
+              onPress={() => toggleMotorway(sourceIndex)}
               activeOpacity={0.7}
             >
               <View style={styles.cardHeaderLeft}>
@@ -786,6 +829,11 @@ export default function TravelScreen({ route }) {
                 <View style={styles.routeTitleWrap}>
                   <Text style={[styles.motorwayName, { color: colors.text }]}>{motorway.name}</Text>
                   <View style={styles.routeBadgeRow}>
+                    <View style={[styles.routeKindBadge, { backgroundColor: '#11182710' }]}>
+                      <Text style={[styles.routeKindText, { color: colors.textSecondary }]}>
+                        Risk {riskScore}
+                      </Text>
+                    </View>
                     <View style={[styles.routeKindBadge, { backgroundColor: colors.primary + '15' }]}>
                       <Text style={[styles.routeKindText, { color: colors.primary }]}>
                         {motorway.kind || 'route'}
@@ -828,13 +876,13 @@ export default function TravelScreen({ route }) {
                     ))}
                   </View>
                 )}
-                {isLoading(index) ? (
+                {isLoading(sourceIndex) ? (
                   <View style={styles.loadingContainer}>
                     <ActivityIndicator size="small" color={colors.primary} />
                     <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Fetching conditions...</Text>
                   </View>
-                ) : stopData[index] && stopData[index].length > 0 ? (
-                  stopData[index].map((stop, i) => (
+                ) : stopData[sourceIndex] && stopData[sourceIndex].length > 0 ? (
+                  stopData[sourceIndex].map((stop, i) => (
                     <StopRow key={`${motorway.id}-${i}`} stop={stop} colors={colors} formatTempShort={formatTempShort} />
                   ))
                 ) : (

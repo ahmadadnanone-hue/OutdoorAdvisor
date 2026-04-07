@@ -14,7 +14,7 @@ const LEGACY_HOME_SECTIONS = [
   'wind',
 ];
 
-const DEFAULT_HOME_SECTIONS = [
+const PREVIOUS_DEFAULT_HOME_SECTIONS = [
   'aqi',
   'decision',
   'activities',
@@ -22,6 +22,13 @@ const DEFAULT_HOME_SECTIONS = [
   'forecast',
   'details',
   'wind',
+];
+
+const DEFAULT_HOME_SECTIONS = [
+  'aqi',
+  'decision',
+  'activities',
+  'travel',
 ];
 
 const DEFAULT_SETTINGS = {
@@ -39,7 +46,13 @@ function normalizeHomeSections(homeSections) {
   ) {
     return DEFAULT_HOME_SECTIONS;
   }
-  const known = new Set(DEFAULT_HOME_SECTIONS);
+  if (
+    incoming.length === PREVIOUS_DEFAULT_HOME_SECTIONS.length &&
+    incoming.every((key, index) => key === PREVIOUS_DEFAULT_HOME_SECTIONS[index])
+  ) {
+    return DEFAULT_HOME_SECTIONS;
+  }
+  const known = new Set([...DEFAULT_HOME_SECTIONS, 'forecast', 'details', 'wind']);
   const cleaned = incoming.filter((key) => known.has(key));
   const missingDefaults = DEFAULT_HOME_SECTIONS.filter((key) => !cleaned.includes(key));
   return [...cleaned, ...missingDefaults];

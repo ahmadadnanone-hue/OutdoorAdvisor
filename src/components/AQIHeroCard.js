@@ -147,6 +147,15 @@ function HeroGlow({ color, style }) {
   return <View pointerEvents="none" style={[styles.glowOrb, { backgroundColor: color }, style]} />;
 }
 
+function PressableZone({ onPress, children, style }) {
+  if (!onPress) return <View style={style}>{children}</View>;
+  return (
+    <TouchableOpacity activeOpacity={0.82} onPress={onPress} style={style}>
+      {children}
+    </TouchableOpacity>
+  );
+}
+
 export default function AQIHeroCard({
   locationTitle,
   locationSubtitle,
@@ -160,7 +169,8 @@ export default function AQIHeroCard({
   pm25,
   humidity,
   loading,
-  onPress,
+  onPressAqi,
+  onPressTemp,
 }) {
   const { colors: themeColors, isDark } = useTheme();
   const heroColors = getHeroTheme(weatherCode, windSpeed);
@@ -229,16 +239,18 @@ export default function AQIHeroCard({
           </Text>
         </View>
 
-        <View style={styles.tempArea}>
+        <PressableZone onPress={onPressTemp} style={styles.tempArea}>
           <Text style={[styles.tempValue, { color: heroColors.text }]}>{tempLabel || '--'}</Text>
           <Text style={[styles.feelsLike, { color: heroColors.subtext }]}>
             Feels like {feelsLikeLabel || '--'}
           </Text>
-        </View>
+        </PressableZone>
       </View>
 
       <View style={styles.infoRow}>
-        <InfoPill label="AQI" value={aqi != null ? String(aqi) : '--'} colors={heroColors} />
+        <PressableZone onPress={onPressAqi} style={styles.infoPillWrap}>
+          <InfoPill label="AQI" value={aqi != null ? String(aqi) : '--'} colors={heroColors} />
+        </PressableZone>
         <InfoPill
           label="Wind"
           value={windSpeed != null ? `${Math.round(windSpeed)} km/h` : '--'}
@@ -251,7 +263,10 @@ export default function AQIHeroCard({
         />
       </View>
 
-      <View style={[styles.bottomCard, { backgroundColor: heroColors.surface, borderColor: heroColors.line }]}>
+      <PressableZone
+        onPress={onPressAqi}
+        style={[styles.bottomCard, { backgroundColor: heroColors.surface, borderColor: heroColors.line }]}
+      >
         <View>
           <Text style={[styles.bottomEyebrow, { color: heroColors.subtext }]}>Air quality snapshot</Text>
           <Text style={[styles.bottomTitle, { color: heroColors.text }]}>
@@ -264,17 +279,11 @@ export default function AQIHeroCard({
         <View style={[styles.aqiBadge, { backgroundColor: aqiColor + '22' }]}>
           <Text style={[styles.aqiBadgeText, { color: aqiColor }]}>{aqi != null ? aqi : '--'}</Text>
         </View>
-      </View>
+      </PressableZone>
     </View>
   );
 
-  if (!onPress) return content;
-
-  return (
-    <TouchableOpacity activeOpacity={0.88} onPress={onPress}>
-      {content}
-    </TouchableOpacity>
-  );
+  return content;
 }
 
 const styles = StyleSheet.create({
@@ -417,6 +426,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     marginBottom: 16,
+  },
+  infoPillWrap: {
+    flex: 1,
   },
   infoPill: {
     flex: 1,

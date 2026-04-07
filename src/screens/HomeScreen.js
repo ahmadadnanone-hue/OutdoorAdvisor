@@ -135,6 +135,59 @@ function getAqiInsight(aqi, pm25) {
   return `Air quality is very poor right now. Keep outdoor exposure brief and shift activities indoors if possible. PM2.5 is ${pm25 ?? '--'}.`;
 }
 
+function buildHourlyOutlook(hourly, settings, weatherLookup) {
+  const nextTwelve = (hourly || []).slice(0, 12);
+  if (!nextTwelve.length) {
+    return 'Next-12-hour outlook is unavailable right now.';
+  }
+
+  return nextTwelve
+    .map((hour) => {
+      const label = new Date(hour.time || Date.now()).toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        hour12: true,
+      });
+      const weather = weatherLookup(hour.weatherCode);
+      const rain = hour.precipProbability != null ? ` · ${hour.precipProbability}% rain` : '';
+      return `${label}: ${settings.formatTempShort(hour.temp)} · ${weather.description}${rain}`;
+    })
+    .join('\n');
+}
+
+function buildAqiHistoryInsight(history, currentAqi, pm25) {
+  if (!history?.length) {
+    return getAqiInsight(currentAqi, pm25);
+  }
+
+  const recent = history.slice(-6);
+  const first = recent[0];
+  const last = recent[recent.length - 1];
+  const delta =
+    first?.aqi != null && last?.aqi != null
+      ? last.aqi - first.aqi
+      : null;
+  const deltaText =
+    delta == null || delta === 0
+      ? 'AQI has been fairly steady in recent checks.'
+      : delta > 0
+      ? `AQI is up ${delta} points versus the oldest recent check.`
+      : `AQI is down ${Math.abs(delta)} points versus the oldest recent check.`;
+
+  const lines = recent
+    .map((point) => {
+      const time = new Date(point.timestamp).toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+      const pm = point.pm25 != null ? ` · PM2.5 ${point.pm25}` : '';
+      return `${time}: AQI ${point.aqi ?? '--'}${pm}`;
+    })
+    .join('\n');
+
+  return `${deltaText}\n\nRecent AQI checks:\n${lines}`;
+}
+
 function getWindInsight({ windSpeed, windGusts, windDirectionLabel, gustsFromForecast, directionFromForecast, formatWind }) {
   const parts = [];
   parts.push(`Current wind speed is ${formatWind(windSpeed)}${windDirectionLabel && windDirectionLabel !== '--' ? ` from the ${windDirectionLabel}` : ''}.`);
@@ -229,6 +282,7 @@ export default function HomeScreen({ navigation }) {
     aqi,
     pm25,
     pm10,
+    history: aqiHistory,
     loading: aqiLoading,
     isUsingCache: aqiCached,
     updatedAt: aqiUpdatedAt,
@@ -762,10 +816,16 @@ export default function HomeScreen({ navigation }) {
                     pm10={pm10}
                     humidity={weatherCurrent?.humidity}
                     loading={aqiLoading || weatherLoading}
-                    onPress={() =>
+                    onPressAqi={() =>
                       setInsightModal({
-                        title: 'AQI Insight',
-                        body: getAqiInsight(aqi, pm25),
+                        title: 'AQI Trend',
+                        body: buildAqiHistoryInsight(aqiHistory, aqi, pm25),
+                      })
+                    }
+                    onPressTemp={() =>
+                      setInsightModal({
+                        title: 'Next 12 Hours',
+                        body: buildHourlyOutlook(hourly, settings, getWeatherDescription),
                       })
                     }
                   />
