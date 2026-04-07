@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import typography from '../theme/typography';
 import { fetchApiJson } from '../config/api';
 import { loadStoredNotifications } from '../utils/alertPreferences';
 import { maybeSendLocalAlert } from '../utils/alertNotifications';
+import useAiBriefing from '../hooks/useAiBriefing';
 
 const NHMP_REFRESH_MS = 5 * 60 * 1000;
 
@@ -425,6 +426,61 @@ export default function TravelScreen({ route }) {
   const activeAlerts = nhmpData.filter((a) => a.severity !== 'clear');
   const clearRoutes = nhmpData.filter((a) => a.severity === 'clear');
   const travelSummary = getTravelRiskSummary({ nhmpData, pmdAlerts });
+  const focusRoute =
+    expandedMotorway != null
+      ? TRAVEL_ROUTES[expandedMotorway]
+      : route?.params?.highlightRoute
+      ? TRAVEL_ROUTES.find((item) => item.id === route.params.highlightRoute) || null
+      : null;
+  const focusRouteStops =
+    focusRoute != null
+      ? stopData[TRAVEL_ROUTES.findIndex((item) => item.id === focusRoute.id)] || []
+      : [];
+  const travelAiPayload = useMemo(
+    () => ({
+      summaryLabel: travelSummary.label,
+      closureCount: activeAlerts.filter((item) => item.severity === 'closed').length,
+      fogCount: activeAlerts.filter((item) => item.severity === 'fog').length,
+      advisoryCount: activeAlerts.length,
+      clearRouteCount: clearRoutes.length,
+      pmdAlertCount: pmdAlerts.length,
+      pmdAlerts: pmdAlerts.slice(0, 3),
+      focusRoute: focusRoute
+        ? {
+            id: focusRoute.id,
+            name: focusRoute.name,
+            kind: focusRoute.kind,
+            stops: focusRouteStops.slice(0, 4).map((stop) => ({
+              name: stop.name,
+              temp: stop.temp,
+              aqi: stop.aqi,
+              windSpeed: stop.windSpeed,
+              humidity: stop.humidity,
+              weatherLabel: getWeatherDescription(stop.weatherCode).description,
+            })),
+          }
+        : null,
+    }),
+    [travelSummary.label, activeAlerts, clearRoutes.length, pmdAlerts, focusRoute, focusRouteStops]
+  );
+  const travelAiSignature = useMemo(
+    () =>
+      [
+        travelSummary.label,
+        activeAlerts.map((item) => `${item.severity}:${item.route || item.status}`).join('|'),
+        clearRoutes.length,
+        pmdAlerts.slice(0, 3).join('|'),
+        focusRoute?.id || 'all',
+        focusRouteStops.map((stop) => `${stop.name}:${stop.temp}:${stop.aqi}:${stop.weatherCode}`).join('|'),
+      ].join('||'),
+    [travelSummary.label, activeAlerts, clearRoutes.length, pmdAlerts, focusRoute?.id, focusRouteStops]
+  );
+  const { data: travelAiBriefing, loading: travelAiLoading } = useAiBriefing({
+    kind: 'travel',
+    signature: travelAiSignature,
+    payload: travelAiPayload,
+    enabled: nhmpData.length > 0 || pmdAlerts.length > 0,
+  });
 
   return (
     <ScrollView
@@ -647,6 +703,19 @@ export default function TravelScreen({ route }) {
         </View>
       </View>
 
+      <View style={[styles.aiTravelCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[styles.aiTravelEyebrow, { color: colors.primary }]}>Trip insight</Text>
+        <Text style={[styles.aiTravelTitle, { color: colors.text }]}>
+          {travelAiLoading && !travelAiBriefing ? 'Writing a quick route read…' : travelAiBriefing?.headline || 'Live route guidance will appear here.'}
+        </Text>
+        {!!travelAiBriefing?.summary && (
+          <Text style={[styles.aiTravelBody, { color: colors.textSecondary }]}>{travelAiBriefing.summary}</Text>
+        )}
+        {!!travelAiBriefing?.tip && (
+          <Text style={[styles.aiTravelTip, { color: colors.text }]}>{travelAiBriefing.tip}</Text>
+        )}
+      </View>
+
       {/* Weather-Based Route Conditions */}
       <Text style={[styles.title, { color: colors.text, marginTop: 24 }]}>
         Weather Along Major Routes
@@ -849,6 +918,35 @@ const styles = StyleSheet.create({
   travelSummaryChipText: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  aiTravelCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+    marginTop: 12,
+  },
+  aiTravelEyebrow: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  aiTravelTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 24,
+    marginBottom: 8,
+  },
+  aiTravelBody: {
+    fontSize: 14,
+    lineHeight: 21,
+    marginBottom: 8,
+  },
+  aiTravelTip: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '600',
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
   cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },

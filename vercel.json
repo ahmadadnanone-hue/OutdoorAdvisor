@@ -24,6 +24,9 @@
     "api/google/weather.js": {
       "maxDuration": 30
     },
+    "api/ai/briefing.js": {
+      "maxDuration": 30
+    },
     "api/notifications/subscribe.js": {
       "maxDuration": 30
     },

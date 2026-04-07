@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,7 @@ import { maybeSendLocalAlert } from '../utils/alertNotifications';
 import { loadStoredNotifications, loadStoredThresholds } from '../utils/alertPreferences';
 import { getActivitySummary } from '../utils/activityScoring';
 import { getActivityById } from '../data/activities';
+import useAiBriefing from '../hooks/useAiBriefing';
 
 const LIVE_REFRESH_WINDOW_MS = 5 * 60 * 1000;
 const MAX_LIVE_REFRESHES_PER_WINDOW = 2;
@@ -347,6 +348,100 @@ export default function HomeScreen({ navigation }) {
     pollenValue,
     windSpeed: weatherCurrent?.windSpeed,
   });
+  const nextSixHours = hourly.slice(0, 6);
+  const peakRainChance = nextSixHours.reduce(
+    (max, hour) => Math.max(max, hour?.precipProbability ?? 0),
+    0
+  );
+  const nextActivityWindows = ACTIVITIES.slice(0, 3)
+    .map((id) => {
+      const activity = getActivityById(id);
+      if (!activity) return null;
+      const summary = getActivitySummary(activity, aqi ?? 0, weatherCurrent, hourly);
+      return {
+        name: activity.name,
+        score: summary.score,
+        bestTime: summary.bestTime,
+        label: summary.label,
+      };
+    })
+    .filter(Boolean);
+
+  const homeAiPayload = useMemo(
+    () => ({
+      locationName: locationDisplay.primary,
+      decisionLabel: decision.label,
+      decisionTone: decision.tone,
+      aqi,
+      pm25,
+      temp: weatherCurrent?.temp,
+      feelsLike: weatherCurrent?.feelsLike,
+      humidity: weatherCurrent?.humidity,
+      windSpeed: weatherCurrent?.windSpeed,
+      weatherLabel: weather.description,
+      weatherCode: weatherCurrent?.weatherCode,
+      pollenLabel: pollenCategory,
+      pollenValue,
+      peakRainChance,
+      nextActivityWindows,
+    }),
+    [
+      locationDisplay.primary,
+      decision.label,
+      decision.tone,
+      aqi,
+      pm25,
+      weatherCurrent?.temp,
+      weatherCurrent?.feelsLike,
+      weatherCurrent?.humidity,
+      weatherCurrent?.windSpeed,
+      weatherCurrent?.weatherCode,
+      weather.description,
+      pollenCategory,
+      pollenValue,
+      peakRainChance,
+      nextActivityWindows,
+    ]
+  );
+  const homeAiSignature = useMemo(
+    () =>
+      [
+        locationDisplay.primary,
+        decision.label,
+        aqi ?? 'na',
+        pm25 ?? 'na',
+        weatherCurrent?.temp ?? 'na',
+        weatherCurrent?.feelsLike ?? 'na',
+        weatherCurrent?.humidity ?? 'na',
+        weatherCurrent?.windSpeed ?? 'na',
+        weatherCurrent?.weatherCode ?? 'na',
+        pollenValue ?? 'na',
+        peakRainChance,
+      ].join('|'),
+    [
+      locationDisplay.primary,
+      decision.label,
+      aqi,
+      pm25,
+      weatherCurrent?.temp,
+      weatherCurrent?.feelsLike,
+      weatherCurrent?.humidity,
+      weatherCurrent?.windSpeed,
+      weatherCurrent?.weatherCode,
+      pollenValue,
+      peakRainChance,
+    ]
+  );
+  const { data: homeAiBriefing, loading: homeAiLoading } = useAiBriefing({
+    kind: 'home',
+    signature: homeAiSignature,
+    payload: homeAiPayload,
+    enabled:
+      aqi != null ||
+      weatherCurrent?.weatherCode != null ||
+      weatherCurrent?.temp != null ||
+      pollenValue != null,
+  });
 
   useEffect(() => {
     if (!refreshNote) return undefined;
@@ -536,30 +631,54 @@ export default function HomeScreen({ navigation }) {
           switch (key) {
             case 'decision':
               return (
-                <TouchableOpacity
-                  key="decision"
-                  activeOpacity={0.85}
-                  style={[
-                    styles.decisionCard,
-                    {
-                      backgroundColor: decision.bg,
-                      borderColor: decision.border,
-                    },
-                  ]}
-                  onPress={() =>
-                    setInsightModal({
-                      title: decision.label,
-                      body: `${decision.tone} ${decision.body}`,
-                    })
-                  }
-                >
-                  <View style={styles.decisionHeader}>
-                    <Text style={[styles.decisionEyebrow, { color: colors.textSecondary }]}>Outdoor decision</Text>
-                    <Text style={[styles.decisionLabel, { color: decision.color }]}>{decision.label}</Text>
-                  </View>
-                  <Text style={[styles.decisionTone, { color: colors.text }]}>{decision.tone}</Text>
-                  <Text style={[styles.decisionBody, { color: colors.textSecondary }]}>{decision.body}</Text>
-                </TouchableOpacity>
+                <View key="decision" style={styles.section}>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={[
+                      styles.decisionCard,
+                      {
+                        backgroundColor: decision.bg,
+                        borderColor: decision.border,
+                      },
+                    ]}
+                    onPress={() =>
+                      setInsightModal({
+                        title: decision.label,
+                        body: `${decision.tone} ${decision.body}`,
+                      })
+                    }
+                  >
+                    <View style={styles.decisionHeader}>
+                      <Text style={[styles.decisionEyebrow, { color: colors.textSecondary }]}>Outdoor decision</Text>
+                      <Text style={[styles.decisionLabel, { color: decision.color }]}>{decision.label}</Text>
+                    </View>
+                    <Text style={[styles.decisionTone, { color: colors.text }]}>{decision.tone}</Text>
+                    <Text style={[styles.decisionBody, { color: colors.textSecondary }]}>{decision.body}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={[styles.aiBriefingCard, { backgroundColor: colors.card }, cardShadow, cardBorder]}
+                    onPress={() =>
+                      homeAiBriefing &&
+                      setInsightModal({
+                        title: 'What today means',
+                        body: `${homeAiBriefing.headline} ${homeAiBriefing.summary} ${homeAiBriefing.tip}`,
+                      })
+                    }
+                    disabled={!homeAiBriefing}
+                  >
+                    <Text style={[styles.aiBriefingEyebrow, { color: colors.primary }]}>What today means</Text>
+                    <Text style={[styles.aiBriefingTitle, { color: colors.text }]}>
+                      {homeAiLoading && !homeAiBriefing ? 'Writing a quick read of today’s conditions…' : homeAiBriefing?.headline || 'Today’s conditions summary will appear here.'}
+                    </Text>
+                    {!!homeAiBriefing?.summary && (
+                      <Text style={[styles.aiBriefingBody, { color: colors.textSecondary }]}>{homeAiBriefing.summary}</Text>
+                    )}
+                    {!!homeAiBriefing?.tip && (
+                      <Text style={[styles.aiBriefingTip, { color: colors.text }]}>{homeAiBriefing.tip}</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
               );
             case 'travel':
               return (
@@ -1086,7 +1205,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     borderWidth: 1,
     padding: 18,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   decisionHeader: {
     flexDirection: 'row',
@@ -1116,6 +1235,33 @@ const styles = StyleSheet.create({
   decisionBody: {
     fontSize: 14,
     lineHeight: 21,
+  },
+  aiBriefingCard: {
+    borderRadius: 20,
+    padding: 16,
+  },
+  aiBriefingEyebrow: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  aiBriefingTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    lineHeight: 23,
+    marginBottom: 8,
+  },
+  aiBriefingBody: {
+    fontSize: 14,
+    lineHeight: 21,
+    marginBottom: 8,
+  },
+  aiBriefingTip: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '600',
   },
   tripActionStack: {
     gap: 10,
