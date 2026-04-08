@@ -341,7 +341,7 @@ export default function TravelScreen({ route }) {
       const prefs = await loadStoredNotifications();
       if (cancelled) return;
 
-      if (prefs.routeClosureAlerts) {
+      if (isPremium && prefs.routeClosureAlerts) {
         const closure = nhmpData.find((item) => item.severity === 'closed');
         if (closure) {
           maybeSendLocalAlert('nhmp-route-closure', {
@@ -354,7 +354,7 @@ export default function TravelScreen({ route }) {
         }
       }
 
-      if (prefs.fogWarnings) {
+      if (isPremium && prefs.fogWarnings) {
         const fogAlert = nhmpData.find((item) => item.severity === 'fog');
         if (fogAlert) {
           maybeSendLocalAlert('nhmp-fog-warning', {
@@ -367,7 +367,7 @@ export default function TravelScreen({ route }) {
         }
       }
 
-      if (prefs.routeClosureAlerts && pmdAlerts.length > 0) {
+      if (isPremium && prefs.routeClosureAlerts && pmdAlerts.length > 0) {
         const northernAlert = pmdAlerts.find((alert) =>
           /(murree|naran|kaghan|swat|gilgit|hazara|karakoram|abbottabad|mansehra)/i.test(String(alert))
         );
@@ -384,7 +384,7 @@ export default function TravelScreen({ route }) {
     return () => {
       cancelled = true;
     };
-  }, [nhmpData, pmdAlerts]);
+  }, [isPremium, nhmpData, pmdAlerts]);
 
   const loadRouteStops = useCallback(async (routeIndex) => {
     if (stopData[routeIndex] || fetchingRef.current[routeIndex]) return;

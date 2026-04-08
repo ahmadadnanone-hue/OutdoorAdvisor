@@ -14,6 +14,7 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
+import { getPremiumFeatureCopy } from '../lib/premium';
 import typography from '../theme/typography';
 import {
   ensureWebPush,
@@ -33,6 +34,8 @@ import {
 import { ensureLocalNotificationPermission } from '../utils/alertNotifications';
 
 const TABS = ['Thresholds', 'Notifications', 'Customize', 'About'];
+const PREMIUM_HOME_SECTION_KEYS = new Set(['pollen', 'wind', 'details', 'forecast']);
+const PREMIUM_NOTIFICATION_KEYS = new Set(['smogAlerts', 'pollenAlerts', 'fogWarnings', 'routeClosureAlerts']);
 
 const SECTION_META = {
   decision: { label: 'Outdoor Decision', icon: '🧭', desc: 'Plain-language go / go with care / limit exposure answer' },
@@ -248,7 +251,11 @@ export default function AlertsScreen() {
     let cancelled = false;
 
     const refreshNotificationState = async () => {
-      const enabledCount = Object.values(notifications).filter(Boolean).length;
+      const enabledCount = Object.entries(notifications).filter(([key, value]) => {
+        if (!value) return false;
+        if (!isPremium && PREMIUM_NOTIFICATION_KEYS.has(key)) return false;
+        return true;
+      }).length;
 
       if (enabledCount === 0) {
         if (!cancelled) {
@@ -524,11 +531,11 @@ export default function AlertsScreen() {
 
     return (
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {Platform.OS === 'web' && !isPremium && (
+        {!isPremium && (
           <View style={[styles.notificationsPremiumCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.notificationsPremiumTitle, { color: colors.text }]}>Free plan keeps alerts local</Text>
+            <Text style={[styles.notificationsPremiumTitle, { color: colors.text }]}>Premium unlocks higher-value alerts</Text>
             <Text style={[styles.notificationsPremiumBody, { color: colors.textSecondary }]}>
-              Browser push sync is a premium feature. Your selected alerts still work locally on this device.
+              Smog season, high pollen, motorway fog, major route closures, and browser push sync are reserved for premium accounts.
             </Text>
           </View>
         )}
@@ -559,23 +566,43 @@ export default function AlertsScreen() {
           })}
         </View>
 
-        {items.map((item) => (
-          <View
-            key={item.key}
-            style={[styles.notifRow, { backgroundColor: colors.card, borderColor: colors.border }]}
-          >
-            <View style={styles.notifInfo}>
-              <Text style={[styles.notifLabel, { color: colors.text }]}>{item.label}</Text>
-              <Text style={[styles.notifDesc, { color: colors.textSecondary }]}>{item.desc}</Text>
+        {items.map((item) => {
+          const isLocked = PREMIUM_NOTIFICATION_KEYS.has(item.key) && !isPremium;
+          return (
+            <View
+              key={item.key}
+              style={[
+                styles.notifRow,
+                { backgroundColor: colors.card, borderColor: colors.border },
+                isLocked && styles.lockedRow,
+              ]}
+            >
+              <View style={styles.notifInfo}>
+                <View style={styles.lockedRowHeader}>
+                  <Text style={[styles.notifLabel, { color: colors.text }]}>{item.label}</Text>
+                  {isLocked && (
+                    <View style={[styles.inlinePremiumBadge, { backgroundColor: colors.primary + '16' }]}>
+                      <Text style={[styles.inlinePremiumBadgeText, { color: colors.primary }]}>Premium</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={[styles.notifDesc, { color: colors.textSecondary }]}>
+                  {isLocked ? `${item.desc} Premium unlock: ${getPremiumFeatureCopy(item.key)}.` : item.desc}
+                </Text>
+              </View>
+              <Switch
+                value={isLocked ? false : notifications[item.key]}
+                onValueChange={(v) => {
+                  if (isLocked) return;
+                  updateNotification(item.key, v);
+                }}
+                disabled={isLocked}
+                trackColor={{ false: colors.border, true: colors.primary + '77' }}
+                thumbColor={isLocked ? '#d4d4d8' : notifications[item.key] ? colors.primary : '#ccc'}
+              />
             </View>
-            <Switch
-              value={notifications[item.key]}
-              onValueChange={(v) => updateNotification(item.key, v)}
-              trackColor={{ false: colors.border, true: colors.primary + '77' }}
-              thumbColor={notifications[item.key] ? colors.primary : '#ccc'}
-            />
-          </View>
-        ))}
+          );
+        })}
       </ScrollView>
     );
   };
@@ -595,7 +622,7 @@ export default function AlertsScreen() {
       { key: 'knots', label: 'knots' },
     ];
 
-    const enabledKeys = homeSections;
+    const enabledKeys = homeSections.filter((key) => isPremium || !PREMIUM_HOME_SECTION_KEYS.has(key));
     const disabledKeys = ALL_SECTION_KEYS.filter((k) => !enabledKeys.includes(k));
 
     return (
@@ -713,18 +740,32 @@ export default function AlertsScreen() {
             <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginTop: 16, fontSize: 13 }]}>HIDDEN SECTIONS</Text>
             {disabledKeys.map((key) => {
               const meta = SECTION_META[key];
+              const isLocked = PREMIUM_HOME_SECTION_KEYS.has(key) && !isPremium;
               return (
-                <View key={key} style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border, opacity: 0.6 }]}>
+                <View key={key} style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border, opacity: isLocked ? 0.95 : 0.6 }]}>
                   <Text style={styles.sectionCardIcon}>{meta.icon}</Text>
                   <View style={styles.sectionCardInfo}>
-                    <Text style={[styles.sectionCardLabel, { color: colors.text }]}>{meta.label}</Text>
-                    <Text style={[styles.sectionCardDesc, { color: colors.textSecondary }]}>{meta.desc}</Text>
+                    <View style={styles.lockedRowHeader}>
+                      <Text style={[styles.sectionCardLabel, { color: colors.text }]}>{meta.label}</Text>
+                      {isLocked && (
+                        <View style={[styles.inlinePremiumBadge, { backgroundColor: colors.primary + '16' }]}>
+                          <Text style={[styles.inlinePremiumBadgeText, { color: colors.primary }]}>Premium</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={[styles.sectionCardDesc, { color: colors.textSecondary }]}>
+                      {isLocked ? `${meta.desc} Premium unlock: ${getPremiumFeatureCopy(`${key}Section`)}.` : meta.desc}
+                    </Text>
                   </View>
                   <TouchableOpacity
-                    style={[styles.addBtn, { backgroundColor: colors.primary }]}
-                    onPress={() => toggleSection(key)}
+                    style={[styles.addBtn, { backgroundColor: isLocked ? colors.border : colors.primary }]}
+                    onPress={() => {
+                      if (isLocked) return;
+                      toggleSection(key);
+                    }}
+                    disabled={isLocked}
                   >
-                    <Text style={styles.addBtnText}>+ Add</Text>
+                    <Text style={styles.addBtnText}>{isLocked ? 'Premium' : '+ Add'}</Text>
                   </TouchableOpacity>
                 </View>
               );
@@ -1209,10 +1250,30 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
+  lockedRow: {
+    opacity: 0.9,
+  },
+  lockedRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+    flexWrap: 'wrap',
+  },
+  inlinePremiumBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  inlinePremiumBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
   notifLabel: {
     fontSize: typography.body,
     fontWeight: '600',
-    marginBottom: 4,
   },
   notifDesc: {
     fontSize: typography.caption,

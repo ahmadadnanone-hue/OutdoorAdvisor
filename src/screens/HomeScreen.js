@@ -38,6 +38,7 @@ import useAiBriefing from '../hooks/useAiBriefing';
 
 const LIVE_REFRESH_WINDOW_MS = 5 * 60 * 1000;
 const MAX_LIVE_REFRESHES_PER_WINDOW = 2;
+const PREMIUM_HOME_SECTIONS = new Set(['pollen', 'wind', 'details', 'forecast']);
 
 function getWindDirectionLabel(deg) {
   const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
@@ -566,7 +567,7 @@ export default function HomeScreen({ navigation }) {
         });
       }
 
-      if (notificationPrefs.smogAlerts && pm25 != null && pm25 >= thresholds.pm25Alert) {
+      if (isPremium && notificationPrefs.smogAlerts && pm25 != null && pm25 >= thresholds.pm25Alert) {
         maybeSendLocalAlert(`smog-${placeKey}`, {
           title: 'Smog alert',
           body: `PM2.5 is elevated around ${placeLabel}. A mask and shorter outdoor sessions will help.`,
@@ -597,7 +598,7 @@ export default function HomeScreen({ navigation }) {
         });
       }
 
-      if (notificationPrefs.pollenAlerts && pollenValue != null && pollenValue >= 4) {
+      if (isPremium && notificationPrefs.pollenAlerts && pollenValue != null && pollenValue >= 4) {
         maybeSendLocalAlert(`pollen-${placeKey}`, {
           title: 'High pollen alert',
           body: `${pollenDisplayName} pollen is elevated near ${placeLabel}. A mask and allergy medication can make time outside easier.`,
@@ -615,7 +616,7 @@ export default function HomeScreen({ navigation }) {
         });
       }
 
-      if (notificationPrefs.fogWarnings && isFogCode(weatherCurrent?.weatherCode)) {
+      if (isPremium && notificationPrefs.fogWarnings && isFogCode(weatherCurrent?.weatherCode)) {
         maybeSendLocalAlert(`fog-${placeKey}`, {
           title: 'Low-visibility alert',
           body: `Visibility looks reduced around ${placeLabel}. Slow down and leave extra margin while driving.`,
@@ -639,6 +640,7 @@ export default function HomeScreen({ navigation }) {
     weatherCurrent?.feelsLike,
     weatherCurrent?.weatherCode,
     weatherCurrent?.windSpeed,
+    isPremium,
   ]);
 
   // Loading screen while location is being determined
@@ -712,6 +714,9 @@ export default function HomeScreen({ navigation }) {
         )}
         {/* ===== Customizable Sections ===== */}
         {settings.homeSections.map((key) => {
+          if (PREMIUM_HOME_SECTIONS.has(key) && !isPremium) {
+            return null;
+          }
           switch (key) {
             case 'decision':
               return (
@@ -788,10 +793,9 @@ export default function HomeScreen({ navigation }) {
                             requestKey: Date.now(),
                           })
                         }
-                      >
+                        >
                         <View style={[styles.tripActionGraphic, { backgroundColor: colors.primary + '12' }]}>
                           <Text style={styles.tripActionGraphicEmoji}>{item.id === 'MURREE' ? '🏔️' : '🛣️'}</Text>
-                          <View style={[styles.tripActionGraphicLine, { backgroundColor: colors.primary + '40' }]} />
                         </View>
                         <View style={styles.tripActionText}>
                           <Text style={[styles.tripActionEyebrow, { color: colors.primary }]}>{item.eyebrow}</Text>
@@ -1427,15 +1431,6 @@ const styles = StyleSheet.create({
   },
   tripActionGraphicEmoji: {
     fontSize: 28,
-    zIndex: 2,
-  },
-  tripActionGraphicLine: {
-    position: 'absolute',
-    width: 42,
-    height: 6,
-    borderRadius: 999,
-    bottom: 18,
-    transform: [{ rotate: '-32deg' }],
   },
   tripActionText: {
     flex: 1,

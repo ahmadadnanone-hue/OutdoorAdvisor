@@ -3,6 +3,14 @@ export const PREMIUM_FEATURES = {
   routeScans: 'Stop-by-stop route scans',
   nearbyPlaces: 'Nearby venue suggestions',
   browserPush: 'Cross-device browser push',
+  pollenSection: 'Pollen level card on Home',
+  windSection: 'Wind card on Home',
+  detailsSection: 'Current details on Home',
+  forecastSection: '7-day forecast on Home',
+  pollenAlerts: 'High pollen alerts',
+  smogAlerts: 'Smog season alerts',
+  fogWarnings: 'Motorway fog warnings',
+  routeClosureAlerts: 'Major route closure alerts',
 };
 
 const ACTIVE_STATUSES = new Set(['active', 'premium', 'pro', 'paid', 'trialing', 'trial']);
