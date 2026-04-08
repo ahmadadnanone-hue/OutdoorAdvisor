@@ -652,7 +652,6 @@ export default function AlertsScreen() {
           Reorder the important Home stacks and hide the ones you do not need. Your current setup is saved automatically.
         </Text>
         <View style={[styles.layoutHintCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.layoutHintTitle, { color: colors.text }]}>Recommended order</Text>
           <Text style={[styles.layoutHintBody, { color: colors.textSecondary }]}>
             Lead with live conditions first, then the decision answer, activities, and travel. Forecast, wind, and details can stay optional.
           </Text>
@@ -661,7 +660,7 @@ export default function AlertsScreen() {
             onPress={resetHomeSections}
             activeOpacity={0.75}
           >
-            <Text style={[styles.resetLayoutBtnText, { color: colors.primary }]}>Reset to Recommended</Text>
+            <Text style={[styles.resetLayoutBtnText, { color: colors.primary }]}>Reset to Default</Text>
           </TouchableOpacity>
         </View>
 
@@ -801,7 +800,7 @@ export default function AlertsScreen() {
                 {user?.email || 'Your account is connected on this device.'}
               </Text>
               <Text style={[styles.accountPlan, { color: colors.primary }]}>
-                {isPremium ? 'Premium active' : `Plan: ${plan || 'free'}`}
+                {isPremium ? 'Premium' : `Plan: ${plan || 'free'}`}
               </Text>
             </View>
             <TouchableOpacity
