@@ -294,6 +294,38 @@ function formatHour(date) {
   });
 }
 
+function isHourWithinWindow(hour, window) {
+  if (!window) return true;
+  const start = Number(window.startHour);
+  const end = Number(window.endHour);
+  if (Number.isNaN(start) || Number.isNaN(end)) return true;
+  if (start === end) return true;
+  if (start < end) {
+    return hour >= start && hour < end;
+  }
+  return hour >= start || hour < end;
+}
+
+function getActivityTimeWindows(activity) {
+  return Array.isArray(activity?.timeWindows) && activity.timeWindows.length > 0
+    ? activity.timeWindows
+    : null;
+}
+
+function isActivityAvailableAtDate(activity, date) {
+  const windows = getActivityTimeWindows(activity);
+  if (!windows) return true;
+  return windows.some((window) => isHourWithinWindow(date.getHours(), window));
+}
+
+function getTimeWindowPenalty(activity, date) {
+  const windows = getActivityTimeWindows(activity);
+  if (!windows || isActivityAvailableAtDate(activity, date)) {
+    return 0;
+  }
+  return 36;
+}
+
 export function getBestTimeLabel(activity, aqi, hourly = []) {
   const now = new Date();
   const todayKey = now.toDateString();
@@ -303,6 +335,7 @@ export function getBestTimeLabel(activity, aqi, hourly = []) {
       if (!date || Number.isNaN(date.getTime())) return null;
       if (date < now) return null;
       if (date.toDateString() !== todayKey) return null;
+      if (!isActivityAvailableAtDate(activity, date)) return null;
       return {
         ...hour,
         date,
@@ -341,7 +374,20 @@ export function getBestTimeLabel(activity, aqi, hourly = []) {
 }
 
 export function getActivitySummary(activity, aqi, weather, hourly = []) {
-  const score = scoreActivityConditions(activity, aqi, weather, hourly);
+  const nowPenalty = getTimeWindowPenalty(activity, new Date());
+  const score = {
+    ...scoreActivityConditions(activity, aqi, weather, hourly),
+  };
+  if (nowPenalty > 0) {
+    score.score = clamp(score.score - nowPenalty, 0, 100);
+    score.rationale = [
+      `${activity.name} is usually not scheduled at this time of day.`,
+      ...score.rationale,
+    ].slice(0, 4);
+    const tone = getScoreTone(score.score);
+    score.label = tone.label;
+    score.color = tone.color;
+  }
   const bestTime = getBestTimeLabel(activity, aqi, hourly);
   return {
     ...score,

@@ -67,7 +67,7 @@ export default function ActivityCard({
               </View>
               {compact ? (
                 <Text style={[styles.metaLine, { color: colors.textSecondary }]} numberOfLines={1}>
-                  Best {summary.bestTime}
+                  {summary.bestTime}
                 </Text>
               ) : null}
             </View>

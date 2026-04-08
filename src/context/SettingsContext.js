@@ -38,6 +38,19 @@ const DEFAULT_SETTINGS = {
   enabledActivities: DEFAULT_ENABLED_ACTIVITY_IDS,
 };
 
+function normalizeEnabledActivities(enabledActivities) {
+  const incoming = Array.isArray(enabledActivities) ? enabledActivities.filter(Boolean) : [];
+  if (!incoming.length) {
+    return DEFAULT_ENABLED_ACTIVITY_IDS;
+  }
+
+  const next = [...incoming];
+  if (!next.includes('gym')) {
+    next.push('gym');
+  }
+  return next;
+}
+
 function normalizeHomeSections(homeSections) {
   const incoming = Array.isArray(homeSections) ? homeSections : [];
   if (
@@ -74,6 +87,7 @@ export function SettingsProvider({ children }) {
             ...DEFAULT_SETTINGS,
             ...parsed,
             homeSections: normalizeHomeSections(parsed.homeSections),
+            enabledActivities: normalizeEnabledActivities(parsed.enabledActivities),
           });
         }
       } catch {}

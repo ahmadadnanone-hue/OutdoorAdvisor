@@ -178,7 +178,7 @@ export default function ActivitiesScreen() {
           {activitySummary.score}/100
         </Text>
         <Text style={[styles.cardHint, { color: colors.textSecondary }]} numberOfLines={1}>
-          Best {activitySummary.bestTime}
+          {activitySummary.bestTime}
         </Text>
         <Text style={[styles.cardSubHint, { color: colors.textSecondary }]} numberOfLines={1}>
           {getScoreBand(activitySummary.score)}
@@ -217,7 +217,7 @@ export default function ActivitiesScreen() {
 
       {featuredActivities.length > 0 && (
         <View style={styles.featuredWrap}>
-          <Text style={[styles.featuredEyebrow, { color: colors.textSecondary }]}>Best right now</Text>
+          <Text style={[styles.featuredEyebrow, { color: colors.textSecondary }]}>Ranked by current score</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -248,7 +248,7 @@ export default function ActivitiesScreen() {
                   {activity.summary.score}/100
                 </Text>
                 <Text style={[styles.featuredMeta, { color: colors.textSecondary }]} numberOfLines={2}>
-                  Best {activity.summary.bestTime}
+                  {activity.summary.bestTime}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -390,7 +390,7 @@ export default function ActivitiesScreen() {
                       {activitySummary.bestTime}
                     </Text>
                     <Text style={[styles.summaryMeta, { color: colors.textSecondary }]}>
-                      Based on the next hourly weather window
+                      Based on the strongest upcoming time window today
                     </Text>
                   </View>
                 </View>

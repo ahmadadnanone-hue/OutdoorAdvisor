@@ -66,9 +66,10 @@ function isFogCode(code) {
 
 const ACTIVITIES = [
   'running',
-  'cricket',
   'cycling',
   'walking',
+  'gym',
+  'cricket',
   'dining',
   'schoolpe',
 ];
@@ -985,7 +986,7 @@ export default function HomeScreen({ navigation }) {
                     <View>
                       <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 4 }]}>Activity Advisory</Text>
                       <Text style={[styles.sectionHeaderHint, { color: colors.textSecondary }]}>
-                        Best windows first based on current air, rain, heat, and wind.
+                        Sorted by current score, weather, and time of day.
                       </Text>
                     </View>
                     <TouchableOpacity onPress={() => navigation.navigate('Activities')} activeOpacity={0.75}>
@@ -1004,14 +1005,11 @@ export default function HomeScreen({ navigation }) {
                       ]}
                     >
                       <View style={styles.topActivityIntro}>
-                        <View style={[styles.topActivityBadge, { backgroundColor: topHomeActivities[0].summary.color + '18' }]}>
-                          <Text style={[styles.topActivityBadgeText, { color: topHomeActivities[0].summary.color }]}>Best right now</Text>
-                        </View>
                         <Text style={[styles.topActivityName, { color: colors.text }]}>
                           {topHomeActivities[0].activity.emoji} {topHomeActivities[0].activity.name}
                         </Text>
                         <Text style={[styles.topActivityMeta, { color: colors.textSecondary }]}>
-                          Best {topHomeActivities[0].summary.bestTime}
+                          {topHomeActivities[0].summary.bestTime}
                         </Text>
                       </View>
                       <View style={styles.topActivityScoreWrap}>
@@ -1028,14 +1026,14 @@ export default function HomeScreen({ navigation }) {
                         <ActivityCard
                           activity={activity}
                           aqi={aqi}
-                          weather={weatherCurrent}
-                          hourly={hourly}
-                          onPress={() => handleActivityPress(id)}
-                          compact
-                          rankLabel={`Top ${index + 2}`}
-                        />
-                      </View>
-                    ))}
+                        weather={weatherCurrent}
+                        hourly={hourly}
+                        onPress={() => handleActivityPress(id)}
+                        compact
+                        rankLabel={`#${index + 2}`}
+                      />
+                    </View>
+                  ))}
                   </View>
                 </View>
               );

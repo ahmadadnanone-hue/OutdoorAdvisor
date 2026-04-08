@@ -8,6 +8,7 @@ export const ACTIVITY_CATALOG = [
     id: 'running',
     name: 'Running',
     emoji: '\u{1F3C3}',
+    timeWindows: [{ startHour: 5, endHour: 23 }],
     placesQuery: 'running track',
     healthImpact:
       'Running significantly increases your breathing rate, pulling 10-20 times more air into your lungs than at rest. In polluted conditions, this means inhaling far greater quantities of fine particulate matter (PM2.5) and toxic gases deep into your respiratory system, which can cause airway inflammation, reduced lung function, and cardiovascular strain.',
@@ -23,6 +24,7 @@ export const ACTIVITY_CATALOG = [
     id: 'cricket',
     name: 'Cricket',
     emoji: '\u{1F3CF}',
+    timeWindows: [{ startHour: 7, endHour: 22 }],
     placesQuery: 'cricket ground',
     healthImpact:
       'Cricket matches can last several hours outdoors, leading to prolonged exposure to pollutants. Fielding, bowling, and batting all require bursts of exertion that increase respiration. Smoggy conditions also reduce visibility, making it harder to track the ball and increasing injury risk.',
@@ -37,6 +39,7 @@ export const ACTIVITY_CATALOG = [
     id: 'cycling',
     name: 'Cycling',
     emoji: '\u{1F6B4}',
+    timeWindows: [{ startHour: 5, endHour: 22 }],
     placesQuery: 'cycling track',
     healthImpact:
       'Cyclists breathe heavily and are often positioned at vehicle exhaust height on roads. This combination results in very high intake of carbon monoxide, nitrogen dioxide, and particulate matter. Chronic exposure while cycling in polluted areas can lead to long-term respiratory and cardiovascular issues.',
@@ -51,6 +54,7 @@ export const ACTIVITY_CATALOG = [
     id: 'walking',
     name: 'Walking',
     emoji: '\u{1F6B6}',
+    timeWindows: [{ startHour: 5, endHour: 23 }],
     placesType: 'park',
     placesQuery: 'park',
     healthImpact:
@@ -66,6 +70,7 @@ export const ACTIVITY_CATALOG = [
     id: 'swimming',
     name: 'Swimming',
     emoji: '\u{1F3CA}',
+    timeWindows: [{ startHour: 6, endHour: 22 }],
     placesQuery: 'swimming pool',
     healthImpact:
       'Outdoor swimming pools expose you to airborne pollutants while you breathe heavily during laps. Additionally, pollutants can settle on the water surface. The combination of chlorine fumes and air pollution can be particularly irritating to the respiratory system.',
@@ -80,6 +85,7 @@ export const ACTIVITY_CATALOG = [
     id: 'gardening',
     name: 'Gardening',
     emoji: '\u{1F331}',
+    timeWindows: [{ startHour: 6, endHour: 19 }],
     placesQuery: 'plant nursery',
     healthImpact:
       'Gardening involves extended time outdoors at ground level, where pollutant concentrations can be high. Digging and raking stir up dust that mixes with airborne PM2.5. Prolonged low-level exertion means steady inhalation of contaminated air over hours.',
@@ -94,6 +100,7 @@ export const ACTIVITY_CATALOG = [
     id: 'dining',
     name: 'Outdoor Dining',
     emoji: '\u{1F37D}\u{FE0F}',
+    timeWindows: [{ startHour: 12, endHour: 23 }],
     placesType: 'restaurant',
     placesQuery: 'restaurant outdoor seating',
     healthImpact:
@@ -109,6 +116,7 @@ export const ACTIVITY_CATALOG = [
     id: 'schoolpe',
     name: 'School PE',
     emoji: '\u{1F3EB}',
+    timeWindows: [{ startHour: 7, endHour: 15 }],
     placesQuery: 'school',
     healthImpact:
       "Children's lungs are still developing, making them especially vulnerable to air pollution during physical education classes. Vigorous outdoor exercise at school forces children to breathe in large amounts of polluted air, which can worsen asthma, reduce lung growth, and impair concentration for the rest of the school day.",
@@ -123,6 +131,7 @@ export const ACTIVITY_CATALOG = [
     id: 'biking',
     name: 'Biking',
     emoji: '\u{1F6B2}',
+    timeWindows: [{ startHour: 6, endHour: 22 }],
     placesQuery: 'bike park',
     healthImpact:
       'Recreational biking often takes place on roads and trails where vehicle emissions and dust are present. The elevated breathing rate during biking pulls pollutants deep into the lungs. Long rides in smoggy conditions can cause chest tightness, coughing, and reduced performance.',
@@ -137,6 +146,7 @@ export const ACTIVITY_CATALOG = [
     id: 'tennis',
     name: 'Tennis',
     emoji: '\u{1F3BE}',
+    timeWindows: [{ startHour: 6, endHour: 22 }],
     placesQuery: 'tennis court',
     healthImpact:
       'Tennis involves repeated sprints, quick direction changes, and heavy breathing over matches that can last one to three hours. This extended cardiovascular effort in polluted air leads to deep inhalation of PM2.5 and ozone, which can trigger asthma attacks and reduce aerobic capacity.',
@@ -223,6 +233,7 @@ export const ACTIVITY_CATALOG = [
     id: 'gym',
     name: 'Gym Workout',
     emoji: '\u{1F3CB}\u{FE0F}',
+    timeWindows: [{ startHour: 5, endHour: 23 }],
     placesType: 'gym',
     placesQuery: 'gym fitness center',
     healthImpact:
@@ -407,7 +418,7 @@ export const ACTIVITY_CATALOG = [
 // IDs enabled by default (the original 10 activities)
 export const DEFAULT_ENABLED_ACTIVITY_IDS = [
   'running', 'cricket', 'cycling', 'walking', 'swimming',
-  'gardening', 'dining', 'schoolpe', 'biking', 'tennis',
+  'gardening', 'dining', 'schoolpe', 'biking', 'tennis', 'gym',
 ];
 
 export function getActivityById(id) {
