@@ -7,6 +7,17 @@ export const PREMIUM_FEATURES = {
 
 const ACTIVE_STATUSES = new Set(['active', 'premium', 'pro', 'paid', 'trialing', 'trial']);
 
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function parsePremiumEmailAllowlist(input) {
+  return String(input || '')
+    .split(',')
+    .map((value) => normalizeEmail(value))
+    .filter(Boolean);
+}
+
 function isTruthyPremium(value) {
   if (value === true) return true;
   if (typeof value === 'string') {
@@ -18,6 +29,8 @@ function isTruthyPremium(value) {
 export function derivePremiumState(user) {
   const appMeta = user?.app_metadata || {};
   const userMeta = user?.user_metadata || {};
+  const email = normalizeEmail(user?.email);
+  const allowlistedEmails = parsePremiumEmailAllowlist(process.env.EXPO_PUBLIC_PREMIUM_EMAILS);
   const entitlementList = [
     appMeta.plan,
     appMeta.tier,
@@ -44,7 +57,7 @@ export function derivePremiumState(user) {
       return value.some(isTruthyPremium);
     }
     return isTruthyPremium(value);
-  });
+  }) || (email && allowlistedEmails.includes(email));
 
   const plan =
     (typeof appMeta.plan === 'string' && appMeta.plan) ||

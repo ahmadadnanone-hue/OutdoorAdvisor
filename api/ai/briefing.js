@@ -5,6 +5,17 @@ function sendJson(res, status, payload) {
   res.status(status).json(payload);
 }
 
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function parsePremiumEmailAllowlist(input) {
+  return String(input || '')
+    .split(',')
+    .map((value) => normalizeEmail(value))
+    .filter(Boolean);
+}
+
 function getSupabaseServerClient() {
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
   const supabaseKey =
@@ -28,6 +39,7 @@ async function getRequestPremiumState(req) {
   const authHeader = req.headers?.authorization || '';
   const match = authHeader.match(/^Bearer\s+(.+)$/i);
   const token = match?.[1];
+  const allowlistedEmails = parsePremiumEmailAllowlist(process.env.PREMIUM_EMAILS);
 
   if (!token) {
     return { isPremium: false, plan: 'free' };
@@ -43,7 +55,12 @@ async function getRequestPremiumState(req) {
     if (error || !data?.user) {
       return { isPremium: false, plan: 'free' };
     }
-    return derivePremiumState(data.user);
+    const premiumState = derivePremiumState(data.user);
+    const email = normalizeEmail(data.user.email);
+    if (email && allowlistedEmails.includes(email)) {
+      return { isPremium: true, plan: 'premium' };
+    }
+    return premiumState;
   } catch {
     return { isPremium: false, plan: 'free' };
   }
