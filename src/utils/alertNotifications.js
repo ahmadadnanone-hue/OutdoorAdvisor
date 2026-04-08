@@ -78,8 +78,8 @@ export async function maybeSendLocalAlert(key, payload, cooldownMs = DEFAULT_COO
       const notification = new Notification(payload.title, {
         body: payload.body,
         tag: payload.tag || key,
-        icon: '/favicon.ico',
-        badge: '/favicon.ico',
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
       });
 
       notification.onclick = () => {
