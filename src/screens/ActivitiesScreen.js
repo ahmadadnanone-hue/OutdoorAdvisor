@@ -215,47 +215,6 @@ export default function ActivitiesScreen() {
         </View>
       </View>
 
-      {featuredActivities.length > 0 && (
-        <View style={styles.featuredWrap}>
-          <Text style={[styles.featuredEyebrow, { color: colors.textSecondary }]}>Ranked by current score</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.featuredScroll}
-          >
-            {featuredActivities.map((activity, index) => (
-              <TouchableOpacity
-                key={activity.id}
-                style={[
-                  styles.featuredCard,
-                  { backgroundColor: colors.card, borderColor: activity.summary.color + '45' },
-                ]}
-                activeOpacity={0.8}
-                onPress={() => setSelectedActivity(activity)}
-              >
-                <View style={styles.featuredHeader}>
-                  <Text style={styles.featuredEmoji}>{activity.emoji}</Text>
-                  <View style={[styles.featuredBadge, { backgroundColor: activity.summary.color + '16' }]}>
-                    <Text style={[styles.featuredBadgeText, { color: activity.summary.color }]}>
-                      #{index + 1}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={[styles.featuredName, { color: colors.text }]} numberOfLines={1}>
-                  {activity.name}
-                </Text>
-                <Text style={[styles.featuredScore, { color: activity.summary.color }]}>
-                  {activity.summary.score}/100
-                </Text>
-                <Text style={[styles.featuredMeta, { color: colors.textSecondary }]} numberOfLines={2}>
-                  {activity.summary.bestTime}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
       <FlatList
         data={gridData}
         renderItem={renderCard}
@@ -483,40 +442,6 @@ const styles = StyleSheet.create({
   cityLabel: { fontSize: typography.body, flexShrink: 1 },
   aqiBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   aqiBadgeText: { fontSize: typography.caption, fontWeight: '700' },
-  featuredWrap: { paddingHorizontal: 16, marginBottom: 6 },
-  featuredEyebrow: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 10,
-  },
-  featuredScroll: { paddingRight: 8, gap: 10 },
-  featuredCard: {
-    width: 188,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    padding: 16,
-  },
-  featuredHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  featuredEmoji: { fontSize: 34 },
-  featuredBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  featuredBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  featuredName: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
-  featuredScore: { fontSize: 28, fontWeight: '800', marginBottom: 6 },
-  featuredMeta: { fontSize: 12, lineHeight: 18 },
   grid: { paddingHorizontal: 12, paddingBottom: 24 },
   row: { justifyContent: 'space-between', paddingHorizontal: 4 },
   card: {

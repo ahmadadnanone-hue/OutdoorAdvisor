@@ -252,9 +252,9 @@ function getHomeDecision({ aqi, temp, feelsLike, weatherCode, pollenValue, windS
       body: guidance.length
         ? `Best approach: ${guidance.slice(0, 3).join(' · ')}.`
         : 'Conditions are manageable, but you will feel them more than on an easy-weather day.',
-      color: '#F97316',
-      bg: 'rgba(249,115,22,0.12)',
-      border: 'rgba(249,115,22,0.24)',
+      color: '#3B82F6',
+      bg: 'rgba(59,130,246,0.12)',
+      border: 'rgba(59,130,246,0.24)',
     };
   }
 
@@ -697,12 +697,6 @@ export default function HomeScreen({ navigation }) {
                 <Text style={[styles.webRefreshBtnText, { color: colors.primary }]}>Refresh</Text>
               </TouchableOpacity>
             )}
-            <View style={styles.headerWeather}>
-              <Text style={styles.weatherEmoji}>{weather.icon}</Text>
-              <Text style={[styles.headerTemp, { color: colors.text }]}>
-                {settings.formatTempShort(weatherCurrent?.temp)}
-              </Text>
-            </View>
           </View>
         </View>
 
@@ -795,6 +789,10 @@ export default function HomeScreen({ navigation }) {
                           })
                         }
                       >
+                        <View style={[styles.tripActionGraphic, { backgroundColor: colors.primary + '12' }]}>
+                          <Text style={styles.tripActionGraphicEmoji}>{item.id === 'MURREE' ? '🏔️' : '🛣️'}</Text>
+                          <View style={[styles.tripActionGraphicLine, { backgroundColor: colors.primary + '40' }]} />
+                        </View>
                         <View style={styles.tripActionText}>
                           <Text style={[styles.tripActionEyebrow, { color: colors.primary }]}>{item.eyebrow}</Text>
                           <Text style={[styles.tripActionTitle, { color: colors.text }]}>{item.title}</Text>
@@ -999,47 +997,22 @@ export default function HomeScreen({ navigation }) {
                     </TouchableOpacity>
                   </View>
                   {!!topHomeActivities[0] && (
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      onPress={() => handleActivityPress(topHomeActivities[0].id)}
-                      style={[
-                        styles.topActivityHero,
-                        { backgroundColor: colors.card },
-                        cardShadow,
-                        cardBorder,
-                      ]}
-                    >
-                      <View style={styles.topActivityIntro}>
-                        <Text style={[styles.topActivityName, { color: colors.text }]}>
-                          {topHomeActivities[0].activity.emoji} {topHomeActivities[0].activity.name}
-                        </Text>
-                        <Text style={[styles.topActivityMeta, { color: colors.textSecondary }]}>
-                          {topHomeActivities[0].summary.bestTime}
-                        </Text>
-                      </View>
-                      <View style={styles.topActivityScoreWrap}>
-                        <Text style={[styles.topActivityScore, { color: topHomeActivities[0].summary.color }]}>
-                          {topHomeActivities[0].summary.score}
-                        </Text>
-                        <Text style={[styles.topActivityScoreLabel, { color: colors.textSecondary }]}>/100</Text>
-                      </View>
-                    </TouchableOpacity>
-                  )}
-                  <View style={styles.activityGrid}>
-                    {topHomeActivities.slice(1).map(({ id, activity }, index) => (
+                    <View style={styles.activityGrid}>
+                      {topHomeActivities.map(({ id, activity }, index) => (
                       <View key={id} style={styles.activityItem}>
                         <ActivityCard
                           activity={activity}
                           aqi={aqi}
-                        weather={weatherCurrent}
-                        hourly={hourly}
-                        onPress={() => handleActivityPress(id)}
-                        compact
-                        rankLabel={`#${index + 2}`}
-                      />
+                          weather={weatherCurrent}
+                          hourly={hourly}
+                          onPress={() => handleActivityPress(id)}
+                          compact
+                          rankLabel={`#${index + 1}`}
+                        />
+                      </View>
+                    ))}
                     </View>
-                  ))}
-                  </View>
+                  )}
                 </View>
               );
             default:
@@ -1357,19 +1330,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     textAlign: 'center',
   },
-  headerWeather: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  weatherEmoji: {
-    fontSize: 22,
-  },
-  headerTemp: {
-    fontSize: 24,
-    fontWeight: '700',
-  },
-
   /* ---- Sections ---- */
   section: {
     marginBottom: 16,
@@ -1454,6 +1414,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: 108,
+    overflow: 'hidden',
+  },
+  tripActionGraphic: {
+    width: 74,
+    height: 74,
+    borderRadius: 22,
+    marginRight: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  tripActionGraphicEmoji: {
+    fontSize: 28,
+    zIndex: 2,
+  },
+  tripActionGraphicLine: {
+    position: 'absolute',
+    width: 42,
+    height: 6,
+    borderRadius: 999,
+    bottom: 18,
+    transform: [{ rotate: '-32deg' }],
   },
   tripActionText: {
     flex: 1,
@@ -1622,53 +1604,6 @@ const styles = StyleSheet.create({
   activityItem: {
     width: '100%',
   },
-  topActivityHero: {
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  topActivityIntro: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  topActivityBadge: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    marginBottom: 10,
-  },
-  topActivityBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  topActivityName: {
-    fontSize: 19,
-    fontWeight: '800',
-    marginBottom: 4,
-  },
-  topActivityMeta: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  topActivityScoreWrap: {
-    alignItems: 'flex-end',
-  },
-  topActivityScore: {
-    fontSize: 36,
-    fontWeight: '800',
-    lineHeight: 36,
-  },
-  topActivityScoreLabel: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-
   /* ---- Last Updated ---- */
   lastUpdated: {
     fontSize: 11,

@@ -737,12 +737,6 @@ export default function AlertsScreen() {
 
   /* ---------- About Tab ---------- */
   const renderAbout = () => {
-    const platformHighlights = [
-      { label: 'Coverage', value: 'Pakistan' },
-      { label: 'Focus', value: 'Outdoor decisions' },
-      { label: 'Experience', value: 'Mobile-first' },
-    ];
-
     return (
       <ScrollView contentContainerStyle={[styles.scrollContent, styles.aboutContainer]} showsVerticalScrollIndicator={false}>
         <View style={[styles.aboutHero, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -752,14 +746,6 @@ export default function AlertsScreen() {
           <Text style={[styles.aboutTagline, { color: colors.accent }]}>
             Your smart guide to outdoor safety with practical local context, live conditions, and travel checks across Pakistan.
           </Text>
-          <View style={styles.aboutHighlightRow}>
-            {platformHighlights.map((item) => (
-              <View key={item.label} style={[styles.aboutHighlightChip, { backgroundColor: colors.primary + '12' }]}>
-                <Text style={[styles.aboutHighlightLabel, { color: colors.textSecondary }]}>{item.label}</Text>
-                <Text style={[styles.aboutHighlightValue, { color: colors.text }]}>{item.value}</Text>
-              </View>
-            ))}
-          </View>
         </View>
 
         <View style={[styles.aboutCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
