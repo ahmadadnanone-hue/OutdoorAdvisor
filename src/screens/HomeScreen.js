@@ -670,6 +670,11 @@ export default function HomeScreen({ navigation }) {
               <Text style={[styles.greeting, { color: colors.textSecondary }]}>
                 {getGreeting()}
               </Text>
+              {isPremium && (
+                <View style={[styles.premiumHeaderBadge, { backgroundColor: colors.primary + '16' }]}>
+                  <Text style={[styles.premiumHeaderBadgeText, { color: colors.primary }]}>Premium</Text>
+                </View>
+              )}
               <TouchableOpacity style={styles.cityRow} onPress={() => setCityPickerVisible(true)} activeOpacity={0.7}>
                 <Text style={styles.locationPin}>📍</Text>
                 <Text style={[styles.cityText, { color: colors.text }]} numberOfLines={1}>
@@ -1293,6 +1298,19 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginBottom: 4,
     letterSpacing: 0.3,
+  },
+  premiumHeaderBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 8,
+  },
+  premiumHeaderBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   cityRow: {
     flexDirection: 'row',
