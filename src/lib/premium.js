@@ -14,6 +14,7 @@ export const PREMIUM_FEATURES = {
 };
 
 const ACTIVE_STATUSES = new Set(['active', 'premium', 'pro', 'paid', 'trialing', 'trial']);
+const SEEDED_PREMIUM_EMAILS = ['ahmadadnanone@gmail.com', 'saqibmasoodcma@google.com'];
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
@@ -24,6 +25,10 @@ function parsePremiumEmailAllowlist(input) {
     .split(',')
     .map((value) => normalizeEmail(value))
     .filter(Boolean);
+}
+
+function getPremiumEmailAllowlist(input) {
+  return [...new Set([...SEEDED_PREMIUM_EMAILS.map((value) => normalizeEmail(value)), ...parsePremiumEmailAllowlist(input)])];
 }
 
 function isTruthyPremium(value) {
@@ -38,7 +43,7 @@ export function derivePremiumState(user) {
   const appMeta = user?.app_metadata || {};
   const userMeta = user?.user_metadata || {};
   const email = normalizeEmail(user?.email);
-  const allowlistedEmails = parsePremiumEmailAllowlist(process.env.EXPO_PUBLIC_PREMIUM_EMAILS);
+  const allowlistedEmails = getPremiumEmailAllowlist(process.env.EXPO_PUBLIC_PREMIUM_EMAILS);
   const entitlementList = [
     appMeta.plan,
     appMeta.tier,
