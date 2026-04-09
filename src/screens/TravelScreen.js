@@ -64,6 +64,7 @@ const NHMP_ROUTE_ALIASES = {
   M2: ['m2', 'islamabad-lahore', 'islamabad to lahore', 'lahore to islamabad'],
   M3: ['m3', 'lahore-abdul hakam', 'lahore to abdul hakam', 'abdul hakam to lahore'],
   M4: ['m4', 'abdul hakam-multan', 'abdul hakam to multan', 'multan to abdul hakam'],
+  M5: ['m5', 'multan-sukkur', 'multan to sukkur', 'sukkur to multan'],
   M9: ['m9', 'karachi-hyderabad', 'karachi to hyderabad', 'hyderabad to karachi'],
 };
 

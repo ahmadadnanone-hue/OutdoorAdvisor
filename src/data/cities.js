@@ -135,13 +135,27 @@ export const TRAVEL_ROUTES = [
     ],
   },
   {
+    id: 'M5',
+    kind: 'motorway',
+    emoji: '🛣️',
+    name: 'M5 Multan-Sukkur',
+    stops: [
+      { name: 'Multan', lat: 30.1575, lon: 71.5249 },
+      { name: 'Jalalpur Pirwala', lat: 29.5051, lon: 71.2220 },
+      { name: 'Rahim Yar Khan', lat: 28.4202, lon: 70.2952 },
+      { name: 'Ghotki', lat: 28.0053, lon: 69.3180 },
+      { name: 'Sukkur', lat: 27.7052, lon: 68.8574 },
+    ],
+  },
+  {
     id: 'M9',
     kind: 'motorway',
     emoji: '🛣️',
-    name: 'M9 Karachi-Hyderabad',
+    name: 'M9 Hyderabad-Karachi',
     stops: [
-      { name: 'Karachi', lat: 24.8607, lon: 67.0011 },
       { name: 'Hyderabad', lat: 25.3960, lon: 68.3578 },
+      { name: 'Nooriabad', lat: 25.1730, lon: 67.7920 },
+      { name: 'Karachi', lat: 24.8607, lon: 67.0011 },
     ],
   },
   {

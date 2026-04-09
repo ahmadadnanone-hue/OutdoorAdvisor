@@ -32,7 +32,8 @@
         "googleMaps": {
           "apiKey": ""
         }
-      }
+      },
+      "icon": "./assets/icon.png"
     },
     "web": {
       "favicon": "./assets/favicon.png"

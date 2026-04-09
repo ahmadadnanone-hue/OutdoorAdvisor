@@ -104,6 +104,32 @@ function getGreeting() {
   return 'Good Evening';
 }
 
+function titleCaseWord(value) {
+  const clean = String(value || '').replace(/[^a-zA-Z]/g, '');
+  if (!clean) return '';
+  return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+}
+
+function getUserGreetingName(user) {
+  const candidates = [
+    user?.user_metadata?.first_name,
+    user?.user_metadata?.firstName,
+    user?.user_metadata?.name,
+    user?.user_metadata?.full_name,
+    user?.user_metadata?.fullName,
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    const first = String(candidate).trim().split(/\s+/)[0];
+    const formatted = titleCaseWord(first);
+    if (formatted) return formatted;
+  }
+
+  const localPart = String(user?.email || '').split('@')[0];
+  const firstToken = localPart.split(/[._-]/)[0];
+  return titleCaseWord(firstToken);
+}
+
 function getLocationDisplay(label) {
   if (!label) {
     return { primary: 'Lahore', secondary: 'Pakistan' };
@@ -272,7 +298,7 @@ function getHomeDecision({ aqi, temp, feelsLike, weatherCode, pollenValue, windS
 export default function HomeScreen({ navigation }) {
   const { colors, isDark } = useTheme();
   const settings = useSettings();
-  const { isPremium } = useAuth();
+  const { isPremium, user } = useAuth();
   const {
     location,
     city,
@@ -302,6 +328,7 @@ export default function HomeScreen({ navigation }) {
     refresh: refreshWeather,
   } = useWeather(location.lat, location.lon);
   const { primary: pollenPrimary, types: pollenTypes, refresh: refreshPollen } = usePollen(location.lat, location.lon);
+  const greetingName = useMemo(() => getUserGreetingName(user), [user]);
 
   const [refreshing, setRefreshing] = useState(false);
   const [cityPickerVisible, setCityPickerVisible] = useState(false);
@@ -670,7 +697,7 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.headerLeft}>
             <View style={styles.locationTextGroup}>
               <Text style={[styles.greeting, { color: colors.textSecondary }]}>
-                {getGreeting()}
+                {greetingName ? `${getGreeting()} ${greetingName}` : getGreeting()}
               </Text>
               {isPremium && (
                 <View style={[styles.premiumHeaderBadge, { backgroundColor: colors.primary + '16' }]}>
@@ -743,6 +770,7 @@ export default function HomeScreen({ navigation }) {
                     </View>
                     <Text style={[styles.decisionTone, { color: colors.text }]}>{decision.tone}</Text>
                     <Text style={[styles.decisionBody, { color: colors.textSecondary }]}>{decision.body}</Text>
+                    <Text style={[styles.cardTapHint, { color: colors.textSecondary }]}>Tap to open the full explanation and guidance.</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     activeOpacity={0.85}
@@ -764,6 +792,7 @@ export default function HomeScreen({ navigation }) {
                         ? 'Writing a quick read of today’s conditions…'
                         : homeAiBriefing?.headline || 'Today’s conditions summary will appear here.'}
                     </Text>
+                    <Text style={[styles.cardTapHint, { color: colors.textSecondary }]}>Tap to open the fuller read and practical tip.</Text>
                   </TouchableOpacity>
                 </View>
               );
@@ -1388,6 +1417,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     lineHeight: 22,
+  },
+  cardTapHint: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 10,
+    opacity: 0.82,
   },
   tripActionStack: {
     gap: 10,
