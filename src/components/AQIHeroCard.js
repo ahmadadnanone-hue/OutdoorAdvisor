@@ -24,6 +24,16 @@ function isFogCode(code) {
   return code != null && [45, 48].includes(code);
 }
 
+function getTempToneColor(temp) {
+  if (temp == null) return '#FFFFFF';
+  if (temp <= 10) return '#BFDBFE';
+  if (temp <= 18) return '#7DD3FC';
+  if (temp >= 22 && temp <= 26) return '#86EFAC';
+  if (temp <= 31) return '#FDE68A';
+  if (temp <= 36) return '#FDBA74';
+  return '#FCA5A5';
+}
+
 function getHeroTheme(weatherCode, windSpeed) {
   const isWindy = (windSpeed ?? 0) >= 20;
 
@@ -162,6 +172,7 @@ export default function AQIHeroCard({
   conditionLabel,
   weatherCode,
   weatherEmoji,
+  tempValue,
   tempLabel,
   feelsLikeLabel,
   windSpeed,
@@ -176,6 +187,7 @@ export default function AQIHeroCard({
   const heroColors = getHeroTheme(weatherCode, windSpeed);
   const aqiColor = aqi != null ? getAqiColor(aqi) : heroColors.accent;
   const aqiCategory = aqi != null ? getAqiCategory(aqi) : 'AQI pending';
+  const tempTone = getTempToneColor(tempValue);
 
   const cardShadow = !isDark
     ? {
@@ -222,7 +234,7 @@ export default function AQIHeroCard({
             {locationTitle || 'Current location'}
           </Text>
           <Text style={[styles.locationSubtitle, { color: heroColors.subtext }]} numberOfLines={1}>
-            {locationSubtitle || 'Pakistan'}
+            {locationSubtitle || 'Exact pin'}
           </Text>
         </View>
       </View>
@@ -240,7 +252,7 @@ export default function AQIHeroCard({
         </View>
 
         <PressableZone onPress={onPressTemp} style={styles.tempArea}>
-          <Text style={[styles.tempValue, { color: heroColors.text }]}>{tempLabel || '--'}</Text>
+          <Text style={[styles.tempValue, { color: tempTone }]}>{tempLabel || '--'}</Text>
           <Text style={[styles.feelsLike, { color: heroColors.subtext }]}>
             Feels like {feelsLikeLabel || '--'}
           </Text>

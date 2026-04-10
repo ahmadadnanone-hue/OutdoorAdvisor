@@ -697,23 +697,24 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.headerLeft}>
             <View style={styles.locationTextGroup}>
               <Text style={[styles.greeting, { color: colors.textSecondary }]}>
-                {greetingName ? `${getGreeting()} ${greetingName}` : getGreeting()}
+                {getGreeting()}
               </Text>
+              {!!greetingName && (
+                <Text style={[styles.greetingName, { color: colors.text }]}>
+                  {greetingName}
+                </Text>
+              )}
               {isPremium && (
                 <View style={[styles.premiumHeaderBadge, { backgroundColor: colors.primary + '16' }]}>
                   <Text style={[styles.premiumHeaderBadgeText, { color: colors.primary }]}>Premium</Text>
                 </View>
               )}
               <TouchableOpacity style={styles.cityRow} onPress={() => setCityPickerVisible(true)} activeOpacity={0.7}>
-                <Text style={styles.locationPin}>📍</Text>
                 <Text style={[styles.cityText, { color: colors.text }]} numberOfLines={1}>
                   {locationDisplay.primary}
                 </Text>
                 <Text style={[styles.cityChevron, { color: colors.textSecondary }]}>▼</Text>
               </TouchableOpacity>
-              <Text style={[styles.areaText, { color: colors.textSecondary }]} numberOfLines={1}>
-                {locationDisplay.secondary}
-              </Text>
             </View>
           </View>
           <View style={styles.headerRight}>
@@ -769,8 +770,18 @@ export default function HomeScreen({ navigation }) {
                       <Text style={[styles.decisionLabel, { color: decision.color }]}>{decision.label}</Text>
                     </View>
                     <Text style={[styles.decisionTone, { color: colors.text }]}>{decision.tone}</Text>
-                    <Text style={[styles.decisionBody, { color: colors.textSecondary }]}>{decision.body}</Text>
-                    <Text style={[styles.cardTapHint, { color: colors.textSecondary }]}>Tap to open the full explanation and guidance.</Text>
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      onPress={() =>
+                        setInsightModal({
+                          title: decision.label,
+                          body: `${decision.tone} ${decision.body}`,
+                        })
+                      }
+                      style={[styles.moreInfoChip, { backgroundColor: colors.card + '66' }]}
+                    >
+                      <Text style={[styles.moreInfoChipText, { color: colors.textSecondary }]}>More info</Text>
+                    </TouchableOpacity>
                   </TouchableOpacity>
                   <TouchableOpacity
                     activeOpacity={0.85}
@@ -792,7 +803,20 @@ export default function HomeScreen({ navigation }) {
                         ? 'Writing a quick read of today’s conditions…'
                         : homeAiBriefing?.headline || 'Today’s conditions summary will appear here.'}
                     </Text>
-                    <Text style={[styles.cardTapHint, { color: colors.textSecondary }]}>Tap to open the fuller read and practical tip.</Text>
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      onPress={() =>
+                        homeAiBriefing &&
+                        setInsightModal({
+                          title: 'What today means',
+                          body: `${homeAiBriefing.headline} ${homeAiBriefing.summary} ${homeAiBriefing.tip}`,
+                        })
+                      }
+                      style={[styles.moreInfoChip, { backgroundColor: colors.primary + '12' }]}
+                      disabled={!homeAiBriefing || !isPremium}
+                    >
+                      <Text style={[styles.moreInfoChipText, { color: colors.primary }]}>More info</Text>
+                    </TouchableOpacity>
                   </TouchableOpacity>
                 </View>
               );
@@ -844,10 +868,11 @@ export default function HomeScreen({ navigation }) {
                 <View key="aqi" style={styles.section}>
                   <AQIHeroCard
                     locationTitle={locationDisplay.primary}
-                    locationSubtitle={locationDisplay.secondary}
+                    locationSubtitle={isUsingDeviceLocation ? 'Exact pin' : locationDisplay.secondary}
                     conditionLabel={weather.description}
                     weatherCode={weatherCurrent?.weatherCode}
                     weatherEmoji={weather.icon}
+                    tempValue={weatherCurrent?.temp}
                     tempLabel={settings.formatTempShort(weatherCurrent?.temp)}
                     feelsLikeLabel={settings.formatTemp(weatherCurrent?.feelsLike)}
                     windSpeed={weatherCurrent?.windSpeed}
@@ -1302,8 +1327,14 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 13,
     fontWeight: '500',
-    marginBottom: 4,
+    marginBottom: 2,
     letterSpacing: 0.3,
+  },
+  greetingName: {
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 8,
+    letterSpacing: 0.2,
   },
   premiumHeaderBadge: {
     alignSelf: 'flex-start',
@@ -1323,18 +1354,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  locationPin: {
-    fontSize: 16,
-  },
   cityText: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
-  },
-  areaText: {
-    fontSize: 12,
-    fontWeight: '400',
-    marginTop: 2,
-    marginLeft: 20,
   },
   headerRight: {
     flexDirection: 'row',
@@ -1398,10 +1420,6 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginBottom: 8,
   },
-  decisionBody: {
-    fontSize: 14,
-    lineHeight: 21,
-  },
   aiBriefingCard: {
     borderRadius: 20,
     padding: 16,
@@ -1417,6 +1435,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     lineHeight: 22,
+  },
+  moreInfoChip: {
+    alignSelf: 'flex-start',
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  moreInfoChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   cardTapHint: {
     fontSize: 12,
