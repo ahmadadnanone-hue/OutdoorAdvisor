@@ -868,7 +868,7 @@ export default function HomeScreen({ navigation }) {
                 <View key="aqi" style={styles.section}>
                   <AQIHeroCard
                     locationTitle={locationDisplay.primary}
-                    locationSubtitle={isUsingDeviceLocation ? 'Exact pin' : locationDisplay.secondary}
+                    locationSubtitle={isUsingDeviceLocation ? '' : locationDisplay.secondary}
                     conditionLabel={weather.description}
                     weatherCode={weatherCurrent?.weatherCode}
                     weatherEmoji={weather.icon}

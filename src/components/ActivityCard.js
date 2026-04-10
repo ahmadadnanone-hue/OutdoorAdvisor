@@ -35,8 +35,9 @@ export default function ActivityCard({
       style={[
         styles.card,
         compact && styles.cardCompact,
-        { backgroundColor: colors.card },
+        { backgroundColor: compact ? summary.color + '12' : colors.card },
         emphasize && { borderColor: summary.color + '55', borderWidth: 1.5 },
+        compact && { borderColor: summary.color + '26', borderWidth: 1 },
         cardShadow,
         cardBorder,
       ]}

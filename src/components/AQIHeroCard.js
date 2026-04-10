@@ -233,9 +233,11 @@ export default function AQIHeroCard({
           <Text style={[styles.locationTitle, { color: heroColors.text }]} numberOfLines={2}>
             {locationTitle || 'Current location'}
           </Text>
-          <Text style={[styles.locationSubtitle, { color: heroColors.subtext }]} numberOfLines={1}>
-            {locationSubtitle || 'Exact pin'}
-          </Text>
+          {!!locationSubtitle && (
+            <Text style={[styles.locationSubtitle, { color: heroColors.subtext }]} numberOfLines={1}>
+              {locationSubtitle}
+            </Text>
+          )}
         </View>
       </View>
 

@@ -842,7 +842,7 @@ export default function TravelScreen({ route }) {
                   <View style={styles.routeBadgeRow}>
                     <View style={[styles.routeKindBadge, { backgroundColor: '#11182710' }]}>
                       <Text style={[styles.routeKindText, { color: colors.textSecondary }]}>
-                        Risk {riskScore}
+                        Travel Caution {riskScore}
                       </Text>
                     </View>
                     <View style={[styles.routeKindBadge, { backgroundColor: colors.primary + '15' }]}>
