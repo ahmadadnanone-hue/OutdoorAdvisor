@@ -7,12 +7,8 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
 
   try {
-    // Try multiple NHMP endpoints
     let html;
-    const urls = [
-      'http://cpo.nhmp.gov.pk:7892/TA/public/viewtravel.aspx',
-      'https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx',
-    ];
+    const urls = ['https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx'];
     let lastErr;
     for (const url of urls) {
       try {
@@ -50,7 +46,7 @@ function fetchPage(url) {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
       },
-      timeout: 25000,
+      timeout: 8000,
       rejectUnauthorized: false,
     }, (response) => {
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
