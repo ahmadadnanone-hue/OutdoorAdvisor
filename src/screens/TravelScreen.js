@@ -932,14 +932,14 @@ export default function TravelScreen({ route }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   contentContainer: { padding: 16, paddingBottom: 32 },
-  title: { fontSize: typography.title, fontWeight: '700', marginBottom: 4 },
-  subTitle: { fontSize: 16, fontWeight: '700', marginTop: 12, marginBottom: 10 },
+  title: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
+  subTitle: { fontSize: 14, fontWeight: '700', marginTop: 12, marginBottom: 10 },
 
   /* NHMP Section */
   nhmpSection: { marginBottom: 8 },
   nhmpTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  nhmpLink: { fontSize: 13, fontWeight: '600' },
+  nhmpLink: { fontSize: 12, fontWeight: '600' },
   nhmpTimestamp: { fontSize: 11, marginBottom: 10 },
   nhmpLoadingWrap: { flexDirection: 'row', alignItems: 'center', paddingVertical: 20, justifyContent: 'center' },
   nhmpCard: {
@@ -952,24 +952,24 @@ const styles = StyleSheet.create({
   severityBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, gap: 4 },
   severityIcon: { fontSize: 14 },
   severityLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
-  nhmpRoute: { fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  nhmpRoute: { fontSize: 13, fontWeight: '700', marginBottom: 2 },
   nhmpSector: { fontSize: 12, marginBottom: 4 },
-  nhmpStatus: { fontSize: 13, lineHeight: 19 },
+  nhmpStatus: { fontSize: 12, lineHeight: 18 },
   bannerHint: { fontSize: 11, marginTop: 8, fontWeight: '600' },
   allClearBanner: { borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 8 },
   allClearText: { fontSize: 15, fontWeight: '600', color: '#22C55E' },
   clearCount: { fontSize: 12, marginTop: 6, textAlign: 'center' },
 
   /* PMD Section */
-  pmdBlockedTitle: { fontSize: 15, fontWeight: '700', marginBottom: 6 },
+  pmdBlockedTitle: { fontSize: 14, fontWeight: '700', marginBottom: 6 },
   pmdLinksRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
   pmdLinkBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
   pmdLinkText: { fontSize: 13, fontWeight: '700' },
   pmdAlertBanner: { borderWidth: 1, borderRadius: 14, padding: 14, flexDirection: 'row', marginBottom: 12 },
   pmdAlertIcon: { fontSize: 20, marginRight: 10, marginTop: 2 },
   pmdAlertContent: { flex: 1 },
-  pmdAlertTitle: { fontSize: 14, fontWeight: '800', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
-  pmdAlertText: { fontSize: 13, lineHeight: 18, marginBottom: 4 },
+  pmdAlertTitle: { fontSize: 13, fontWeight: '800', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
+  pmdAlertText: { fontSize: 12, lineHeight: 17, marginBottom: 4 },
   pmdCityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 8 },
   pmdCityCard: { borderWidth: 1, borderRadius: 14, padding: 12, width: '48%', minWidth: 150 },
   pmdCityHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
@@ -1096,7 +1096,7 @@ const styles = StyleSheet.create({
   routePremiumTitle: { fontSize: 14, fontWeight: '700', marginBottom: 6 },
   routePremiumBody: { fontSize: 13, lineHeight: 19 },
   loadingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 20 },
-  loadingText: { fontSize: typography.body, marginLeft: 10 },
+  loadingText: { fontSize: 13, marginLeft: 10 },
   noDataText: { fontSize: typography.body, textAlign: 'center', paddingVertical: 16 },
 
   /* Stop rows */
