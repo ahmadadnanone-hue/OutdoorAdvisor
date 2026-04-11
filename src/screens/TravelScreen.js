@@ -548,7 +548,7 @@ export default function TravelScreen({ route }) {
       {/* NHMP Live Advisories */}
       <View style={styles.nhmpSection}>
         <View style={styles.nhmpTitleRow}>
-          <Text style={[styles.title, { color: colors.text }]}>NHMP Live Advisory</Text>
+          <Text style={[styles.title, { color: colors.text }]}>National Highways & Motorway Police</Text>
           <View style={styles.headerActions}>
             <TouchableOpacity
               onPress={() => loadNhmp()}
@@ -611,7 +611,7 @@ export default function TravelScreen({ route }) {
       {/* PMD Official Forecast */}
       <View style={[styles.nhmpSection, { marginTop: 24 }]}>
         <View style={styles.nhmpTitleRow}>
-          <Text style={[styles.title, { color: colors.text }]}>PMD 3-Day Forecast</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Pakistan Meteorological Department</Text>
           <TouchableOpacity
             onPress={() => Linking.openURL('https://nwfc.pmd.gov.pk/new/3-days-forecast.php')}
             activeOpacity={0.7}

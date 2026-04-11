@@ -70,68 +70,62 @@ function fetchPage(url) {
 function parseAdvisories(html) {
   const results = [];
   const stripTags = (s) => s.replace(/<[^>]+>/g, '').replace(/&nbsp;/gi, ' ').replace(/&amp;/g, '&').replace(/&#\d+;/g, '').replace(/\s+/g, ' ').trim();
-
-  // Extract all table rows
-  const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  const tableRegex = /<table[^>]*id="GridView\d+"[^>]*>([\s\S]*?)<\/table>/gi;
   let match;
 
-  while ((match = rowRegex.exec(html)) !== null) {
-    const row = match[1];
-    const cells = [];
-    const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-    let cellMatch;
-    while ((cellMatch = cellRe.exec(row)) !== null) {
-      cells.push(stripTags(cellMatch[1]));
+  while ((match = tableRegex.exec(html)) !== null) {
+    const tableHtml = match[0];
+    const tableBody = match[1];
+    const advisoryRows = [];
+    const advisoryRegex = /<tr[^>]*class="([^"]*)"[^>]*>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<\/tr>/gi;
+    let advisoryMatch;
+
+    while ((advisoryMatch = advisoryRegex.exec(tableBody)) !== null) {
+      const status = stripTags(advisoryMatch[2]);
+      if (status && status.length > 3) {
+        advisoryRows.push({
+          status,
+          hasWarning: /warning|danger|yellow|orange|red/i.test(advisoryMatch[1] || ''),
+        });
+      }
     }
 
-    if (cells.length < 2) continue;
+    if (!advisoryRows.length) continue;
 
-    // Check for highlight colors (warnings)
-    const hasWarning = /yellow|#ff|orange|red/i.test(match[0]);
+    const contextWindow = html.slice(Math.max(0, match.index - 900), match.index);
+    const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    const contextCells = [];
+    let tdMatch;
+    while ((tdMatch = tdRegex.exec(contextWindow)) !== null) {
+      const raw = tdMatch[1];
+      const text = stripTags(raw);
+      if (text) {
+        contextCells.push({ raw, text });
+      }
+    }
 
-    // Try to find route identifier in cells
-    const routePattern = /\b(M-?\d+|N-?\d+|E-?\d+|Swat\s*Express)/i;
+    const routeCell = [...contextCells].reverse().find((cell) =>
+      /\b(M-?\d+|N-?\d+|E-?\d+|GT Road|Highway|Expressway|Swat|Murree|Karakoram|Hazara|Lahore|Islamabad|Peshawar|Karachi|Hyderabad)\b/i.test(cell.text)
+    );
+    const sectorCell = [...contextCells].reverse().find((cell) => /sector/i.test(cell.text));
+
     let routeName = '';
-    let sector = '';
-    let status = '';
-
-    for (let i = 0; i < cells.length; i++) {
-      const cell = cells[i];
-      if (!routeName && routePattern.test(cell)) {
-        routeName = cell.replace(/\s+/g, ' ').trim();
-      } else if (routeName && !sector && cell.length > 2 && cell.length < 80 && !isLikelyStatus(cell)) {
-        sector = cell;
-      } else if (cell.length > 5 && isLikelyStatus(cell)) {
-        status = cell;
-      }
+    if (routeCell) {
+      const routeCode = routeCell.text.match(/\b(M-?\d+|N-?\d+|E-?\d+)\b/i)?.[1] || '';
+      const bracketText = routeCell.text.match(/\(([^)]+)\)/)?.[1] || '';
+      routeName = [routeCode, bracketText && `(${bracketText})`].filter(Boolean).join(' ').trim() || routeCell.text;
     }
 
-    // Fallback: first cell = route, last meaningful cell = status
-    if (!routeName && cells[0] && cells[0].length > 1 && cells[0].length < 80) {
-      routeName = cells[0];
-    }
-    if (!status) {
-      for (let i = cells.length - 1; i >= 1; i--) {
-        if (cells[i].length > 5) {
-          status = cells[i];
-          break;
-        }
-      }
-    }
+    const sector = sectorCell?.text || '';
 
-    if (routeName && status && status.length > 3) {
-      // Skip header/label rows
-      if (/^(S\.?\s*No|Sr|#|Date|Time|Route|Sector|Zone|Status|Remarks)/i.test(routeName)) continue;
-      if (routeName.length > 100 || status.length > 500) continue;
-
-      const severity = getSeverity(status);
-
+    for (const advisory of advisoryRows) {
+      if (/^last updated/i.test(advisory.status)) continue;
       results.push({
-        route: routeName,
-        sector: sector || '',
-        status,
-        severity,
-        hasWarning,
+        route: routeName || sector || 'NHMP corridor',
+        sector,
+        status: advisory.status,
+        severity: getSeverity(advisory.status),
+        hasWarning: advisory.hasWarning,
       });
     }
   }
