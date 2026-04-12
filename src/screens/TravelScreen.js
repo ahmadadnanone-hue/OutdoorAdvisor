@@ -270,6 +270,7 @@ export default function TravelScreen({ route }) {
   const [nhmpTime, setNhmpTime] = useState(null);
   const [nhmpStale, setNhmpStale] = useState(false);
   const [nhmpError, setNhmpError] = useState(false);
+  const [nhmpAlertsExpanded, setNhmpAlertsExpanded] = useState(false);
 
   // PMD data
   const [pmdCities, setPmdCities] = useState([]);
@@ -278,6 +279,7 @@ export default function TravelScreen({ route }) {
   const [pmdTime, setPmdTime] = useState(null);
   const [pmdBlocked, setPmdBlocked] = useState(false);
   const [expandedPmdCity, setExpandedPmdCity] = useState(null);
+  const [pmdAlertsExpanded, setPmdAlertsExpanded] = useState(false);
 
   const loadNhmp = useCallback(async ({ silent = false } = {}) => {
     if (!silent && nhmpData.length > 0) {
@@ -602,8 +604,31 @@ export default function TravelScreen({ route }) {
           <>
             {activeAlerts.length > 0 && (
               <>
-                <Text style={[styles.subTitle, { color: colors.text }]}>Routes to review first</Text>
-                {activeAlerts.map((a, i) => (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                    setNhmpAlertsExpanded((value) => !value);
+                  }}
+                  style={[
+                    styles.collapseToggle,
+                    {
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
+                      borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                    },
+                  ]}
+                >
+                  <View style={styles.collapseToggleCopy}>
+                    <Text style={[styles.collapseToggleEyebrow, { color: colors.textSecondary }]}>Live advisories</Text>
+                    <Text style={[styles.collapseToggleTitle, { color: colors.text }]}>
+                      {activeAlerts.length} route{activeAlerts.length > 1 ? 's' : ''} to review first
+                    </Text>
+                  </View>
+                  <Text style={[styles.chevron, { color: colors.textSecondary }]}>
+                    {nhmpAlertsExpanded ? '▲' : '▼'}
+                  </Text>
+                </TouchableOpacity>
+                {nhmpAlertsExpanded && activeAlerts.map((a, i) => (
                   <NHMPAdvisory key={`alert-${i}`} advisory={a} colors={colors} isDark={isDark} />
                 ))}
               </>
@@ -672,22 +697,41 @@ export default function TravelScreen({ route }) {
         ) : (
           <>
             {pmdAlerts.length > 0 && (
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => Linking.openURL('https://nwfc.pmd.gov.pk/new/daily-forecast-en.php')}
-                style={[styles.pmdAlertBanner, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' }]}
-              >
-                <Text style={styles.pmdAlertIcon}>🚨</Text>
-                <View style={styles.pmdAlertContent}>
-                  <Text style={[styles.pmdAlertTitle, { color: '#EF4444' }]}>Weather Alert</Text>
-                  {pmdAlerts.slice(0, 3).map((alert, i) => (
-                    <Text key={i} style={[styles.pmdAlertText, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>
-                      {alert}
+              <>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                    setPmdAlertsExpanded((value) => !value);
+                  }}
+                  style={[styles.pmdAlertBanner, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' }]}
+                >
+                  <Text style={styles.pmdAlertIcon}>🚨</Text>
+                  <View style={styles.pmdAlertContent}>
+                    <Text style={[styles.pmdAlertTitle, { color: '#EF4444' }]}>Weather alerts</Text>
+                    <Text style={[styles.pmdAlertText, { color: isDark ? '#FCA5A5' : '#991B1B', marginBottom: 0 }]}>
+                      {pmdAlerts.length} active PMD alert{pmdAlerts.length > 1 ? 's' : ''}. Tap to {pmdAlertsExpanded ? 'hide' : 'view'} details.
                     </Text>
-                  ))}
-                  <Text style={[styles.bannerHint, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>Tap for official PMD alert details</Text>
-                </View>
-              </TouchableOpacity>
+                  </View>
+                  <Text style={[styles.chevron, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>
+                    {pmdAlertsExpanded ? '▲' : '▼'}
+                  </Text>
+                </TouchableOpacity>
+                {pmdAlertsExpanded && (
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => Linking.openURL('https://nwfc.pmd.gov.pk/new/daily-forecast-en.php')}
+                    style={[styles.pmdAlertDetails, { backgroundColor: isDark ? 'rgba(239,68,68,0.08)' : '#FFF7F7', borderColor: 'rgba(239,68,68,0.22)' }]}
+                  >
+                    {pmdAlerts.slice(0, 5).map((alert, i) => (
+                      <Text key={i} style={[styles.pmdAlertText, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>
+                        {alert}
+                      </Text>
+                    ))}
+                    <Text style={[styles.bannerHint, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>Tap for official PMD alert details</Text>
+                  </TouchableOpacity>
+                )}
+              </>
             )}
             <View style={styles.pmdCityGrid}>
               {pmdCities.map((city, i) => {
@@ -962,6 +1006,20 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 10,
   },
+  collapseToggle: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 2,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  collapseToggleCopy: { flex: 1, paddingRight: 10 },
+  collapseToggleEyebrow: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 },
+  collapseToggleTitle: { fontSize: 14, fontWeight: '700', lineHeight: 19 },
   nhmpHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   severityBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, gap: 4 },
   severityIcon: { fontSize: 14 },
@@ -980,6 +1038,7 @@ const styles = StyleSheet.create({
   pmdLinkBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
   pmdLinkText: { fontSize: 13, fontWeight: '700' },
   pmdAlertBanner: { borderWidth: 1, borderRadius: 14, padding: 14, flexDirection: 'row', marginBottom: 12 },
+  pmdAlertDetails: { borderWidth: 1, borderRadius: 14, padding: 14, marginTop: -2, marginBottom: 12 },
   pmdAlertIcon: { fontSize: 20, marginRight: 10, marginTop: 2 },
   pmdAlertContent: { flex: 1 },
   pmdAlertTitle: { fontSize: 13, fontWeight: '800', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
