@@ -20,6 +20,7 @@ import { fetchAqiForLocation } from '../hooks/useAQI';
 import { getWeatherDescription } from '../utils/weatherCodes';
 import typography from '../theme/typography';
 import { fetchApiJson } from '../config/api';
+import { fetchNhmpDirect } from '../utils/nhmpParser';
 import { loadStoredNotifications } from '../utils/alertPreferences';
 import { maybeSendLocalAlert } from '../utils/alertNotifications';
 import useAiBriefing from '../hooks/useAiBriefing';
