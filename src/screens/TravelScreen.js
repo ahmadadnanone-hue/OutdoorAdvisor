@@ -283,7 +283,13 @@ export default function TravelScreen({ route }) {
       setNhmpRefreshing(true);
     }
     try {
-      const json = await fetchApiJson('/api/nhmp');
+      // Fetch directly from device (avoids Vercel geo-blocking), fall back to API
+      let json;
+      try {
+        json = await fetchNhmpDirect();
+      } catch {
+        json = await fetchApiJson('/api/nhmp');
+      }
       if (nhmpCancelRef.current) return;
 
       if (json.success && json.advisories) {
