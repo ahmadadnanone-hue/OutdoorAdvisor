@@ -8,7 +8,7 @@
   "functions": {
     "api/nhmp.js": {
       "maxDuration": 30,
-      "regions": ["sin1"]
+      "regions": ["bom1"]
     },
     "api/pmd.js": {
       "maxDuration": 30
