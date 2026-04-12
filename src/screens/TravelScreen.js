@@ -278,6 +278,7 @@ export default function TravelScreen({ route }) {
   const [pmdLoading, setPmdLoading] = useState(true);
   const [pmdTime, setPmdTime] = useState(null);
   const [pmdBlocked, setPmdBlocked] = useState(false);
+  const [pmdSectionExpanded, setPmdSectionExpanded] = useState(false);
   const [expandedPmdCity, setExpandedPmdCity] = useState(null);
   const [pmdAlertsExpanded, setPmdAlertsExpanded] = useState(false);
 
@@ -669,122 +670,157 @@ export default function TravelScreen({ route }) {
             <ActivityIndicator size="small" color={colors.primary} />
             <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading PMD data...</Text>
           </View>
-        ) : pmdBlocked ? (
-          <View style={[styles.nhmpCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
-            <Text style={[styles.pmdBlockedTitle, { color: colors.text }]}>
-              Official PMD Forecasts
-            </Text>
-            <Text style={[styles.nhmpStatus, { color: colors.textSecondary }]}>
-              Live data temporarily unavailable. Tap links below to view directly.
-            </Text>
-            <View style={styles.pmdLinksRow}>
-              <TouchableOpacity
-                style={[styles.pmdLinkBtn, { backgroundColor: colors.primary + '15' }]}
-                onPress={() => Linking.openURL('https://nwfc.pmd.gov.pk/new/3-days-forecast.php')}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.pmdLinkText, { color: colors.primary }]}>3-Day Forecast</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.pmdLinkBtn, { backgroundColor: '#EF4444' + '15' }]}
-                onPress={() => Linking.openURL('https://nwfc.pmd.gov.pk/new/daily-forecast-en.php')}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.pmdLinkText, { color: '#EF4444' }]}>Weather Alerts</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
         ) : (
           <>
-            {pmdAlerts.length > 0 && (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setPmdSectionExpanded((value) => !value);
+              }}
+              style={[
+                styles.collapseToggle,
+                {
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
+                  borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                },
+              ]}
+            >
+              <View style={styles.collapseToggleCopy}>
+                <Text style={[styles.collapseToggleEyebrow, { color: colors.textSecondary }]}>Official forecast</Text>
+                <Text style={[styles.collapseToggleTitle, { color: colors.text }]}>
+                  {pmdBlocked
+                    ? 'PMD live data temporarily unavailable'
+                    : `${pmdCities.length} cities and ${pmdAlerts.length} active alert${pmdAlerts.length === 1 ? '' : 's'}`}
+                </Text>
+              </View>
+              <Text style={[styles.chevron, { color: colors.textSecondary }]}>
+                {pmdSectionExpanded ? '▲' : '▼'}
+              </Text>
+            </TouchableOpacity>
+
+            {pmdSectionExpanded && (
               <>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                    setPmdAlertsExpanded((value) => !value);
-                  }}
-                  style={[styles.pmdAlertBanner, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' }]}
-                >
-                  <Text style={styles.pmdAlertIcon}>🚨</Text>
-                  <View style={styles.pmdAlertContent}>
-                    <Text style={[styles.pmdAlertTitle, { color: '#EF4444' }]}>Weather alerts</Text>
-                    <Text style={[styles.pmdAlertText, { color: isDark ? '#FCA5A5' : '#991B1B', marginBottom: 0 }]}>
-                      {pmdAlerts.length} active PMD alert{pmdAlerts.length > 1 ? 's' : ''}. Tap to {pmdAlertsExpanded ? 'hide' : 'view'} details.
+                {pmdBlocked ? (
+                  <View style={[styles.nhmpCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
+                    <Text style={[styles.pmdBlockedTitle, { color: colors.text }]}>
+                      Official PMD Forecasts
                     </Text>
+                    <Text style={[styles.nhmpStatus, { color: colors.textSecondary }]}>
+                      Live data temporarily unavailable. Tap links below to view directly.
+                    </Text>
+                    <View style={styles.pmdLinksRow}>
+                      <TouchableOpacity
+                        style={[styles.pmdLinkBtn, { backgroundColor: colors.primary + '15' }]}
+                        onPress={() => Linking.openURL('https://nwfc.pmd.gov.pk/new/3-days-forecast.php')}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.pmdLinkText, { color: colors.primary }]}>3-Day Forecast</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.pmdLinkBtn, { backgroundColor: '#EF4444' + '15' }]}
+                        onPress={() => Linking.openURL('https://nwfc.pmd.gov.pk/new/daily-forecast-en.php')}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.pmdLinkText, { color: '#EF4444' }]}>Weather Alerts</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <Text style={[styles.chevron, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>
-                    {pmdAlertsExpanded ? '▲' : '▼'}
-                  </Text>
-                </TouchableOpacity>
-                {pmdAlertsExpanded && (
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => Linking.openURL('https://nwfc.pmd.gov.pk/new/daily-forecast-en.php')}
-                    style={[styles.pmdAlertDetails, { backgroundColor: isDark ? 'rgba(239,68,68,0.08)' : '#FFF7F7', borderColor: 'rgba(239,68,68,0.22)' }]}
-                  >
-                    {pmdAlerts.slice(0, 5).map((alert, i) => (
-                      <Text key={i} style={[styles.pmdAlertText, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>
-                        {alert}
-                      </Text>
-                    ))}
-                    <Text style={[styles.bannerHint, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>Tap for official PMD alert details</Text>
-                  </TouchableOpacity>
+                ) : (
+                  <>
+                    {pmdAlerts.length > 0 && (
+                      <>
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={() => {
+                            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                            setPmdAlertsExpanded((value) => !value);
+                          }}
+                          style={[styles.pmdAlertBanner, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' }]}
+                        >
+                          <Text style={styles.pmdAlertIcon}>🚨</Text>
+                          <View style={styles.pmdAlertContent}>
+                            <Text style={[styles.pmdAlertTitle, { color: '#EF4444' }]}>Weather alerts</Text>
+                            <Text style={[styles.pmdAlertText, { color: isDark ? '#FCA5A5' : '#991B1B', marginBottom: 0 }]}>
+                              {pmdAlerts.length} active PMD alert{pmdAlerts.length > 1 ? 's' : ''}. Tap to {pmdAlertsExpanded ? 'hide' : 'view'} details.
+                            </Text>
+                          </View>
+                          <Text style={[styles.chevron, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>
+                            {pmdAlertsExpanded ? '▲' : '▼'}
+                          </Text>
+                        </TouchableOpacity>
+                        {pmdAlertsExpanded && (
+                          <TouchableOpacity
+                            activeOpacity={0.8}
+                            onPress={() => Linking.openURL('https://nwfc.pmd.gov.pk/new/daily-forecast-en.php')}
+                            style={[styles.pmdAlertDetails, { backgroundColor: isDark ? 'rgba(239,68,68,0.08)' : '#FFF7F7', borderColor: 'rgba(239,68,68,0.22)' }]}
+                          >
+                            {pmdAlerts.slice(0, 5).map((alert, i) => (
+                              <Text key={i} style={[styles.pmdAlertText, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>
+                                {alert}
+                              </Text>
+                            ))}
+                            <Text style={[styles.bannerHint, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>Tap for official PMD alert details</Text>
+                          </TouchableOpacity>
+                        )}
+                      </>
+                    )}
+                    <View style={styles.pmdCityGrid}>
+                      {pmdCities.map((city, i) => {
+                        const isExpanded = expandedPmdCity === i;
+                        const today = city.forecast[0];
+                        const severityConf = PMD_SEVERITY_MAP[today?.severity] || PMD_SEVERITY_MAP.other;
+                        return (
+                          <TouchableOpacity
+                            key={city.city}
+                            style={[styles.pmdCityCard, {
+                              backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
+                              borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                            }]}
+                            onPress={() => {
+                              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                              setExpandedPmdCity(isExpanded ? null : i);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.pmdCityHeader}>
+                              <Text style={[styles.pmdCityName, { color: colors.text }]}>{city.city}</Text>
+                              <View style={[styles.pmdTempBadge, { backgroundColor: severityConf.bg }]}>
+                                <Text style={[styles.pmdTempText, { color: severityConf.color }]}>
+                                  {today ? `${today.minTemp}°-${today.maxTemp}°` : '--'}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={[styles.pmdCondition, { color: colors.textSecondary }]}>
+                              {severityConf.icon} {today?.condition || 'N/A'}
+                            </Text>
+                            {city.humidity && (
+                              <Text style={[styles.pmdHumidity, { color: colors.textSecondary }]}>
+                                Humidity: {city.humidity}
+                              </Text>
+                            )}
+                            {isExpanded && city.forecast.length > 1 && (
+                              <View style={[styles.pmdForecastDays, { borderTopColor: colors.border }]}>
+                                {city.forecast.map((day, di) => {
+                                  const daySev = PMD_SEVERITY_MAP[day.severity] || PMD_SEVERITY_MAP.other;
+                                  return (
+                                    <View key={di} style={styles.pmdDayRow}>
+                                      <Text style={[styles.pmdDayLabel, { color: colors.textSecondary }]}>{day.date}</Text>
+                                      <Text style={[styles.pmdDayCondition, { color: colors.text }]}>{daySev.icon} {day.condition}</Text>
+                                      <Text style={[styles.pmdDayTemp, { color: daySev.color }]}>{day.minTemp}°-{day.maxTemp}°</Text>
+                                    </View>
+                                  );
+                                })}
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </>
                 )}
               </>
             )}
-            <View style={styles.pmdCityGrid}>
-              {pmdCities.map((city, i) => {
-                const isExpanded = expandedPmdCity === i;
-                const today = city.forecast[0];
-                const severityConf = PMD_SEVERITY_MAP[today?.severity] || PMD_SEVERITY_MAP.other;
-                return (
-                  <TouchableOpacity
-                    key={city.city}
-                    style={[styles.pmdCityCard, {
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
-                      borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-                    }]}
-                    onPress={() => {
-                      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                      setExpandedPmdCity(isExpanded ? null : i);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.pmdCityHeader}>
-                      <Text style={[styles.pmdCityName, { color: colors.text }]}>{city.city}</Text>
-                      <View style={[styles.pmdTempBadge, { backgroundColor: severityConf.bg }]}>
-                        <Text style={[styles.pmdTempText, { color: severityConf.color }]}>
-                          {today ? `${today.minTemp}°-${today.maxTemp}°` : '--'}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={[styles.pmdCondition, { color: colors.textSecondary }]}>
-                      {severityConf.icon} {today?.condition || 'N/A'}
-                    </Text>
-                    {city.humidity && (
-                      <Text style={[styles.pmdHumidity, { color: colors.textSecondary }]}>
-                        Humidity: {city.humidity}
-                      </Text>
-                    )}
-                    {isExpanded && city.forecast.length > 1 && (
-                      <View style={[styles.pmdForecastDays, { borderTopColor: colors.border }]}>
-                        {city.forecast.map((day, di) => {
-                          const daySev = PMD_SEVERITY_MAP[day.severity] || PMD_SEVERITY_MAP.other;
-                          return (
-                            <View key={di} style={styles.pmdDayRow}>
-                              <Text style={[styles.pmdDayLabel, { color: colors.textSecondary }]}>{day.date}</Text>
-                              <Text style={[styles.pmdDayCondition, { color: colors.text }]}>{daySev.icon} {day.condition}</Text>
-                              <Text style={[styles.pmdDayTemp, { color: daySev.color }]}>{day.minTemp}°-{day.maxTemp}°</Text>
-                            </View>
-                          );
-                        })}
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
           </>
         )}
       </View>
