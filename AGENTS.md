@@ -32,6 +32,7 @@ It is not meant to feel like a generic weather app.
 - National Highways & Motorway Police live advisories
 - Pakistan Meteorological Department forecasts and alerts
 - motorway and corridor route cards
+- premium experimental route planner tab
 - premium stop-by-stop route scan
 - AI travel insight
 
@@ -77,6 +78,7 @@ It is not meant to feel like a generic weather app.
 - premium gating logic lives in `src/lib/premium.js`
 - some premium checks are UI-side and some are server-enforced
 - known premium user allowlist exists for now as a temporary bridge before store subscriptions
+- route planner is premium and experimental
 
 ## Important Current Truths
 

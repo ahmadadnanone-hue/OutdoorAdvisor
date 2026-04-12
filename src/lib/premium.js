@@ -11,6 +11,7 @@ export const PREMIUM_FEATURES = {
   smogAlerts: 'Smog season alerts',
   fogWarnings: 'Motorway fog warnings',
   routeClosureAlerts: 'Major route closure alerts',
+  routePlanner: 'Experimental route planner',
 };
 
 const ACTIVE_STATUSES = new Set(['active', 'premium', 'pro', 'paid', 'trialing', 'trial']);
