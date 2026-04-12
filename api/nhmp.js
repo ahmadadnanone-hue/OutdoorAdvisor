@@ -8,7 +8,11 @@ export default async function handler(req, res) {
 
   try {
     let html;
-    const urls = ['https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx'];
+    const urls = [
+      'https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx',
+      'http://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx',
+      'http://cpo.nhmp.gov.pk:7892/TA/public/viewtravel.aspx',
+    ];
     let lastErr;
     for (const url of urls) {
       try {
