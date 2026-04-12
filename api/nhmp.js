@@ -1,44 +1,97 @@
 import https from 'https';
 import http from 'http';
+import { kvGetJson, kvSetJson } from './_lib/kv.js';
+import { NHMP_FALLBACK_SNAPSHOT } from './_data/nhmpFallback.js';
+
+const NHMP_CACHE_KEY = 'travel:nhmp:latest';
+const LIVE_CACHE_MAX_AGE_MS = 15 * 60 * 1000;
+const SNAPSHOT_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const NHMP_PAGE_URLS = [
+  'https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx',
+  'http://cpo.nhmp.gov.pk:7892/TA/public/viewtravel.aspx',
+  'http://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx',
+];
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET');
   res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
 
-  try {
-    let html;
-    const urls = [
-      'https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx',
-      'http://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx',
-      'http://cpo.nhmp.gov.pk:7892/TA/public/viewtravel.aspx',
-    ];
-    let lastErr;
-    for (const url of urls) {
-      try {
-        html = await fetchPage(url);
-        if (html && html.length > 500) break;
-      } catch (e) {
-        lastErr = e;
-        html = null;
-      }
-    }
-    if (!html) throw lastErr || new Error('All NHMP endpoints failed');
-    const advisories = parseAdvisories(html);
+  let cached = null;
 
-    res.status(200).json({
-      success: true,
-      timestamp: new Date().toISOString(),
-      count: advisories.length,
-      advisories,
-    });
+  try {
+    cached = await kvGetJson(NHMP_CACHE_KEY);
+    if (isCacheFresh(cached)) {
+      sendPayload(res, cached, { stale: cached.source !== 'live' });
+      return;
+    }
+  } catch {}
+
+  try {
+    const livePayload = await fetchLiveNhmp();
+    const payload = {
+      ...livePayload,
+      source: 'live',
+      sourceLabel: 'Official NHMP feed',
+    };
+
+    try {
+      await kvSetJson(NHMP_CACHE_KEY, payload);
+    } catch {}
+
+    sendPayload(res, payload);
   } catch (err) {
-    res.status(200).json({
-      success: false,
+    if (cached?.advisories?.length) {
+      sendPayload(res, cached, {
+        stale: true,
+        error: err.message,
+      });
+      return;
+    }
+
+    const snapshotPayload = {
+      ...NHMP_FALLBACK_SNAPSHOT,
+      count: NHMP_FALLBACK_SNAPSHOT.advisories.length,
+      source: 'snapshot',
+    };
+
+    try {
+      await kvSetJson(NHMP_CACHE_KEY, snapshotPayload);
+    } catch {}
+
+    sendPayload(res, snapshotPayload, {
+      stale: true,
       error: err.message,
-      advisories: [],
     });
   }
+}
+
+async function fetchLiveNhmp() {
+  let lastErr;
+
+  for (const url of NHMP_PAGE_URLS) {
+    try {
+      const html = await fetchPage(url);
+      if (!html || html.length < 500 || isNhmpErrorPage(html)) {
+        throw new Error('NHMP returned an error page');
+      }
+
+      const advisories = parseAdvisories(html);
+      if (!advisories.length) {
+        throw new Error('NHMP returned no advisories');
+      }
+
+      return {
+        timestamp: new Date().toISOString(),
+        count: advisories.length,
+        advisories,
+      };
+    } catch (error) {
+      lastErr = error;
+    }
+  }
+
+  throw lastErr || new Error('All NHMP endpoints failed');
 }
 
 function fetchPage(url) {
@@ -49,14 +102,24 @@ function fetchPage(url) {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
       },
-      timeout: 20000,
+      family: 4,
+      timeout: 4500,
       rejectUnauthorized: false,
     }, (response) => {
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
         fetchPage(response.headers.location).then(resolve).catch(reject);
         return;
       }
+
+      if (response.statusCode >= 400) {
+        response.resume();
+        reject(new Error(`NHMP returned ${response.statusCode}`));
+        return;
+      }
+
       let data = '';
       response.on('data', (chunk) => { data += chunk; });
       response.on('end', () => resolve(data));
@@ -67,7 +130,34 @@ function fetchPage(url) {
   });
 }
 
-function parseAdvisories(html) {
+function isCacheFresh(cached) {
+  if (!cached?.timestamp || !cached?.advisories?.length) return false;
+
+  const ageMs = Date.now() - new Date(cached.timestamp).getTime();
+  if (!Number.isFinite(ageMs) || ageMs < 0) return false;
+
+  const maxAge = cached.source === 'snapshot' ? SNAPSHOT_CACHE_MAX_AGE_MS : LIVE_CACHE_MAX_AGE_MS;
+  return ageMs <= maxAge;
+}
+
+function isNhmpErrorPage(html) {
+  return /server error in '\/' application|timeout expired|exception details:|system\.invalidoperationexception/i.test(html || '');
+}
+
+function sendPayload(res, payload, extra = {}) {
+  res.status(200).json({
+    success: true,
+    timestamp: payload.timestamp || new Date().toISOString(),
+    count: payload.count || payload.advisories.length,
+    advisories: payload.advisories,
+    source: payload.source || 'live',
+    sourceLabel: payload.sourceLabel || 'Official NHMP feed',
+    stale: extra.stale ?? payload.source !== 'live',
+    error: extra.error,
+  });
+}
+
+export function parseAdvisories(html) {
   const results = [];
   const stripTags = (s) => s.replace(/<[^>]+>/g, '').replace(/&nbsp;/gi, ' ').replace(/&amp;/g, '&').replace(/&#\d+;/g, '').replace(/\s+/g, ' ').trim();
   const tableRegex = /<table[^>]*id="GridView\d+"[^>]*>([\s\S]*?)<\/table>/gi;

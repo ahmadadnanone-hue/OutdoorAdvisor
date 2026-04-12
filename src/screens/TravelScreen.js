@@ -268,6 +268,7 @@ export default function TravelScreen({ route }) {
   const [nhmpLoading, setNhmpLoading] = useState(true);
   const [nhmpRefreshing, setNhmpRefreshing] = useState(false);
   const [nhmpTime, setNhmpTime] = useState(null);
+  const [nhmpStale, setNhmpStale] = useState(false);
   const [nhmpError, setNhmpError] = useState(false);
 
   // PMD data
@@ -283,18 +284,22 @@ export default function TravelScreen({ route }) {
       setNhmpRefreshing(true);
     }
     try {
-      // Fetch directly from device (avoids Vercel geo-blocking), fall back to API
       let json;
-      try {
-        json = await fetchNhmpDirect();
-      } catch {
+      if (Platform.OS === 'web') {
         json = await fetchApiJson('/api/nhmp');
+      } else {
+        try {
+          json = await fetchNhmpDirect();
+        } catch {
+          json = await fetchApiJson('/api/nhmp');
+        }
       }
       if (nhmpCancelRef.current) return;
 
-      if (json.success && json.advisories) {
+      if (json.success && Array.isArray(json.advisories) && json.advisories.length > 0) {
         setNhmpData(json.advisories);
         setNhmpTime(json.timestamp);
+        setNhmpStale(Boolean(json.stale));
         setNhmpError(false);
       } else {
         setNhmpError(true);
@@ -576,7 +581,9 @@ export default function TravelScreen({ route }) {
         </View>
         {nhmpTime && (
           <Text style={[styles.nhmpTimestamp, { color: colors.textSecondary }]}>
-            Updated: {new Date(nhmpTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+            {nhmpStale
+              ? `Last known official update: ${new Date(nhmpTime).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}, ${new Date(nhmpTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
+              : `Updated: ${new Date(nhmpTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`}
           </Text>
         )}
 

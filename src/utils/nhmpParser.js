@@ -1,5 +1,9 @@
 const NHMP_URL = 'https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx';
 
+function isNhmpErrorPage(html) {
+  return /server error in '\/' application|timeout expired|exception details:|system\.invalidoperationexception/i.test(html || '');
+}
+
 function stripTags(s) {
   return s.replace(/<[^>]+>/g, '').replace(/&nbsp;/gi, ' ').replace(/&amp;/g, '&').replace(/&#\d+;/g, '').replace(/\s+/g, ' ').trim();
 }
@@ -105,15 +109,30 @@ export function parseNhmpHtml(html) {
 }
 
 export async function fetchNhmpDirect() {
-  const response = await fetch(NHMP_URL, {
-    headers: {
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    },
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  let response;
+
+  try {
+    response = await fetch(NHMP_URL, {
+      headers: {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
   if (!response.ok) throw new Error(`NHMP returned ${response.status}`);
   const html = await response.text();
-  if (!html || html.length < 500) throw new Error('NHMP response too small');
+  if (!html || html.length < 500 || isNhmpErrorPage(html)) {
+    throw new Error('NHMP response was not usable');
+  }
+
   const advisories = parseNhmpHtml(html);
+  if (!advisories.length) throw new Error('NHMP response returned no advisories');
+
   return {
     success: true,
     timestamp: new Date().toISOString(),
