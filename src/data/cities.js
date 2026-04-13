@@ -9,6 +9,34 @@ export const CITIES = [
   { name: 'Quetta', lat: 30.1798, lon: 66.9750 },
   { name: 'Sialkot', lat: 32.4945, lon: 74.5229 },
   { name: 'Gujranwala', lat: 32.1877, lon: 74.1945 },
+  { name: 'Hyderabad', lat: 25.3960, lon: 68.3578 },
+  { name: 'Sukkur', lat: 27.7052, lon: 68.8574 },
+  { name: 'Abbottabad', lat: 34.1688, lon: 73.2215 },
+  { name: 'Mansehra', lat: 34.3339, lon: 73.2004 },
+  { name: 'Gilgit', lat: 35.9208, lon: 74.3140 },
+  { name: 'Murree', lat: 33.9070, lon: 73.3943 },
+  { name: 'Naran', lat: 34.9070, lon: 73.6490 },
+  { name: 'Mingora', lat: 34.7795, lon: 72.3629 },
+  { name: 'Kalam', lat: 35.4907, lon: 72.5808 },
+  { name: 'Bahawalpur', lat: 29.3956, lon: 71.6836 },
+  { name: 'Sargodha', lat: 32.0836, lon: 72.6711 },
+  { name: 'Mardan', lat: 34.1989, lon: 72.0401 },
+  { name: 'Swabi', lat: 34.1200, lon: 72.4700 },
+  { name: 'Dera Ismail Khan', lat: 31.8320, lon: 70.9016 },
+  { name: 'Rahim Yar Khan', lat: 28.4202, lon: 70.2952 },
+];
+
+export const VEHICLE_TYPES = [
+  { id: 'petrol', label: 'Petrol', icon: '⛽' },
+  { id: 'diesel', label: 'Diesel', icon: '🛢️' },
+  { id: 'ev', label: 'EV', icon: '🔋' },
+];
+
+export const TRIP_PREFERENCES = [
+  { id: 'fastest', label: 'Fastest', icon: '⚡' },
+  { id: 'safest', label: 'Safest', icon: '🛡️' },
+  { id: 'scenic', label: 'Scenic', icon: '🏔️' },
+  { id: 'family', label: 'Family', icon: '👨‍👩‍👧‍👦' },
 ];
 
 // Neighborhood / sub-area AQI sampling points for major cities.
