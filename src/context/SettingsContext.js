@@ -6,6 +6,8 @@ const STORAGE_KEY = 'routeadvisor_settings';
 const DEFAULT_SETTINGS = {
   units: 'metric', // 'metric' | 'imperial'
   windUnit: 'kmh', // 'kmh' | 'mph' | 'ms' | 'knots'
+  homeSections: [],
+  enabledActivities: [],
 };
 
 const SettingsContext = createContext();
