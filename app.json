@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "OutdoorAdvisor",
-    "slug": "OutdoorAdvisor",
+    "name": "RouteAdvisor",
+    "slug": "RouteAdvisor",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +14,7 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "OutdoorAdvisor needs your location to show air quality and weather for your area."
+        "NSLocationWhenInUseUsageDescription": "RouteAdvisor needs your location to plan routes and show conditions for your area."
       }
     },
     "android": {
@@ -43,7 +43,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "OutdoorAdvisor needs your location to show air quality and weather for your area."
+          "locationWhenInUsePermission": "RouteAdvisor needs your location to plan routes and show conditions for your area."
         }
       ]
     ]
