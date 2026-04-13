@@ -40,6 +40,13 @@ export function SettingsProvider({ children }) {
   const setUnits = useCallback((u) => updateSettings({ units: u }), [updateSettings]);
   const setWindUnit = useCallback((w) => updateSettings({ windUnit: w }), [updateSettings]);
 
+  // Stubs for legacy settings screen compatibility (cleaned up in Phase 6)
+  const moveSection = useCallback(() => {}, []);
+  const toggleSection = useCallback(() => {}, []);
+  const resetHomeSections = useCallback(() => {}, []);
+  const addActivity = useCallback(() => {}, []);
+  const removeActivity = useCallback(() => {}, []);
+
   // Unit conversion helpers
   const convertTemp = useCallback((celsius) => {
     if (celsius == null) return null;
