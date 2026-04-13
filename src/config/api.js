@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 
-const DEFAULT_PRODUCTION_API_BASE_URL = 'https://outdooradvisor.vercel.app';
+const DEFAULT_PRODUCTION_API_BASE_URL = 'https://routeadvisor.vercel.app';
 
 export function getApiBaseUrl() {
   const explicitBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
