@@ -9,7 +9,7 @@ const memory = {};
 const isWeb = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 
 function fullKey(namespace, key) {
-  return `oa_cache::${namespace}::${key}`;
+  return `ra_cache::${namespace}::${key}`;
 }
 
 export function get(namespace, key, ttlMs) {
@@ -68,7 +68,7 @@ export function set(namespace, key, data) {
 
 export function clear(namespace) {
   // Wipe all keys in a namespace (useful for manual "clear cache" action).
-  const prefix = `oa_cache::${namespace}::`;
+  const prefix = `ra_cache::${namespace}::`;
   for (const k of Object.keys(memory)) {
     if (k.startsWith(prefix)) delete memory[k];
   }
