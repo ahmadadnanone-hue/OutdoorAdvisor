@@ -3,7 +3,7 @@ import { useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { lightTheme, darkTheme, common } from '../theme/colors';
 
-const STORAGE_KEY = 'outdooradvisor_theme_mode';
+const STORAGE_KEY = 'routeadvisor_theme_mode';
 
 const ThemeContext = createContext();
 
