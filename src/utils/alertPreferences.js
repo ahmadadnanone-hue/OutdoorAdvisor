@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const THRESHOLDS_KEY = 'outdooradvisor_thresholds';
-export const NOTIFICATIONS_KEY = 'outdooradvisor_notifications';
-export const MOCK_ACCOUNT_KEY = 'outdooradvisor_mock_account';
+export const THRESHOLDS_KEY = 'routeadvisor_thresholds';
+export const NOTIFICATIONS_KEY = 'routeadvisor_notifications';
+export const MOCK_ACCOUNT_KEY = 'routeadvisor_mock_account';
 
 export const DEFAULT_THRESHOLDS = {
   aqiAlert: 150,
