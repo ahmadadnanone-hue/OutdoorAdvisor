@@ -18,7 +18,8 @@ Important current gaps:
 
 Current external blockers:
 
-- this machine is not logged into Expo / EAS yet
+- Expo / EAS login is now done on this machine
+- EAS project has been created and linked
 - Apple Developer account / App Store Connect credentials are still needed for the first TestFlight build
 - `eas.json` still needs the final App Store Connect app ID when the store record exists
 
@@ -53,6 +54,14 @@ Suggested first commands once logged in:
 - `npx eas-cli build --platform ios --profile preview`
 - `npx eas-cli build --platform ios --profile production`
 - `npx eas-cli submit --platform ios --profile production`
+
+Current progress:
+
+- Expo login completed
+- EAS project created for `@ahmadadnanone/outdooradvisor`
+- local project linked to EAS project ID `5218db89-4a97-4ab7-8d1e-08f7a008e8ec`
+- iOS build flow reached the Apple account credentials step
+- first real iOS cloud build is paused until Apple Developer enrollment exists
 
 ## Phase 3: iPhone Product Hardening
 

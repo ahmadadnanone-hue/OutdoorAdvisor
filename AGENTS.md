@@ -75,6 +75,9 @@ It is not a weather app or activity tracker. It answers: "which route is safer, 
 - GitHub remote is configured and working from this machine
 - Vercel project needs to be created and linked to routeadvisor.vercel.app
 - production deploys triggered with `npx expo export -p web` then `vercel deploy --prod --yes`
+- Expo / EAS login is configured on this machine
+- EAS project has been created and linked for this repo
+- iOS App Store / TestFlight work is blocked only by missing Apple Developer enrollment
 - NHMP source is not an API; it is scraped from:
   - `https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx`
 
