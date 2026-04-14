@@ -16,6 +16,12 @@ Important current gaps:
 - notifications are currently web-oriented and need a native iOS push path review
 - app-store-specific legal / privacy / account deletion review has not been done
 
+Current external blockers:
+
+- this machine is not logged into Expo / EAS yet
+- Apple Developer account / App Store Connect credentials are still needed for the first TestFlight build
+- `eas.json` still needs the final App Store Connect app ID when the store record exists
+
 ## Goal
 
 Ship OutdoorAdvisor as a real iPhone app with:
@@ -40,6 +46,13 @@ Ship OutdoorAdvisor as a real iPhone app with:
 - configure App Store Connect submission profile
 - confirm Apple Developer account access
 - connect credentials through EAS
+
+Suggested first commands once logged in:
+
+- `npx eas-cli login`
+- `npx eas-cli build --platform ios --profile preview`
+- `npx eas-cli build --platform ios --profile production`
+- `npx eas-cli submit --platform ios --profile production`
 
 ## Phase 3: iPhone Product Hardening
 
