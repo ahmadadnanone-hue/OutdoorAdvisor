@@ -8,9 +8,8 @@ The app already has a solid Expo / React Native base, but it is not App Store re
 
 Important current gaps:
 
-- `app.json` still uses the app name and slug `RouteAdvisor`
-- no iOS bundle identifier is configured yet
-- no `eas.json` is configured for store builds and TestFlight submission
+- native app identity has now been started in `app.json`, but still needs final App Store validation
+- `eas.json` now exists, but App Store Connect submission values are still blank
 - no App Store metadata workflow exists yet
 - no privacy policy / terms URLs are present in the product flow
 - premium is still custom allowlist logic, not real App Store subscriptions
@@ -28,15 +27,15 @@ Ship OutdoorAdvisor as a real iPhone app with:
 
 ## Phase 1: Native App Identity
 
-- rename app config from `RouteAdvisor` to `OutdoorAdvisor`
-- set final `slug`
-- add `ios.bundleIdentifier`
-- add `ios.buildNumber`
+- verify app config rename from `RouteAdvisor` to `OutdoorAdvisor`
+- verify final `slug`
+- verify `ios.bundleIdentifier`
+- verify `ios.buildNumber`
 - confirm final app icon, splash, accent colors, and app name
 
 ## Phase 2: Expo / EAS Setup
 
-- add `eas.json`
+- verify `eas.json`
 - configure production iOS build profile
 - configure App Store Connect submission profile
 - confirm Apple Developer account access

@@ -1,8 +1,9 @@
 {
   "expo": {
-    "name": "RouteAdvisor",
-    "slug": "RouteAdvisor",
+    "name": "OutdoorAdvisor",
+    "slug": "outdooradvisor",
     "version": "1.0.0",
+    "scheme": "outdooradvisor",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -12,12 +13,15 @@
       "backgroundColor": "#0F172A"
     },
     "ios": {
+      "bundleIdentifier": "com.ahmadadnan.outdooradvisor",
+      "buildNumber": "1",
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "RouteAdvisor needs your location to plan routes and show conditions for your area."
+        "NSLocationWhenInUseUsageDescription": "OutdoorAdvisor needs your location to plan routes and show conditions for your area."
       }
     },
     "android": {
+      "package": "com.ahmadadnan.outdooradvisor",
       "adaptiveIcon": {
         "backgroundColor": "#0F172A",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -43,7 +47,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "RouteAdvisor needs your location to plan routes and show conditions for your area."
+          "locationWhenInUsePermission": "OutdoorAdvisor needs your location to plan routes and show conditions for your area."
         }
       ]
     ]
