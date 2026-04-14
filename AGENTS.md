@@ -78,6 +78,9 @@ It is not a weather app or activity tracker. It answers: "which route is safer, 
 - Expo / EAS login is configured on this machine
 - EAS project has been created and linked for this repo
 - iOS App Store / TestFlight work is blocked only by missing Apple Developer enrollment
+- local Expo prebuild has been run for iOS, so an `ios/` project exists on this machine for Xcode use
+- the generated `/ios` folder is gitignored in this repo
+- CocoaPods is still a local-machine dependency for simulator/native iOS builds
 - NHMP source is not an API; it is scraped from:
   - `https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx`
 
@@ -106,3 +109,7 @@ Never state a route is definitively "safe".
   - push to GitHub
   - deploy to production on Vercel
 - for docs-only changes, build/deploy is optional
+- for local iOS work:
+  - `npm run ios:prebuild`
+  - `npm run ios:sim`
+  - open `ios/OutdoorAdvisor.xcodeproj` in Xcode if native files already exist locally

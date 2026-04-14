@@ -17,7 +17,8 @@
       "buildNumber": "1",
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "OutdoorAdvisor needs your location to plan routes and show conditions for your area."
+        "NSLocationWhenInUseUsageDescription": "OutdoorAdvisor needs your location to plan routes and show conditions for your area.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -30,7 +31,9 @@
       },
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "config": {
         "googleMaps": {
@@ -50,6 +53,11 @@
           "locationWhenInUsePermission": "OutdoorAdvisor needs your location to plan routes and show conditions for your area."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "5218db89-4a97-4ab7-8d1e-08f7a008e8ec"
+      }
+    }
   }
 }

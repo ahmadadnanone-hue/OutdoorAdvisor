@@ -62,6 +62,8 @@ Current progress:
 - local project linked to EAS project ID `5218db89-4a97-4ab7-8d1e-08f7a008e8ec`
 - iOS build flow reached the Apple account credentials step
 - first real iOS cloud build is paused until Apple Developer enrollment exists
+- local Expo iOS prebuild completed, generating a usable Xcode project on this Mac
+- CocoaPods installation is still required locally for full native/simulator build flow
 
 ## Phase 3: iPhone Product Hardening
 
