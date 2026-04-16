@@ -52,7 +52,14 @@ function TabIcon({ name, focused, color }) {
   return (
     <View style={styles.tabIconContainer}>
       <Text style={[styles.tabEmoji, focused && styles.tabEmojiActive]}>{config.icon}</Text>
-      <Text style={[styles.tabLabel, { color }, focused && styles.tabLabelActive]}>{config.label}</Text>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.85}
+        style={[styles.tabLabel, { color }, focused && styles.tabLabelActive]}
+      >
+        {config.label}
+      </Text>
     </View>
   );
 }
@@ -100,9 +107,9 @@ function AppNavigator() {
               backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#FFFFFF',
               borderTopColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
               borderTopWidth: 1,
-              height: 65,
-              paddingBottom: 6,
-              paddingTop: 6,
+              height: Platform.OS === 'ios' ? 78 : 68,
+              paddingBottom: Platform.OS === 'ios' ? 18 : 8,
+              paddingTop: 8,
               ...tabBarShadow,
             },
           })}
@@ -134,6 +141,8 @@ const styles = StyleSheet.create({
   tabIconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    width: '100%',
+    paddingHorizontal: 2,
   },
   tabEmoji: {
     fontSize: 24,
@@ -142,9 +151,12 @@ const styles = StyleSheet.create({
     fontSize: 26,
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '500',
-    marginTop: 3,
+    marginTop: 2,
+    letterSpacing: 0.1,
+    textAlign: 'center',
+    includeFontPadding: false,
   },
   tabLabelActive: {
     fontWeight: '600',

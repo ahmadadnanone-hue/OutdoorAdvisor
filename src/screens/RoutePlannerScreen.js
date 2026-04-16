@@ -19,6 +19,8 @@ import {
   getPlannerQuickPairs,
   scorePlannerCandidates,
 } from '../utils/routePlanner';
+import CityPicker from '../components/CityPicker';
+import VehicleToggle from '../components/VehicleToggle';
 
 function StopConditionRow({ stop, condition, colors }) {
   const weather = getWeatherDescription(condition?.weatherCode);
@@ -119,6 +121,7 @@ export default function RoutePlannerScreen() {
   const quickPairs = useMemo(() => getPlannerQuickPairs(), []);
   const [fromCity, setFromCity] = useState('Lahore');
   const [toCity, setToCity] = useState('Islamabad');
+  const [vehicleType, setVehicleType] = useState('car');
   const [nhmpData, setNhmpData] = useState([]);
   const [pmdAlerts, setPmdAlerts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -256,26 +259,34 @@ export default function RoutePlannerScreen() {
       </View>
 
       <View style={[styles.selectorCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <View style={styles.selectorHeader}>
-          <View style={styles.selectorColumn}>
-            <Text style={[styles.selectorLabel, { color: colors.textSecondary }]}>From</Text>
-            <Text style={[styles.selectorValue, { color: colors.text }]}>{fromCity}</Text>
-          </View>
+        <View style={styles.pickerRow}>
+          <CityPicker
+            label="From"
+            value={fromCity}
+            options={plannerCities}
+            onChange={setFromCity}
+          />
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => {
               setFromCity(toCity);
               setToCity(fromCity);
             }}
-            style={[styles.swapBtn, { backgroundColor: colors.primary + '14' }]}
+            style={[styles.swapCircle, { backgroundColor: colors.primary + '14', borderColor: colors.primary + '33' }]}
+            accessibilityLabel="Swap from and to"
           >
-            <Text style={[styles.swapBtnText, { color: colors.primary }]}>Swap</Text>
+            <Text style={[styles.swapArrow, { color: colors.primary }]}>⇄</Text>
           </TouchableOpacity>
-          <View style={[styles.selectorColumn, { alignItems: 'flex-end' }]}>
-            <Text style={[styles.selectorLabel, { color: colors.textSecondary }]}>To</Text>
-            <Text style={[styles.selectorValue, { color: colors.text }]}>{toCity}</Text>
-          </View>
+          <CityPicker
+            label="To"
+            value={toCity}
+            options={plannerCities}
+            onChange={setToCity}
+            accentColor="#0F766E"
+          />
         </View>
+
+        <VehicleToggle value={vehicleType} onChange={setVehicleType} />
 
         <Text style={[styles.sectionHint, { color: colors.textSecondary }]}>Quick pairs</Text>
         <View style={styles.quickPairRow}>
@@ -289,48 +300,9 @@ export default function RoutePlannerScreen() {
               }}
               style={[styles.quickPairChip, { backgroundColor: colors.primary + '12', borderColor: colors.primary + '22' }]}
             >
-              <Text style={[styles.quickPairText, { color: colors.primary }]}>{pair.from} to {pair.to}</Text>
+              <Text style={[styles.quickPairText, { color: colors.primary }]}>{pair.from} → {pair.to}</Text>
             </TouchableOpacity>
           ))}
-        </View>
-
-        <Text style={[styles.sectionHint, { color: colors.textSecondary }]}>Supported cities</Text>
-        <View style={styles.cityGrid}>
-          {plannerCities.map((city) => {
-            const selectedFrom = city.name === fromCity;
-            const selectedTo = city.name === toCity;
-            return (
-              <View key={city.name} style={styles.cityChipWrap}>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => setFromCity(city.name)}
-                  style={[
-                    styles.cityChip,
-                    {
-                      backgroundColor: selectedFrom ? colors.primary : (isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC'),
-                      borderColor: selectedFrom ? colors.primary : colors.border,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.cityChipText, { color: selectedFrom ? '#FFFFFF' : colors.text }]}>From {city.name}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => setToCity(city.name)}
-                  style={[
-                    styles.cityChip,
-                    {
-                      marginTop: 8,
-                      backgroundColor: selectedTo ? '#0F766E' : (isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC'),
-                      borderColor: selectedTo ? '#0F766E' : colors.border,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.cityChipText, { color: selectedTo ? '#FFFFFF' : colors.text }]}>To {city.name}</Text>
-                </TouchableOpacity>
-              </View>
-            );
-          })}
         </View>
       </View>
 
@@ -396,20 +368,26 @@ const styles = StyleSheet.create({
   heroTitle: { color: '#FFFFFF', fontSize: 28, fontWeight: '800', marginBottom: 8 },
   heroBody: { color: 'rgba(255,255,255,0.82)', fontSize: 14, lineHeight: 21 },
   selectorCard: { borderWidth: 1, borderRadius: 18, padding: 16, marginBottom: 16 },
-  selectorHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
-  selectorColumn: { flex: 1 },
-  selectorLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 },
-  selectorValue: { fontSize: 22, fontWeight: '800' },
-  swapBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999, marginHorizontal: 10 },
-  swapBtnText: { fontSize: 13, fontWeight: '700' },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 8,
+    marginBottom: 14,
+  },
+  swapCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swapArrow: { fontSize: 18, fontWeight: '800' },
   sectionHint: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8, marginTop: 4 },
-  quickPairRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  quickPairRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   quickPairChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   quickPairText: { fontSize: 12, fontWeight: '700' },
-  cityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  cityChipWrap: { width: '48%' },
-  cityChip: { borderWidth: 1, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12 },
-  cityChipText: { fontSize: 13, fontWeight: '700' },
   loadingCard: { borderWidth: 1, borderRadius: 18, padding: 18, alignItems: 'center', gap: 12 },
   loadingText: { fontSize: 13, lineHeight: 19, textAlign: 'center' },
   lockedCard: { borderWidth: 1, borderRadius: 18, padding: 18 },

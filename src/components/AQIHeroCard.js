@@ -34,8 +34,32 @@ function getTempToneColor(temp) {
   return '#FCA5A5';
 }
 
-function getHeroTheme(weatherCode, windSpeed) {
+function getHeroTheme(weatherCode, windSpeed, isNight) {
   const isWindy = (windSpeed ?? 0) >= 20;
+
+  // Clear night: deep indigo with a cool accent, so the moon emoji reads right.
+  if (isNight && weatherCode === 0) {
+    return {
+      background: '#1F2A44',
+      surface: 'rgba(255,255,255,0.1)',
+      line: 'rgba(255,255,255,0.18)',
+      text: '#FFFFFF',
+      subtext: 'rgba(255,255,255,0.72)',
+      accent: '#C7D2FE',
+    };
+  }
+
+  // Partly cloudy night: a gentler slate so clouds don't feel sunny.
+  if (isNight && weatherCode != null && weatherCode <= 3) {
+    return {
+      background: '#2A3552',
+      surface: 'rgba(255,255,255,0.1)',
+      line: 'rgba(255,255,255,0.18)',
+      text: '#FFFFFF',
+      subtext: 'rgba(255,255,255,0.72)',
+      accent: '#CBD5F5',
+    };
+  }
 
   if (isStormCode(weatherCode)) {
     return {
@@ -111,13 +135,13 @@ function WindMotion({ color }) {
         Animated.timing(translateX, {
           toValue: 16,
           duration: 1800,
-          easing: Easing.inOut(Easing.sine),
+          easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(translateX, {
           toValue: -12,
           duration: 1800,
-          easing: Easing.inOut(Easing.sine),
+          easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
       ])
@@ -180,11 +204,12 @@ export default function AQIHeroCard({
   pm25,
   humidity,
   loading,
+  isNight = false,
   onPressAqi,
   onPressTemp,
 }) {
   const { colors: themeColors, isDark } = useTheme();
-  const heroColors = getHeroTheme(weatherCode, windSpeed);
+  const heroColors = getHeroTheme(weatherCode, windSpeed, isNight);
   const aqiColor = aqi != null ? getAqiColor(aqi) : heroColors.accent;
   const aqiCategory = aqi != null ? getAqiCategory(aqi) : 'AQI pending';
   const tempTone = getTempToneColor(tempValue);

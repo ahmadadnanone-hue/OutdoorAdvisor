@@ -118,6 +118,10 @@ It is not meant to feel like a generic weather app.
   - push to GitHub
   - deploy to production on Vercel
 - for docs-only changes, build/deploy is optional
+- **always update this AGENTS.md file after every repo change**
+  - log what changed under `Recent Changes` below
+  - update architectural sections if the change affects them
+  - keep this file current so the next agent has accurate context
 
 ## Good First Checks Before Editing
 
@@ -132,3 +136,31 @@ It is not meant to feel like a generic weather app.
 - keep this file current when premium rules change
 - update it when auth, subscriptions, or app-store hardening starts
 - update it when a new major route, AI behavior, or notification rule is added
+
+## Recent Changes
+
+### 2026-04-16 — Night-aware hero banner (no more sun at night)
+- `src/utils/weatherCodes.js`: added `isNight(when, sunrise?, sunset?)` helper and an optional `{ isNight }` option to `getWeatherDescription`. When night, clear-sky `0` maps to 🌙, partly cloudy `1–3` maps to ☁️
+- `src/screens/HomeScreen.js`: computes `nightMode` from current time + today's sunrise/sunset (falls back to 6am–6:30pm window). Passes it into `AQIHeroCard`
+- `src/components/AQIHeroCard.js`: `getHeroTheme` now takes `isNight` and returns a deep indigo (#1F2A44) / slate (#2A3552) palette for clear and partly-cloudy nights so the orange sunny background no longer shows at night
+- Only the Home hero is night-aware so far — forecast strips still use day icons. Can be extended later by threading `isNight` through `ForecastStrip` / `HourlyForecastStrip`
+- Verified with `npx expo export -p web` — bundles cleanly
+
+### 2026-04-16 — Route Planner declutter + vehicle toggle
+- Replaced the supported-cities chip grid (~24 chips) on `RoutePlannerScreen` with two tap-to-open pickers
+- New component `src/components/CityPicker.js`: tappable field → bottom-sheet modal with searchable city list. Works on iOS, Android, and Web (no Google SDK needed — unlike `PlacesAutocomplete.js` which is web-only)
+- New component `src/components/VehicleToggle.js`: pill-style single-select row (Car · EV · Bike · Moto). Exports `VEHICLE_OPTIONS` for reuse
+- `RoutePlannerScreen.js` now has: hero → From/Swap/To picker row → Vehicle toggle → Quick pairs → results. Removed `selectorHeader`, `selectorColumn`, `selectorValue`, `swapBtn*`, `cityGrid`, `cityChip*` styles (replaced by `pickerRow` + `swapCircle` + `swapArrow`)
+- `vehicleType` state added (default `car`). **Not yet wired into scoring** — planner still ranks routes by NHMP/PMD/AQI. Vehicle-aware scoring (EV range, bike elevation, moto weather sensitivity) is the next follow-up
+- Verified with `npx expo export -p web` — 685 modules bundled (2 new), no errors
+- Known limitation to address in a follow-up: **login screen shows "not configured" placeholder** in Settings tab when `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` env vars are missing locally. In production (Vercel) they are set. For local dev / simulator runs, add a `.env` file at repo root with both keys, then restart Metro
+
+### 2026-04-16 — Bottom tab bar label polish
+- Fixed wrapping tab labels ("Hom e", "Trave l", "Plann er", "Activi ties", "Setti ngs")
+- Edits applied in `App.js`:
+  - `TabIcon` `<Text>` now uses `numberOfLines={1}`, `adjustsFontSizeToFit`, `minimumFontScale={0.85}`
+  - `tabIconContainer` gains `width: '100%'` and `paddingHorizontal: 2`
+  - `tabLabel` font sized to 10.5, `textAlign: 'center'`, `includeFontPadding: false`, `letterSpacing: 0.1`
+  - `tabBarStyle` height / paddingBottom now platform-aware (iOS 78/18, else 68/8) so iOS safe-area is respected
+- Verified with `npx expo export -p web` — 683 modules bundled, no errors
+- Next candidate polish: remove duplicate AQI display in `AQIHeroCard` (shown in both info row and bottom snapshot card)

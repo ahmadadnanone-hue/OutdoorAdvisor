@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, View, Text, StyleSheet } from 'react-native';
+import { Animated, Easing, StyleSheet } from 'react-native';
 
 function PulseIcon({ emoji, size }) {
   const scale = useRef(new Animated.Value(1)).current;
@@ -45,8 +45,8 @@ function SwayIcon({ emoji, size }) {
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(translateX, { toValue: 4, duration: 1500, easing: Easing.inOut(Easing.sine), useNativeDriver: true }),
-        Animated.timing(translateX, { toValue: -4, duration: 1500, easing: Easing.inOut(Easing.sine), useNativeDriver: true }),
+        Animated.timing(translateX, { toValue: 4, duration: 1500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(translateX, { toValue: -4, duration: 1500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ])
     ).start();
   }, [translateX]);

@@ -20,7 +20,7 @@ import useLocation from '../hooks/useLocation';
 import useAQI from '../hooks/useAQI';
 import useWeather from '../hooks/useWeather';
 import usePollen from '../hooks/usePollen';
-import { getWeatherDescription } from '../utils/weatherCodes';
+import { getWeatherDescription, isNight } from '../utils/weatherCodes';
 import { getAqiColor } from '../theme/colors';
 import { CITIES } from '../data/cities';
 import AQIHeroCard from '../components/AQIHeroCard';
@@ -392,8 +392,9 @@ export default function HomeScreen({ navigation }) {
   }) : '--';
   const locationDisplay = getLocationDisplay(city);
 
-  const weather = getWeatherDescription(weatherCurrent?.weatherCode);
   const todayForecast = daily?.[0] || null;
+  const nightMode = isNight(new Date(), todayForecast?.sunrise, todayForecast?.sunset);
+  const weather = getWeatherDescription(weatherCurrent?.weatherCode, { isNight: nightMode });
   const displayWindGusts = weatherCurrent?.windGusts ?? todayForecast?.windGusts ?? null;
   const displayWindDirection = weatherCurrent?.windDirection ?? todayForecast?.windDirection ?? null;
   const gustsFromForecast = weatherCurrent?.windGusts == null && todayForecast?.windGusts != null;
@@ -881,6 +882,7 @@ export default function HomeScreen({ navigation }) {
                     pm10={pm10}
                     humidity={weatherCurrent?.humidity}
                     loading={aqiLoading || weatherLoading}
+                    isNight={nightMode}
                     onPressAqi={() =>
                       setInsightModal({
                         title: 'AQI Trend',
