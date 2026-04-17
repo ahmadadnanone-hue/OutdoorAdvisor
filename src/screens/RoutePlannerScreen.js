@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
 import { fetchApiJson } from '../config/api';
 import { fetchWeatherForLocation } from '../hooks/useWeather';
 import { fetchAqiForLocation } from '../hooks/useAQI';
@@ -117,6 +118,7 @@ function RoutePlanCard({ plan, expanded, onToggle, stopConditions, colors, isDar
 export default function RoutePlannerScreen() {
   const { colors, isDark } = useTheme();
   const { isPremium } = useAuth();
+  const { showScooterVehicle } = useSettings();
   const plannerCities = useMemo(() => getPlannerCityOptions(), []);
   const quickPairs = useMemo(() => getPlannerQuickPairs(), []);
   const [fromCity, setFromCity] = useState('Lahore');
@@ -296,7 +298,7 @@ export default function RoutePlannerScreen() {
           />
         </View>
 
-        <VehicleToggle value={vehicleType} onChange={setVehicleType} />
+        <VehicleToggle value={vehicleType} onChange={setVehicleType} showScooter={showScooterVehicle} />
 
         <TouchableOpacity
           activeOpacity={0.85}
@@ -355,12 +357,16 @@ export default function RoutePlannerScreen() {
         <>
           {bestPlan && (
             <View style={[styles.bestCard, { backgroundColor: bestPlan.tone + '12', borderColor: bestPlan.tone + '22' }]}>
-              <Text style={[styles.bestEyebrow, { color: colors.textSecondary }]}>Best route right now</Text>
+              <Text style={[styles.bestEyebrow, { color: colors.textSecondary }]}>
+                {bestPlan.motorwayBlocked ? 'No legal match on the mapped network' : 'Best route right now'}
+              </Text>
               <Text style={[styles.bestTitle, { color: bestPlan.tone }]}>{bestPlan.title}</Text>
               <Text style={[styles.bestBody, { color: colors.text }]}>
-                {bestPlan.summary}. {bestPlan.recommendation} based on the current advisory and stop scan mix.
+                {bestPlan.motorwayBlocked
+                  ? `${bestPlan.reasons[0] || 'Two-wheelers are restricted on this corridor.'} Consider GT Road (N-5) or local city streets instead.`
+                  : `${bestPlan.summary}. ${bestPlan.recommendation} based on the current advisory and stop scan mix.`}
               </Text>
-              {bestPlan.reasons[0] ? (
+              {!bestPlan.motorwayBlocked && bestPlan.reasons[0] ? (
                 <Text style={[styles.bestReason, { color: colors.textSecondary }]}>
                   Main watch item: {bestPlan.reasons[0]}
                 </Text>

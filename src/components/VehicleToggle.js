@@ -2,15 +2,30 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 
-export const VEHICLE_OPTIONS = [
+const BASE_VEHICLE_OPTIONS = [
   { key: 'car', label: 'Car', emoji: '🚗' },
   { key: 'ev', label: 'EV', emoji: '⚡' },
   { key: 'motorbike', label: 'Motorbike', emoji: '🏍️' },
 ];
 
-// Pakistan motorways (M-1 to M-9) prohibit motorcycles by law. Used by the
-// route planner to warn/penalize motorbike routes that touch a motorway leg.
-export const VEHICLES_BANNED_FROM_MOTORWAY = new Set(['motorbike']);
+// Scooter is off by default — it's enabled via Settings > Customize so the
+// main toggle stays tidy for the 95% car/moto case.
+const OPTIONAL_VEHICLE_OPTIONS = [
+  { key: 'scooter', label: 'Scooter', emoji: '🛵' },
+];
+
+export const VEHICLE_OPTIONS = BASE_VEHICLE_OPTIONS;
+
+export function getVehicleOptions({ showScooter = false } = {}) {
+  return showScooter
+    ? [...BASE_VEHICLE_OPTIONS, ...OPTIONAL_VEHICLE_OPTIONS]
+    : BASE_VEHICLE_OPTIONS;
+}
+
+// Pakistan motorways (M-1 to M-9) prohibit motorcycles and scooters by law.
+// Used by the route planner to warn/penalize two-wheeler routes that touch
+// a motorway leg.
+export const VEHICLES_BANNED_FROM_MOTORWAY = new Set(['motorbike', 'scooter']);
 
 /**
  * VehicleToggle — pill-style single-select toggle row. Keeps the route planner
@@ -21,8 +36,9 @@ export const VEHICLES_BANNED_FROM_MOTORWAY = new Set(['motorbike']);
  *   - value: one of VEHICLE_OPTIONS[*].key
  *   - onChange: (key) => void
  */
-export default function VehicleToggle({ value, onChange }) {
+export default function VehicleToggle({ value, onChange, showScooter = false }) {
   const { colors, isDark } = useTheme();
+  const options = getVehicleOptions({ showScooter });
 
   return (
     <View style={styles.wrap}>
@@ -33,7 +49,7 @@ export default function VehicleToggle({ value, onChange }) {
           { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F3F4F6' },
         ]}
       >
-        {VEHICLE_OPTIONS.map((option) => {
+        {options.map((option) => {
           const active = value === option.key;
           return (
             <TouchableOpacity

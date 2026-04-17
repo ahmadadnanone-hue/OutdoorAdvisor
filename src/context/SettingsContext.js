@@ -36,6 +36,8 @@ const DEFAULT_SETTINGS = {
   windUnit: 'kmh', // 'kmh' | 'mph' | 'ms' | 'knots'
   homeSections: DEFAULT_HOME_SECTIONS,
   enabledActivities: DEFAULT_ENABLED_ACTIVITY_IDS,
+  // Route Planner niche vehicle flags (off by default so the toggle stays tidy).
+  showScooterVehicle: false,
 };
 
 function normalizeEnabledActivities(enabledActivities) {

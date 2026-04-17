@@ -223,6 +223,27 @@ export const TRAVEL_ROUTES = [
       { name: 'Kalam', lat: 35.4907, lon: 72.5808 },
     ],
   },
+  // N-5 GT Road — parallels the motorway network but legally open to
+  // motorbikes and scooters. Critical alternate for two-wheeler routing
+  // between the Lahore/Islamabad/Peshawar corridor.
+  {
+    id: 'N5',
+    kind: 'highway',
+    emoji: '🛤️',
+    name: 'N-5 GT Road (Peshawar-Lahore)',
+    stops: [
+      { name: 'Peshawar', lat: 34.0151, lon: 71.5249 },
+      { name: 'Nowshera', lat: 34.0159, lon: 71.9747 },
+      { name: 'Attock', lat: 33.7660, lon: 72.3609 },
+      { name: 'Rawalpindi', lat: 33.5651, lon: 73.0169 },
+      { name: 'Islamabad', lat: 33.6844, lon: 73.0479 },
+      { name: 'Jhelum', lat: 32.9333, lon: 73.7333 },
+      { name: 'Kharian', lat: 32.8111, lon: 73.8847 },
+      { name: 'Gujrat', lat: 32.5740, lon: 74.0781 },
+      { name: 'Gujranwala', lat: 32.1877, lon: 74.1945 },
+      { name: 'Lahore', lat: 31.5204, lon: 74.3587 },
+    ],
+  },
 ];
 
 export const MOTORWAYS = TRAVEL_ROUTES.filter((route) => route.kind === 'motorway');

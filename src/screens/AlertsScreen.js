@@ -142,7 +142,7 @@ const sliderStyles = StyleSheet.create({
 /* ---------- Main Screen ---------- */
 export default function AlertsScreen() {
   const themeCtx = useTheme();
-  const { colors } = themeCtx;
+  const { colors, isDark } = themeCtx;
   const settings = useSettings();
   const { configured, isSignedIn, isPremium, plan, loading: authLoading, signIn, signOut, signUp, user } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
@@ -609,7 +609,18 @@ export default function AlertsScreen() {
 
   /* ---------- Customize Tab ---------- */
   const renderCustomize = () => {
-    const { units, windUnit, homeSections, setUnits, setWindUnit, moveSection, toggleSection, resetHomeSections } = settings;
+    const {
+      units,
+      windUnit,
+      homeSections,
+      setUnits,
+      setWindUnit,
+      moveSection,
+      toggleSection,
+      resetHomeSections,
+      showScooterVehicle,
+      updateSettings,
+    } = settings;
 
     const unitOptions = [
       { key: 'metric', label: 'Metric', desc: '°C, mm' },
@@ -672,6 +683,39 @@ export default function AlertsScreen() {
             );
           })}
         </View>
+
+        {/* Route Planner vehicle options */}
+        <Text style={[styles.sectionLabel, { color: colors.text, marginTop: 28 }]}>Route Planner Vehicles</Text>
+        <Text style={[styles.sectionDesc, { color: colors.textSecondary }]}>
+          Niche vehicle types stay hidden until you enable them here, so the main picker stays tidy.
+        </Text>
+        <TouchableOpacity
+          activeOpacity={0.75}
+          onPress={() => updateSettings({ showScooterVehicle: !showScooterVehicle })}
+          style={[styles.rowToggle, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
+          <View style={styles.rowToggleCopy}>
+            <Text style={[styles.rowToggleTitle, { color: colors.text }]}>🛵 Scooter</Text>
+            <Text style={[styles.rowToggleDesc, { color: colors.textSecondary }]}>
+              Adds Scooter to the planner's vehicle toggle. Like motorbikes, scooters are banned on M-1 to M-9 motorways.
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.rowToggleSwitch,
+              {
+                backgroundColor: showScooterVehicle ? colors.primary : (isDark ? 'rgba(255,255,255,0.14)' : '#E5E7EB'),
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.rowToggleThumb,
+                { transform: [{ translateX: showScooterVehicle ? 18 : 2 }] },
+              ]}
+            />
+          </View>
+        </TouchableOpacity>
 
         {/* Home Layout */}
         <Text style={[styles.sectionLabel, { color: colors.text, marginTop: 28 }]}>Home Screen Layout</Text>
@@ -820,7 +864,7 @@ export default function AlertsScreen() {
             </Text>
           </View>
         ) : isSignedIn ? (
-          <>
+          <View style={styles.accountSignedInRow}>
             <View style={styles.accountCopy}>
               <Text style={[styles.accountTitle, { color: colors.text }]}>Signed in</Text>
               <Text style={[styles.accountBody, { color: colors.textSecondary }]}>
@@ -842,7 +886,7 @@ export default function AlertsScreen() {
                 <Text style={[styles.accountBtnText, { color: '#EF4444' }]}>Sign out</Text>
               )}
             </TouchableOpacity>
-          </>
+          </View>
         ) : (
           <View style={styles.accountPanel}>
             <View style={styles.accountHeaderRow}>
@@ -944,6 +988,52 @@ const styles = StyleSheet.create({
   },
   accountPanel: {
     width: '100%',
+  },
+  accountSignedInRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+  },
+  rowToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 14,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 8,
+  },
+  rowToggleCopy: {
+    flex: 1,
+  },
+  rowToggleTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  rowToggleDesc: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  rowToggleSwitch: {
+    width: 42,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+  },
+  rowToggleThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.16,
+    shadowRadius: 2,
+    elevation: 2,
   },
   accountHeaderRow: {
     flexDirection: 'row',

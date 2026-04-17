@@ -139,6 +139,16 @@ It is not meant to feel like a generic weather app.
 
 ## Recent Changes
 
+### 2026-04-17 — Motorbike alternates (N-5), scooter toggle, signed-in card fix
+- `src/data/cities.js`: added **N-5 GT Road** (`id: 'N5'`, `kind: 'highway'`) — Peshawar → Nowshera → Attock → Rawalpindi → Islamabad → Jhelum → Kharian → Gujrat → Gujranwala → Lahore. Gives motorbike/scooter users a legal corridor across the M-1/M-2 axis. Adds Rawalpindi, Jhelum, Gujrat as new planner cities via the auto-merge in `getPlannerCityOptions`
+- `src/components/VehicleToggle.js`: scooter 🛵 option now available via optional `showScooter` prop (hidden by default to keep the main toggle tidy). `VEHICLES_BANNED_FROM_MOTORWAY` now includes `scooter` so motorway bans apply to both two-wheelers
+- `src/context/SettingsContext.js`: new `showScooterVehicle: false` default, persists via same AsyncStorage key
+- `src/screens/AlertsScreen.js`: (1) fixed the **enlarged Signed-in card** — the `accountCopy` flex:1 inside the column-flex card was stretching the entire card; wrapped the signed-in branch in a new `accountSignedInRow` (flexDirection: row), so copy and Sign-out button sit on one line. (2) Added a "Route Planner Vehicles" section to the Customize tab with a Scooter on/off toggle. New `rowToggle` / `rowToggleSwitch` / `rowToggleThumb` styles — animation is a simple translateX, not a spring
+- `src/screens/RoutePlannerScreen.js`: reads `showScooterVehicle` from settings and passes through to `VehicleToggle`. Rephrased the **"Best route right now"** card when `bestPlan.motorwayBlocked` — eyebrow becomes "No legal match on the mapped network" and body suggests "Consider GT Road (N-5) or local city streets instead". Non-blocked case unchanged
+- With N-5 added, Lahore → Islamabad on Motorbike now ranks **N-5 as the best route** (kind: highway, no motorway penalty) with M-2 appearing below at red "Not allowed" — instead of only red cards
+- Verified with `npx expo export -p web` — bundles cleanly
+- **Deferred to next turn**: true Liquid Glass polish (needs `expo-blur` install + native rebuild — it's not in Expo 55's default bundle). EV charging / POI overlays (need a `/api/poi/chargers` endpoint; filter brand=="BMW destination" server-side)
+
 ### 2026-04-17 — Route planner: explicit Plan-route button + motorbike restriction
 - `src/screens/RoutePlannerScreen.js`: added `hasSearched` state + a primary "Plan route" button. Auto-fetch of NHMP/PMD/AQI now only fires after the user taps the button; changing From/To/Vehicle invalidates the prior search. New copy ("Ready when you are…") replaces results area until first tap. Button disables to "Pick two different cities" when From === To
 - `src/components/VehicleToggle.js`: consolidated to `Car · EV · Motorbike` (dropped the duplicated bicycle-emoji `bike` and `motorcycle` options). Exports `VEHICLES_BANNED_FROM_MOTORWAY = new Set(['motorbike'])` for scoring reuse
