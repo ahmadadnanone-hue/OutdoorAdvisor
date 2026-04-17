@@ -1,4 +1,5 @@
 import { CITIES, TRAVEL_ROUTES } from '../data/cities';
+import { VEHICLES_BANNED_FROM_MOTORWAY } from '../components/VehicleToggle';
 
 const ROUTE_ALERT_KEYWORDS = {
   E35: ['hazara', 'mansehra', 'abbottabad', 'haripur', 'burhan'],
@@ -226,7 +227,10 @@ function getLegRisk(leg, nhmpData, pmdAlerts, stopConditions) {
   };
 }
 
-export function scorePlannerCandidates(candidates, nhmpData, pmdAlerts, stopConditions) {
+export function scorePlannerCandidates(candidates, nhmpData, pmdAlerts, stopConditions, options = {}) {
+  const { vehicleType = 'car' } = options;
+  const enforcesMotorwayBan = VEHICLES_BANNED_FROM_MOTORWAY.has(vehicleType);
+
   return candidates
     .map((candidate) => {
       const legs = candidate.legs.map((leg) => ({
@@ -234,7 +238,14 @@ export function scorePlannerCandidates(candidates, nhmpData, pmdAlerts, stopCond
         metrics: getLegRisk(leg, nhmpData, pmdAlerts, stopConditions),
       }));
 
-      const totalRisk = legs.reduce((sum, leg) => sum + leg.metrics.totalRisk, 0) + (candidate.kind === 'transfer' ? 12 : 0);
+      const motorwayLegs = legs.filter((leg) => leg.routeKind === 'motorway');
+      const motorwayBlocked = enforcesMotorwayBan && motorwayLegs.length > 0;
+
+      let totalRisk = legs.reduce((sum, leg) => sum + leg.metrics.totalRisk, 0) + (candidate.kind === 'transfer' ? 12 : 0);
+      // Pakistan motorways (M-1..M-9) ban motorcycles. Push these routes to
+      // the bottom and flag them clearly rather than hiding them outright.
+      if (motorwayBlocked) totalRisk += 220;
+
       const worstAdvisory = legs.find((leg) => leg.metrics.advisory?.severity === 'closed')
         || legs.find((leg) => leg.metrics.advisory?.severity === 'fog')
         || legs.find((leg) => leg.metrics.advisory?.severity === 'rain')
@@ -244,7 +255,10 @@ export function scorePlannerCandidates(candidates, nhmpData, pmdAlerts, stopCond
 
       let recommendation = 'Low caution';
       let tone = '#22C55E';
-      if (totalRisk >= 100) {
+      if (motorwayBlocked) {
+        recommendation = 'Not allowed';
+        tone = '#EF4444';
+      } else if (totalRisk >= 100) {
         recommendation = 'High caution';
         tone = '#EF4444';
       } else if (totalRisk >= 55) {
@@ -256,6 +270,10 @@ export function scorePlannerCandidates(candidates, nhmpData, pmdAlerts, stopCond
       }
 
       const reasons = [];
+      if (motorwayBlocked) {
+        const names = [...new Set(motorwayLegs.map((leg) => leg.routeName))].join(', ');
+        reasons.push(`Motorbikes are not permitted on ${names} — Pakistan motorway rules`);
+      }
       if (worstAdvisory?.metrics?.advisory?.status) {
         reasons.push(worstAdvisory.metrics.advisory.status);
       }
@@ -286,6 +304,7 @@ export function scorePlannerCandidates(candidates, nhmpData, pmdAlerts, stopCond
         recommendation,
         tone,
         reasons,
+        motorwayBlocked,
       };
     })
     .sort((a, b) => a.totalRisk - b.totalRisk || a.legs.length - b.legs.length || a.title.localeCompare(b.title));

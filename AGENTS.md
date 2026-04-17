@@ -139,6 +139,12 @@ It is not meant to feel like a generic weather app.
 
 ## Recent Changes
 
+### 2026-04-17 — Route planner: explicit Plan-route button + motorbike restriction
+- `src/screens/RoutePlannerScreen.js`: added `hasSearched` state + a primary "Plan route" button. Auto-fetch of NHMP/PMD/AQI now only fires after the user taps the button; changing From/To/Vehicle invalidates the prior search. New copy ("Ready when you are…") replaces results area until first tap. Button disables to "Pick two different cities" when From === To
+- `src/components/VehicleToggle.js`: consolidated to `Car · EV · Motorbike` (dropped the duplicated bicycle-emoji `bike` and `motorcycle` options). Exports `VEHICLES_BANNED_FROM_MOTORWAY = new Set(['motorbike'])` for scoring reuse
+- `src/utils/routePlanner.js`: `scorePlannerCandidates(candidates, nhmpData, pmdAlerts, stopConditions, { vehicleType })` — when vehicle is motorbike and any leg is `routeKind: 'motorway'` (M-1..M-9), adds +220 risk, flips tone to red with recommendation "Not allowed", and prepends a reason like "Motorbikes are not permitted on M2 Islamabad-Lahore — Pakistan motorway rules". Non-motorway alternates (N-series highways, E-35 expressway, N-15 mountain) rank above motorway options naturally via the risk penalty
+- Verified with `npx expo export -p web` — 685 modules bundled, no errors
+
 ### 2026-04-16 — Night-aware hero banner (no more sun at night)
 - `src/utils/weatherCodes.js`: added `isNight(when, sunrise?, sunset?)` helper and an optional `{ isNight }` option to `getWeatherDescription`. When night, clear-sky `0` maps to 🌙, partly cloudy `1–3` maps to ☁️
 - `src/screens/HomeScreen.js`: computes `nightMode` from current time + today's sunrise/sunset (falls back to 6am–6:30pm window). Passes it into `AQIHeroCard`

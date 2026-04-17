@@ -127,6 +127,9 @@ export default function RoutePlannerScreen() {
   const [loading, setLoading] = useState(false);
   const [expandedPlanId, setExpandedPlanId] = useState(null);
   const [stopConditions, setStopConditions] = useState({});
+  // hasSearched gates the results area and API fetch. Resets whenever the
+  // user changes inputs so they always tap "Plan route" explicitly.
+  const [hasSearched, setHasSearched] = useState(false);
 
   const candidateRoutes = useMemo(
     () => buildPlannerCandidates(fromCity, toCity),
@@ -134,16 +137,23 @@ export default function RoutePlannerScreen() {
   );
 
   const scoredPlans = useMemo(
-    () => scorePlannerCandidates(candidateRoutes, nhmpData, pmdAlerts, stopConditions),
-    [candidateRoutes, nhmpData, pmdAlerts, stopConditions]
+    () => scorePlannerCandidates(candidateRoutes, nhmpData, pmdAlerts, stopConditions, { vehicleType }),
+    [candidateRoutes, nhmpData, pmdAlerts, stopConditions, vehicleType]
   );
+
+  // Invalidate prior search whenever the user edits inputs.
+  useEffect(() => {
+    setHasSearched(false);
+  }, [fromCity, toCity, vehicleType]);
+
+  const sameCity = !fromCity || !toCity || fromCity === toCity;
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadPlannerData() {
-      if (!isPremium || candidateRoutes.length === 0) {
-        setStopConditions({});
+      if (!isPremium || candidateRoutes.length === 0 || !hasSearched) {
+        if (!hasSearched) setStopConditions({});
         return;
       }
 
@@ -205,7 +215,7 @@ export default function RoutePlannerScreen() {
     return () => {
       cancelled = true;
     };
-  }, [candidateRoutes, isPremium]);
+  }, [candidateRoutes, isPremium, hasSearched]);
 
   useEffect(() => {
     setExpandedPlanId(scoredPlans[0]?.id || null);
@@ -288,6 +298,22 @@ export default function RoutePlannerScreen() {
 
         <VehicleToggle value={vehicleType} onChange={setVehicleType} />
 
+        <TouchableOpacity
+          activeOpacity={0.85}
+          disabled={sameCity}
+          onPress={() => setHasSearched(true)}
+          style={[
+            styles.planButton,
+            { backgroundColor: colors.primary },
+            sameCity && styles.planButtonDisabled,
+          ]}
+          accessibilityLabel="Plan route"
+        >
+          <Text style={styles.planButtonText}>
+            {sameCity ? 'Pick two different cities' : 'Plan route'}
+          </Text>
+        </TouchableOpacity>
+
         <Text style={[styles.sectionHint, { color: colors.textSecondary }]}>Quick pairs</Text>
         <View style={styles.quickPairRow}>
           {quickPairs.map((pair) => (
@@ -306,7 +332,14 @@ export default function RoutePlannerScreen() {
         </View>
       </View>
 
-      {loading ? (
+      {!hasSearched ? (
+        <View style={[styles.lockedCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.lockedTitle, { color: colors.text }]}>Ready when you are</Text>
+          <Text style={[styles.lockedBody, { color: colors.textSecondary }]}>
+            Choose your From and To cities, pick a vehicle, then tap Plan route to pull live NHMP, PMD, and stop-by-stop AQI for every supported corridor.
+          </Text>
+        </View>
+      ) : loading ? (
         <View style={[styles.loadingCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <ActivityIndicator size="small" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Checking route conditions across the supported network…</Text>
@@ -384,6 +417,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   swapArrow: { fontSize: 18, fontWeight: '800' },
+  planButton: {
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  planButtonDisabled: {
+    opacity: 0.45,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  planButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
   sectionHint: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8, marginTop: 4 },
   quickPairRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   quickPairChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },

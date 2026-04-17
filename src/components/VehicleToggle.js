@@ -5,9 +5,12 @@ import { useTheme } from '../context/ThemeContext';
 export const VEHICLE_OPTIONS = [
   { key: 'car', label: 'Car', emoji: '🚗' },
   { key: 'ev', label: 'EV', emoji: '⚡' },
-  { key: 'bike', label: 'Bike', emoji: '🚴' },
-  { key: 'motorcycle', label: 'Moto', emoji: '🏍️' },
+  { key: 'motorbike', label: 'Motorbike', emoji: '🏍️' },
 ];
+
+// Pakistan motorways (M-1 to M-9) prohibit motorcycles by law. Used by the
+// route planner to warn/penalize motorbike routes that touch a motorway leg.
+export const VEHICLES_BANNED_FROM_MOTORWAY = new Set(['motorbike']);
 
 /**
  * VehicleToggle — pill-style single-select toggle row. Keeps the route planner
