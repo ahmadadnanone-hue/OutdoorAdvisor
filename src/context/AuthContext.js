@@ -6,6 +6,15 @@ import { derivePremiumState } from '../lib/premium';
 const AuthContext = createContext();
 const DEFAULT_WEB_AUTH_REDIRECT = 'https://outdooradvisor.vercel.app';
 
+const TEST_ID = 'testuser';
+const TEST_PASSWORD = 'testuser';
+const TEST_MOCK_USER = {
+  id: 'test-user-local',
+  email: 'testuser',
+  app_metadata: {},
+  user_metadata: { premium: true },
+};
+
 function getEmailRedirectTo() {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
     return window.location.origin;
@@ -18,6 +27,7 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(isSupabaseConfigured);
+  const [isTestSession, setIsTestSession] = useState(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
@@ -58,6 +68,12 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signIn = useCallback(async ({ email, password }) => {
+    if (email === TEST_ID && password === TEST_PASSWORD) {
+      setSession({ user: TEST_MOCK_USER });
+      setUser(TEST_MOCK_USER);
+      setIsTestSession(true);
+      return;
+    }
     if (!supabase) {
       throw new Error('Sign-in is not configured yet.');
     }
@@ -92,10 +108,16 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    if (isTestSession) {
+      setSession(null);
+      setUser(null);
+      setIsTestSession(false);
+      return;
+    }
     if (!supabase) return;
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
-  }, []);
+  }, [isTestSession]);
 
   const value = useMemo(
     () => {
