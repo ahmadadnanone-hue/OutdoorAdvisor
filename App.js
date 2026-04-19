@@ -38,6 +38,7 @@ import ActivitiesScreen from './src/screens/ActivitiesScreen';
 import AlertsScreen from './src/screens/AlertsScreen';
 import { GlassTabBar } from './src/components/glass';
 import Icon, { ICON } from './src/components/Icon';
+import FABMenu from './src/components/FABMenu';
 import { colors as dc } from './src/design';
 
 const Tab = createBottomTabNavigator();
@@ -114,6 +115,9 @@ function AppNavigator() {
           <Tab.Screen name="Activities" component={ActivitiesScreen} />
           <Tab.Screen name="Settings"   component={AlertsScreen} />
         </Tab.Navigator>
+
+        {/* Global FAB — rendered inside NavigationContainer for useNavigation access */}
+        <FABMenu />
       </NavigationContainer>
     </>
   );
