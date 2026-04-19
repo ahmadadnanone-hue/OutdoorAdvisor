@@ -32,6 +32,7 @@ import {
 import { ensureLocalNotificationPermission } from '../utils/alertNotifications';
 import { GlassCard } from '../components/glass';
 import { ScreenGradient } from '../components/layout';
+import AboutTab from '../components/settings/AboutTab';
 import { colors as dc } from '../design';
 
 const TABS = ['Thresholds', 'Notifications', 'Customize', 'About'];
@@ -522,24 +523,7 @@ export default function AlertsScreen() {
   };
 
   /* ---------- About Tab ---------- */
-  const renderAbout = () => (
-    <ScrollView contentContainerStyle={[styles.scrollContent, styles.aboutContainer]} showsVerticalScrollIndicator={false}>
-      <GlassCard strong style={styles.aboutHero} contentStyle={styles.aboutHeroContent}>
-        <Text style={styles.aboutEmoji}>🌬️</Text>
-        <Text style={styles.aboutAppName}>OutdoorAdvisor</Text>
-        <Text style={styles.aboutVersion}>Version 1.0.0</Text>
-        <Text style={styles.aboutTagline}>
-          Your smart guide to outdoor safety with practical local context, live conditions, and travel checks across Pakistan.
-        </Text>
-      </GlassCard>
-      <GlassCard style={styles.aboutCard} contentStyle={styles.aboutCardContent}>
-        <Text style={styles.aboutCardTitle}>OutdoorAdvisor</Text>
-        <Text style={styles.aboutBodyText}>OutdoorAdvisor helps people make better daily outdoor decisions with a calm, practical view of current conditions, activity timing, and important travel context.</Text>
-        <Text style={[styles.aboutBodyText, { marginTop: 12 }]}>The product is designed to keep guidance simple: what conditions mean right now, when to go, when to be careful, and which routes deserve a second look before leaving.</Text>
-        <Text style={[styles.aboutBodyText, { marginTop: 12 }]}>Built in Pakistan for Pakistan, with a strong focus on clarity, reliability, and a mobile-first experience that feels easy to trust at a glance.</Text>
-      </GlassCard>
-    </ScrollView>
-  );
+  const renderAbout = () => <AboutTab />;
 
   /* ---------- Render ---------- */
   const tabContent = [renderThresholds, renderNotifications, renderCustomize, renderAbout];
@@ -633,7 +617,9 @@ export default function AlertsScreen() {
         </GlassCard>
 
         {renderTabBar()}
-        {tabContent[activeTab]()}
+        <View style={{ flex: 1 }}>
+          {tabContent[activeTab]()}
+        </View>
       </SafeAreaView>
     </ScreenGradient>
   );
@@ -740,15 +726,4 @@ const styles = StyleSheet.create({
   addBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
   addBtnText: { fontSize: 12, fontWeight: '700' },
 
-  aboutContainer: { alignItems: 'center' },
-  aboutHero: { width: '100%', marginBottom: 16 },
-  aboutHeroContent: { padding: 22, alignItems: 'center' },
-  aboutEmoji: { fontSize: 64, marginBottom: 8 },
-  aboutAppName: { fontSize: 28, fontWeight: '800', color: dc.textPrimary },
-  aboutVersion: { fontSize: 15, color: dc.textSecondary, marginTop: 4 },
-  aboutTagline: { fontSize: 15, fontWeight: '600', color: dc.accentCyan, marginTop: 8, marginBottom: 18, textAlign: 'center', lineHeight: 24 },
-  aboutCard: { width: '100%', marginBottom: 14 },
-  aboutCardContent: { padding: 16 },
-  aboutCardTitle: { fontSize: 17, fontWeight: '700', color: dc.accentCyan, marginBottom: 10 },
-  aboutBodyText: { fontSize: 15, color: dc.textPrimary, lineHeight: 22 },
 });
