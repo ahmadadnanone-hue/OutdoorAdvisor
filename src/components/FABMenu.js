@@ -88,9 +88,10 @@ function FABItem({ action, index, open, onPress }) {
   const angleDeg = ANGLES_DEG[index];
   const rad = angleDeg * (Math.PI / 180);
 
-  // item center offset from button center (screen coords: y up = positive)
+  // item center offset from button center
+  // In screen coords y increases downward, so sin(-90°) = -1 → cy negative → item goes UP
   const cx = Math.cos(rad) * R;
-  const cy = -Math.sin(rad) * R; // flip: negative sin = upward on screen
+  const cy = Math.sin(rad) * R;
 
   useEffect(() => {
     if (open) {

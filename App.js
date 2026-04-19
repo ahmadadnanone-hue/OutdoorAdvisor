@@ -3,7 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Platform, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { SettingsProvider } from './src/context/SettingsContext';
 import { AuthProvider } from './src/context/AuthContext';
@@ -135,12 +135,14 @@ const styles = StyleSheet.create({
 
 export default function App() {
   return (
-    <AuthProvider>
-      <SettingsProvider>
-        <ThemeProvider>
-          <AppNavigator />
-        </ThemeProvider>
-      </SettingsProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <SettingsProvider>
+          <ThemeProvider>
+            <AppNavigator />
+          </ThemeProvider>
+        </SettingsProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
