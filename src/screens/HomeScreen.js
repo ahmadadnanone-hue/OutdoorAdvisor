@@ -21,9 +21,12 @@ import useAQI from '../hooks/useAQI';
 import useWeather from '../hooks/useWeather';
 import usePollen from '../hooks/usePollen';
 import { getWeatherDescription, isNight } from '../utils/weatherCodes';
-import { getAqiColor } from '../theme/colors';
 import { CITIES } from '../data/cities';
-import AQIHeroCard from '../components/AQIHeroCard';
+import { ScreenGradient } from '../components/layout';
+import { GlassCard, GlassPill } from '../components/glass';
+import { LiveConditionsCard, OutdoorDecisionCard } from '../components/cards';
+import Icon, { ICON } from '../components/Icon';
+import { colors as dc } from '../design';
 import ForecastStrip from '../components/ForecastStrip';
 import HourlyForecastStrip from '../components/HourlyForecastStrip';
 import AnimatedWeatherIcon from '../components/AnimatedWeatherIcon';
@@ -39,6 +42,16 @@ import useAiBriefing from '../hooks/useAiBriefing';
 const LIVE_REFRESH_WINDOW_MS = 5 * 60 * 1000;
 const MAX_LIVE_REFRESHES_PER_WINDOW = 2;
 const PREMIUM_HOME_SECTIONS = new Set(['pollen', 'wind', 'details', 'forecast']);
+
+function getAqiColor(aqi) {
+  if (aqi == null) return dc.textMuted;
+  if (aqi <= 50)  return dc.accentGreen;
+  if (aqi <= 100) return dc.accentYellow;
+  if (aqi <= 150) return dc.accentOrange;
+  if (aqi <= 200) return dc.accentRed;
+  if (aqi <= 300) return '#B877F5';
+  return '#FF3B30';
+}
 
 function getWindDirectionLabel(deg) {
   const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
@@ -72,7 +85,6 @@ const ACTIVITIES = [
   'gym',
   'cricket',
   'dining',
-  'schoolpe',
 ];
 
 const HOME_TRIP_ACTIONS = [
@@ -293,6 +305,50 @@ function getHomeDecision({ aqi, temp, feelsLike, weatherCode, pollenValue, windS
     bg: 'rgba(34,197,94,0.12)',
     border: 'rgba(34,197,94,0.24)',
   };
+}
+
+function getWeatherIcon(code, isNightMode) {
+  if (code == null) return isNightMode ? ICON.weatherNight : ICON.weatherPartly;
+  if (code === 0) return isNightMode ? ICON.weatherNight : ICON.weatherSunny;
+  if (code <= 3) return isNightMode ? ICON.weatherCloudy : ICON.weatherPartly;
+  if (code <= 48) return ICON.weatherCloudy;
+  if (code <= 82) return ICON.weatherRain;
+  if (code <= 86) return ICON.weatherCloudy;
+  return ICON.weatherRain;
+}
+
+function NightPartlyCloudyIcon() {
+  return (
+    <View style={styles.nightPartlyIcon}>
+      <Icon
+        name={ICON.weatherNight}
+        size={34}
+        color="rgba(155,200,255,0.95)"
+        style={styles.nightPartlyMoon}
+      />
+      <Icon
+        name={ICON.weatherCloudy}
+        size={48}
+        color={dc.accentCyan}
+        style={styles.nightPartlyCloud}
+      />
+    </View>
+  );
+}
+
+function getAqiCategory(aqi) {
+  if (aqi == null) return null;
+  if (aqi <= 50) return 'Good';
+  if (aqi <= 100) return 'Moderate';
+  if (aqi <= 150) return 'Unhealthy for Sensitive Groups';
+  if (aqi <= 200) return 'Unhealthy';
+  return 'Very Unhealthy';
+}
+
+function decisionStatus(label) {
+  if (label === 'Good to go') return 'go';
+  if (label === 'Go with care') return 'caution';
+  return 'danger';
 }
 
 export default function HomeScreen({ navigation }) {
@@ -674,17 +730,20 @@ export default function HomeScreen({ navigation }) {
   // Loading screen while location is being determined
   if (locationLoading) {
     return (
-      <SafeAreaView style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-          Detecting your location...
-        </Text>
-      </SafeAreaView>
+      <ScreenGradient>
+        <SafeAreaView style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={dc.accentCyan} />
+          <Text style={[styles.loadingText, { color: dc.textSecondary }]}>
+            Detecting your location...
+          </Text>
+        </SafeAreaView>
+      </ScreenGradient>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+    <ScreenGradient>
+    <SafeAreaView style={styles.safe}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -693,41 +752,49 @@ export default function HomeScreen({ navigation }) {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         ) : undefined}
       >
-        {/* ===== 1. Premium Header ===== */}
+        {/* ===== Header ===== */}
         <View style={styles.headerBar}>
-          <View style={styles.headerLeft}>
-            <View style={styles.locationTextGroup}>
-              <Text style={[styles.greeting, { color: colors.textSecondary }]}>
-                {getGreeting()}
-              </Text>
-              {!!greetingName && (
-                <Text style={[styles.greetingName, { color: colors.text }]}>
-                  {greetingName}
-                </Text>
-              )}
-              {isPremium && (
-                <View style={[styles.premiumHeaderBadge, { backgroundColor: colors.primary + '16' }]}>
-                  <Text style={[styles.premiumHeaderBadgeText, { color: colors.primary }]}>Premium</Text>
-                </View>
-              )}
-              <TouchableOpacity style={styles.cityRow} onPress={() => setCityPickerVisible(true)} activeOpacity={0.7}>
-                <Text style={[styles.cityText, { color: colors.text }]} numberOfLines={1}>
-                  {locationDisplay.primary}
-                </Text>
-                <Text style={[styles.cityChevron, { color: colors.textSecondary }]}>▼</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.headerIdentity}>
+            <Text style={styles.greeting}>{getGreeting()}</Text>
+            {!!greetingName && <Text style={styles.greetingName}>{greetingName}</Text>}
           </View>
-          <View style={styles.headerRight}>
-            {Platform.OS === 'web' && (
-              <TouchableOpacity
-                style={[styles.webRefreshBtn, { backgroundColor: colors.primary + '14' }]}
-                onPress={onRefresh}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.webRefreshBtnText, { color: colors.primary }]}>Refresh</Text>
-              </TouchableOpacity>
-            )}
+          <View style={styles.headerControlsRow}>
+            <View style={styles.headerPills}>
+              {isPremium && (
+                <GlassPill
+                  label="Premium"
+                  compact
+                  active
+                  hapticStyle={null}
+                  style={styles.premiumPill}
+                  contentStyle={styles.headerPillContent}
+                />
+              )}
+              {Platform.OS === 'web' && (
+                <GlassPill
+                  label="Refresh"
+                  compact
+                  onPress={onRefresh}
+                  leadingIcon={<Icon name={ICON.refresh} size={13} color={dc.accentCyan} />}
+                />
+              )}
+              <GlassPill
+                label={locationDisplay.primary}
+                compact
+                onPress={() => setCityPickerVisible(true)}
+                leadingIcon={<Icon name={ICON.locationPin} size={11} color={dc.accentCyan} />}
+                trailingIcon={<Icon name={ICON.chevronDown} size={11} color={dc.textMuted} />}
+                style={styles.locationPill}
+                contentStyle={styles.headerPillContent}
+              />
+              <GlassPill
+                leadingIcon={<Icon name={ICON.settings} size={18} color={dc.textPrimary} />}
+                onPress={() => navigation.navigate('Alerts')}
+                hapticStyle="light"
+                style={styles.settingsPill}
+                contentStyle={styles.settingsPillContent}
+              />
+            </View>
           </View>
         </View>
 
@@ -750,75 +817,45 @@ export default function HomeScreen({ navigation }) {
             case 'decision':
               return (
                 <View key="decision" style={styles.section}>
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    style={[
-                      styles.decisionCard,
-                      {
-                        backgroundColor: decision.bg,
-                        borderColor: decision.border,
-                      },
-                    ]}
+                  <OutdoorDecisionCard
+                    status={decisionStatus(decision.label)}
+                    title={decision.label}
+                    body={decision.tone}
                     onPress={() =>
                       setInsightModal({
                         title: decision.label,
                         body: `${decision.tone} ${decision.body}`,
                       })
                     }
-                  >
-                    <View style={styles.decisionHeader}>
-                      <Text style={[styles.decisionEyebrow, { color: colors.textSecondary }]}>Outdoor decision</Text>
-                      <Text style={[styles.decisionLabel, { color: decision.color }]}>{decision.label}</Text>
-                    </View>
-                    <Text style={[styles.decisionTone, { color: colors.text }]}>{decision.tone}</Text>
-                    <TouchableOpacity
-                      activeOpacity={0.75}
-                      onPress={() =>
-                        setInsightModal({
-                          title: decision.label,
-                          body: `${decision.tone} ${decision.body}`,
-                        })
-                      }
-                      style={[styles.moreInfoChip, { backgroundColor: colors.card + '66' }]}
-                    >
-                      <Text style={[styles.moreInfoChipText, { color: colors.textSecondary }]}>More info</Text>
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    style={[styles.aiBriefingCard, { backgroundColor: colors.card }, cardShadow, cardBorder]}
-                    onPress={() =>
-                      homeAiBriefing &&
-                      setInsightModal({
-                        title: 'What today means',
-                        body: `${homeAiBriefing.headline} ${homeAiBriefing.summary} ${homeAiBriefing.tip}`,
-                      })
+                  />
+                  <GlassCard
+                    style={styles.aiBriefingCard}
+                    contentStyle={styles.aiBriefingContent}
+                    onPress={
+                      homeAiBriefing && isPremium
+                        ? () =>
+                            setInsightModal({
+                              title: 'What today means',
+                              body: `${homeAiBriefing.headline} ${homeAiBriefing.summary} ${homeAiBriefing.tip}`,
+                            })
+                        : undefined
                     }
-                    disabled={!homeAiBriefing || !isPremium}
+                    hapticStyle={homeAiBriefing && isPremium ? 'light' : null}
                   >
-                    <Text style={[styles.aiBriefingEyebrow, { color: colors.primary }]}>What today means</Text>
-                    <Text style={[styles.aiBriefingTitle, { color: colors.text }]}>
+                    <Text style={styles.aiBriefingEyebrow}>What today means</Text>
+                    <Text style={styles.aiBriefingTitle}>
                       {!isPremium
-                        ? 'Premium unlock: AI daily briefings with a sharper read of today’s conditions.'
+                        ? 'Premium unlock: AI daily briefings with a sharper read of today\'s conditions.'
                         : homeAiLoading && !homeAiBriefing
-                        ? 'Writing a quick read of today’s conditions…'
-                        : homeAiBriefing?.headline || 'Today’s conditions summary will appear here.'}
+                        ? 'Writing a quick read of today\'s conditions…'
+                        : homeAiBriefing?.headline || 'Today\'s conditions summary will appear here.'}
                     </Text>
-                    <TouchableOpacity
-                      activeOpacity={0.75}
-                      onPress={() =>
-                        homeAiBriefing &&
-                        setInsightModal({
-                          title: 'What today means',
-                          body: `${homeAiBriefing.headline} ${homeAiBriefing.summary} ${homeAiBriefing.tip}`,
-                        })
-                      }
-                      style={[styles.moreInfoChip, { backgroundColor: colors.primary + '12' }]}
-                      disabled={!homeAiBriefing || !isPremium}
-                    >
-                      <Text style={[styles.moreInfoChipText, { color: colors.primary }]}>More info</Text>
-                    </TouchableOpacity>
-                  </TouchableOpacity>
+                    {homeAiBriefing && isPremium && (
+                      <View style={styles.moreInfoChip}>
+                        <Text style={[styles.moreInfoChipText, { color: dc.accentCyan }]}>More info</Text>
+                      </View>
+                    )}
+                  </GlassCard>
                 </View>
               );
             case 'travel':
@@ -867,32 +904,38 @@ export default function HomeScreen({ navigation }) {
             case 'aqi':
               return (
                 <View key="aqi" style={styles.section}>
-                  <AQIHeroCard
-                    locationTitle={locationDisplay.primary}
-                    locationSubtitle={isUsingDeviceLocation ? '' : locationDisplay.secondary}
-                    conditionLabel={weather.description}
-                    weatherCode={weatherCurrent?.weatherCode}
-                    weatherEmoji={weather.icon}
-                    tempValue={weatherCurrent?.temp}
+                  <LiveConditionsCard
+                    city={locationDisplay.primary}
+                    country={isUsingDeviceLocation ? '' : locationDisplay.secondary}
+                    condition={weather.description}
                     tempLabel={settings.formatTempShort(weatherCurrent?.temp)}
-                    feelsLikeLabel={settings.formatTemp(weatherCurrent?.feelsLike)}
-                    windSpeed={weatherCurrent?.windSpeed}
+                    feelsLikeLabel={
+                      weatherCurrent?.feelsLike != null
+                        ? `Feels like ${settings.formatTemp(weatherCurrent.feelsLike)}`
+                        : null
+                    }
+                    weatherIcon={getWeatherIcon(weatherCurrent?.weatherCode, nightMode)}
+                    weatherIconNode={
+                      nightMode && weatherCurrent?.weatherCode != null && weatherCurrent.weatherCode <= 3
+                        ? <NightPartlyCloudyIcon />
+                        : null
+                    }
                     aqi={aqi}
-                    pm25={pm25}
-                    pm10={pm10}
-                    humidity={weatherCurrent?.humidity}
-                    loading={aqiLoading || weatherLoading}
-                    isNight={nightMode}
-                    onPressAqi={() =>
+                    aqiCategory={getAqiCategory(aqi)}
+                    aqiColor={aqi != null ? getAqiColor(aqi) : dc.accentOrange}
+                    pm25Label={pm25 != null ? `PM2.5 ${pm25} μg/m³` : null}
+                    windLabel={
+                      weatherCurrent?.windSpeed != null
+                        ? settings.formatWind(weatherCurrent.windSpeed)
+                        : null
+                    }
+                    humidityLabel={
+                      weatherCurrent?.humidity != null ? `${weatherCurrent.humidity}%` : null
+                    }
+                    onPress={() =>
                       setInsightModal({
                         title: 'AQI Trend',
                         body: buildAqiHistoryInsight(aqiHistory, aqi, pm25),
-                      })
-                    }
-                    onPressTemp={() =>
-                      setInsightModal({
-                        title: 'Next 12 Hours',
-                        body: buildHourlyOutlook(hourly, settings, getWeatherDescription),
                       })
                     }
                   />
@@ -1282,6 +1325,7 @@ export default function HomeScreen({ navigation }) {
         </View>
       </Modal>
     </SafeAreaView>
+    </ScreenGradient>
   );
 }
 
@@ -1310,71 +1354,79 @@ const styles = StyleSheet.create({
 
   /* ---- Header Bar ---- */
   headerBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 16,
-    paddingVertical: 8,
+    marginBottom: 10,
     paddingTop: 12,
+    paddingBottom: 0,
   },
-  headerLeft: {
+  headerIdentity: {
+    width: '100%',
+    marginBottom: 12,
+  },
+  headerControlsRow: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  headerPills: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    flex: 1,
-    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    maxWidth: 344,
+    width: '100%',
   },
-  locationTextGroup: {
-    flexShrink: 1,
+  premiumPill: {
+    minWidth: 142,
+  },
+  locationPill: {
+    flex: 1,
+    minWidth: 0,
+  },
+  settingsPill: {
+    width: 48,
+    minWidth: 48,
+    borderRadius: 24,
+  },
+  headerPillContent: {
+    minHeight: 48,
+    paddingHorizontal: 18,
+    justifyContent: 'center',
+  },
+  settingsPillContent: {
+    minHeight: 48,
+    minWidth: 48,
+    paddingHorizontal: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   greeting: {
     fontSize: 13,
     fontWeight: '500',
     marginBottom: 2,
     letterSpacing: 0.3,
+    color: dc.textSecondary,
   },
   greetingName: {
     fontSize: 20,
     fontWeight: '800',
-    marginBottom: 8,
     letterSpacing: 0.2,
+    color: dc.textPrimary,
   },
-  premiumHeaderBadge: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginBottom: 8,
+  nightPartlyIcon: {
+    width: 60,
+    height: 56,
+    position: 'relative',
+    marginBottom: 2,
   },
-  premiumHeaderBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+  nightPartlyMoon: {
+    position: 'absolute',
+    top: 1,
+    left: 6,
   },
-  cityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  cityText: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingTop: 4,
-  },
-  webRefreshBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
-  webRefreshBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.3,
+  nightPartlyCloud: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
   },
   refreshNotice: {
     borderRadius: 14,
@@ -1423,7 +1475,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   aiBriefingCard: {
-    borderRadius: 20,
+    marginTop: 12,
+  },
+  aiBriefingContent: {
     padding: 16,
   },
   aiBriefingEyebrow: {
@@ -1432,11 +1486,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     marginBottom: 8,
+    color: dc.accentCyan,
   },
   aiBriefingTitle: {
     fontSize: 16,
     fontWeight: '700',
     lineHeight: 22,
+    color: dc.textPrimary,
   },
   moreInfoChip: {
     alignSelf: 'flex-start',

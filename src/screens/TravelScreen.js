@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import {
   View,
   Text,
+  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
@@ -9,64 +10,74 @@ import {
   UIManager,
   Platform,
   StyleSheet,
-  Linking,
 } from 'react-native';
-import { useTheme } from '../context/ThemeContext';
+import * as WebBrowser from 'expo-web-browser';
+
+function openInApp(url) {
+  WebBrowser.openBrowserAsync(url, {
+    presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+    dismissButtonStyle: 'close',
+    readerMode: false,
+  }).catch(() => WebBrowser.openBrowserAsync(url));
+}
+
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import { TRAVEL_ROUTES } from '../data/cities';
 import { fetchWeatherForLocation } from '../hooks/useWeather';
 import { fetchAqiForLocation } from '../hooks/useAQI';
 import { getWeatherDescription } from '../utils/weatherCodes';
-import typography from '../theme/typography';
 import { fetchApiJson } from '../config/api';
 import { fetchNhmpDirect } from '../utils/nhmpParser';
 import { loadStoredNotifications } from '../utils/alertPreferences';
 import { maybeSendLocalAlert } from '../utils/alertNotifications';
 import useAiBriefing from '../hooks/useAiBriefing';
 
+import { ScreenGradient } from '../components/layout';
+import { GlassCard } from '../components/glass';
+import { AdvisorySourceCard, TravelSnapshotCard } from '../components/cards';
+import Icon, { ICON } from '../components/Icon';
+import { colors as dc, typography, statusColor } from '../design';
+
 const NHMP_REFRESH_MS = 5 * 60 * 1000;
 
-if (
-  Platform.OS === 'android' &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const PMD_SEVERITY_MAP = {
-  severe: { icon: '⛈️', color: '#EF4444', bg: 'rgba(239,68,68,0.12)' },
-  rain: { icon: '🌧️', color: '#3B82F6', bg: 'rgba(59,130,246,0.12)' },
-  fog: { icon: '🌫️', color: '#F97316', bg: 'rgba(249,115,22,0.12)' },
-  cloudy: { icon: '☁️', color: '#94A3B8', bg: 'rgba(148,163,184,0.12)' },
-  clear: { icon: '☀️', color: '#22C55E', bg: 'rgba(34,197,94,0.12)' },
-  other: { icon: '🌤️', color: '#6B7280', bg: 'rgba(107,114,128,0.12)' },
+const SEVERITY_CONFIG = {
+  closed: { color: dc.accentRed,    tint: dc.dangerGlass,  stroke: dc.dangerStroke,  label: 'CLOSED'   },
+  fog:    { color: dc.accentOrange, tint: dc.warningGlass, stroke: dc.warningStroke, label: 'FOG'      },
+  rain:   { color: dc.accentBlue,   tint: dc.infoGlass,    stroke: dc.infoStroke,    label: 'RAIN'     },
+  warning:{ color: dc.accentYellow, tint: dc.warningGlass, stroke: dc.warningStroke, label: 'ADVISORY' },
+  cloudy: { color: dc.textSecondary,tint: dc.cardGlass,    stroke: dc.cardStroke,    label: 'CLOUDY'   },
+  clear:  { color: dc.accentGreen,  tint: dc.successGlass, stroke: dc.successStroke, label: 'CLEAR'    },
 };
 
-const SEVERITY_CONFIG = {
-  closed: { icon: '🚫', color: '#EF4444', bg: 'rgba(239,68,68,0.12)', label: 'CLOSED' },
-  fog: { icon: '🌫️', color: '#F97316', bg: 'rgba(249,115,22,0.12)', label: 'FOG' },
-  rain: { icon: '🌧️', color: '#3B82F6', bg: 'rgba(59,130,246,0.12)', label: 'RAIN' },
-  warning: { icon: '⚠️', color: '#EAB308', bg: 'rgba(234,179,8,0.12)', label: 'ADVISORY' },
-  cloudy: { icon: '☁️', color: '#94A3B8', bg: 'rgba(148,163,184,0.12)', label: 'CLOUDY' },
-  clear: { icon: '✅', color: '#22C55E', bg: 'rgba(34,197,94,0.12)', label: 'CLEAR' },
+const PMD_SEVERITY_MAP = {
+  severe: { color: dc.accentRed,    bg: dc.dangerGlass  },
+  rain:   { color: dc.accentBlue,   bg: dc.infoGlass    },
+  fog:    { color: dc.accentOrange, bg: dc.warningGlass },
+  cloudy: { color: dc.textSecondary,bg: dc.cardGlass    },
+  clear:  { color: dc.accentGreen,  bg: dc.successGlass },
+  other:  { color: dc.textMuted,    bg: dc.cardGlass    },
 };
 
 const ROUTE_ALERT_KEYWORDS = {
-  E35: ['hazara', 'mansehra', 'abbottabad', 'haripur', 'burhan'],
-  KKH: ['karakoram', 'gilgit', 'chilas', 'besham', 'mansehra', 'abbottabad'],
-  N15: ['naran', 'kaghan', 'balakot', 'babusar', 'mansehra'],
-  MURREE: ['murree', 'bhurban', 'patriata', 'kohala'],
-  SWAT: ['swat', 'mingora', 'kalam', 'malakand', 'mardan'],
+  E35:   ['hazara','mansehra','abbottabad','haripur','burhan'],
+  KKH:   ['karakoram','gilgit','chilas','besham','mansehra','abbottabad'],
+  N15:   ['naran','kaghan','balakot','babusar','mansehra'],
+  MURREE:['murree','bhurban','patriata','kohala'],
+  SWAT:  ['swat','mingora','kalam','malakand','mardan'],
 };
 
 const NHMP_ROUTE_ALIASES = {
-  M1: ['m1', 'peshawar-islamabad', 'peshawar to islamabad', 'islamabad to peshawar'],
-  M2: ['m2', 'islamabad-lahore', 'islamabad to lahore', 'lahore to islamabad'],
-  M3: ['m3', 'lahore-abdul hakam', 'lahore to abdul hakam', 'abdul hakam to lahore'],
-  M4: ['m4', 'abdul hakam-multan', 'abdul hakam to multan', 'multan to abdul hakam'],
-  M5: ['m5', 'multan-sukkur', 'multan to sukkur', 'sukkur to multan'],
-  M9: ['m9', 'karachi-hyderabad', 'karachi to hyderabad', 'hyderabad to karachi'],
+  M1: ['m1','peshawar-islamabad','peshawar to islamabad','islamabad to peshawar'],
+  M2: ['m2','islamabad-lahore','islamabad to lahore','lahore to islamabad'],
+  M3: ['m3','lahore-abdul hakam','lahore to abdul hakam','abdul hakam to lahore'],
+  M4: ['m4','abdul hakam-multan','abdul hakam to multan','multan to abdul hakam'],
+  M5: ['m5','multan-sukkur','multan to sukkur','sukkur to multan'],
+  M9: ['m9','karachi-hyderabad','karachi to hyderabad','hyderabad to karachi'],
 };
 
 function getTravelRiskSummary({ nhmpData, pmdAlerts }) {
@@ -79,45 +90,42 @@ function getTravelRiskSummary({ nhmpData, pmdAlerts }) {
 
   if (closures.length > 0) {
     return {
+      level: 'high',
       label: 'High travel caution',
-      tone: '#EF4444',
-      bg: 'rgba(239,68,68,0.10)',
-      border: 'rgba(239,68,68,0.22)',
-      body: `${closures.length} official closure alert${closures.length > 1 ? 's are' : ' is'} active right now. Recheck NHMP before motorway travel and expect diversions.`,
-      chips: [
-        `${closures.length} closure${closures.length > 1 ? 's' : ''}`,
-        fog.length ? `${fog.length} fog advisory${fog.length > 1 ? 'ies' : ''}` : null,
-        northernAlerts.length ? `${northernAlerts.length} PMD northern alert${northernAlerts.length > 1 ? 's' : ''}` : null,
+      body: `${closures.length} official closure alert${closures.length > 1 ? 's are' : ' is'} active right now. Recheck NHMP before motorway travel.`,
+      stats: [
+        { label: 'Closures', value: closures.length },
+        fog.length ? { label: 'Fog', value: fog.length } : null,
+        northernAlerts.length ? { label: 'PMD Alerts', value: northernAlerts.length } : null,
       ].filter(Boolean),
     };
   }
 
   if (fog.length > 0 || northernAlerts.length > 0 || warnings.length > 0) {
     return {
+      level: 'elevated',
       label: 'Go with care',
-      tone: '#F97316',
-      bg: 'rgba(249,115,22,0.10)',
-      border: 'rgba(249,115,22,0.22)',
       body: fog.length
-        ? `Fog or visibility-related advisories are active. Slow down, keep more margin, and check route-specific notes below.`
+        ? 'Fog or visibility advisories are active. Slow down and keep extra margin.'
         : northernAlerts.length
-        ? `PMD is flagging weather risk on northern corridors. Trips are still possible, but route timing matters more right now.`
-        : `There are live travel advisories worth checking before a longer drive today.`,
-      chips: [
-        fog.length ? `${fog.length} fog advisory${fog.length > 1 ? 'ies' : ''}` : null,
-        warnings.length ? `${warnings.length} active advisory${warnings.length > 1 ? 'ies' : ''}` : null,
-        northernAlerts.length ? `${northernAlerts.length} PMD corridor alert${northernAlerts.length > 1 ? 's' : ''}` : null,
+        ? 'PMD flagging weather risk on northern corridors. Route timing matters.'
+        : 'Live travel advisories worth checking before a longer drive.',
+      stats: [
+        fog.length ? { label: 'Fog', value: fog.length } : null,
+        warnings.length ? { label: 'Advisories', value: warnings.length } : null,
+        northernAlerts.length ? { label: 'PMD Alerts', value: northernAlerts.length } : null,
       ].filter(Boolean),
     };
   }
 
   return {
+    level: 'calm',
     label: 'Routes mostly clear',
-    tone: '#22C55E',
-    bg: 'rgba(34,197,94,0.10)',
-    border: 'rgba(34,197,94,0.22)',
-    body: 'No major closure or fog alert is dominating the official feeds right now. Check a specific corridor below for stop-by-stop weather and AQI before you leave.',
-    chips: ['NHMP quiet', pmdAlerts.length ? `${pmdAlerts.length} PMD weather note${pmdAlerts.length > 1 ? 's' : ''}` : 'No major PMD corridor alert'],
+    body: 'No major closure or fog alert in official feeds. Check a specific corridor below before you leave.',
+    stats: [
+      { label: 'NHMP', value: 'Quiet' },
+      { label: 'PMD Alerts', value: pmdAlerts.length },
+    ],
   };
 }
 
@@ -128,7 +136,6 @@ function findNhmpRouteMatch(route, advisories) {
     ...(NHMP_ROUTE_ALIASES[route.id] || []),
     ...route.stops.map((stop) => stop.name.toLowerCase()),
   ];
-
   return advisories.find((advisory) => {
     const haystack = `${advisory.route || ''} ${advisory.sector || ''} ${advisory.status || ''}`.toLowerCase();
     return aliases.some((alias) => haystack.includes(alias));
@@ -139,7 +146,6 @@ function findRelevantPmdAlerts(route, alerts) {
   const staticKeywords = ROUTE_ALERT_KEYWORDS[route.id] || [];
   const dynamicKeywords = route.stops.map((stop) => stop.name.toLowerCase());
   const keywords = [...new Set([...staticKeywords, ...dynamicKeywords, route.name.toLowerCase()])];
-
   return alerts.filter((alert) => {
     const text = String(alert || '').toLowerCase();
     return keywords.some((keyword) => text.includes(keyword));
@@ -148,15 +154,11 @@ function findRelevantPmdAlerts(route, alerts) {
 
 function getRouteSourceSummary(route, advisory, matchedAlerts) {
   if (route.kind === 'motorway') {
-    if (advisory) return 'Source: NHMP advisory first, then live stop weather/AQI and PMD weather context.';
-    return 'Source: live stop weather/AQI with PMD weather context. NHMP did not publish a route-specific entry in the latest feed.';
+    if (advisory) return 'NHMP advisory matched. Live stop weather/AQI and PMD context included.';
+    return 'Live stop weather/AQI with PMD context. No NHMP-specific entry in latest feed.';
   }
-
-  if (matchedAlerts.length > 0) {
-    return 'Source: live stop weather/AQI plus PMD regional alerts for this corridor.';
-  }
-
-  return 'Source: live stop weather/AQI along route stops. PMD currently has no route-specific alert in the latest feed.';
+  if (matchedAlerts.length > 0) return 'Live stop weather/AQI plus PMD regional alerts for this corridor.';
+  return 'Live stop weather/AQI along route stops. No PMD route-specific alert in latest feed.';
 }
 
 function isFog(weatherCode) { return weatherCode === 45 || weatherCode === 48; }
@@ -184,7 +186,6 @@ function getRouteRiskScore(route, advisory, matchedAlerts, stops) {
   else if (advisory?.severity === 'rain') score += 54;
   else if (advisory?.severity === 'warning') score += 46;
   else if (advisory?.severity === 'clear') score -= 18;
-
   score += Math.min(30, (matchedAlerts?.length || 0) * 10);
   score += getStopRiskScore(stops);
   if (route.kind === 'northern') score += 4;
@@ -192,38 +193,37 @@ function getRouteRiskScore(route, advisory, matchedAlerts, stops) {
 }
 
 /* ===== NHMP Advisory Card ===== */
-function NHMPAdvisory({ advisory, colors, isDark }) {
+function NHMPAdvisoryCard({ advisory }) {
   const config = SEVERITY_CONFIG[advisory.severity] || SEVERITY_CONFIG.clear;
   return (
-    <TouchableOpacity
-      activeOpacity={0.75}
-      onPress={() => Linking.openURL('https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx')}
-      style={[styles.nhmpCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}
+    <GlassCard
+      tintColor={config.tint}
+      borderColor={config.stroke}
+      contentStyle={styles.advisoryContent}
+      onPress={() => openInApp('https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx')}
+      hapticStyle="selection"
     >
-      <View style={styles.nhmpHeader}>
-        <View style={[styles.severityBadge, { backgroundColor: config.bg }]}>
-          <Text style={styles.severityIcon}>{config.icon}</Text>
-          <Text style={[styles.severityLabel, { color: config.color }]}>{config.label}</Text>
-        </View>
+      <View style={styles.advisoryBadge}>
+        <View style={[styles.severityDot, { backgroundColor: config.color }]} />
+        <Text style={[styles.severityLabel, { color: config.color }]}>{config.label}</Text>
       </View>
-      <Text style={[styles.nhmpRoute, { color: colors.text }]} numberOfLines={2}>
-        {advisory.route}
-      </Text>
+      <Text style={styles.advisoryRoute} numberOfLines={2}>{advisory.route}</Text>
       {advisory.sector ? (
-        <Text style={[styles.nhmpSector, { color: colors.textSecondary }]} numberOfLines={1}>
-          {advisory.sector}
-        </Text>
+        <Text style={styles.advisorySector} numberOfLines={1}>{advisory.sector}</Text>
       ) : null}
-      <Text style={[styles.nhmpStatus, { color: advisory.severity === 'clear' ? colors.textSecondary : config.color }]}>
+      <Text style={[styles.advisoryStatus, { color: advisory.severity === 'clear' ? dc.textSecondary : config.color }]}>
         {advisory.status}
       </Text>
-      <Text style={[styles.bannerHint, { color: colors.textSecondary }]}>Tap for official NHMP details</Text>
-    </TouchableOpacity>
+      <View style={styles.advisoryFooter}>
+        <Text style={styles.advisoryHint}>Tap for official NHMP details</Text>
+        <Icon name={ICON.external} size={12} color={dc.textMuted} />
+      </View>
+    </GlassCard>
   );
 }
 
 /* ===== Weather Stop Row ===== */
-function StopRow({ stop, colors, formatTempShort }) {
+function StopRow({ stop, formatTempShort }) {
   const { description, icon } = getWeatherDescription(stop.weatherCode);
   const hasFog = isFog(stop.weatherCode);
   const hasSmog = stop.aqi != null && stop.aqi > 150;
@@ -231,21 +231,21 @@ function StopRow({ stop, colors, formatTempShort }) {
   const isClear = !hasFog && !hasSmog && !hasRain;
 
   return (
-    <View style={[styles.stopRow, { borderBottomColor: colors.border }]}>
+    <View style={styles.stopRow}>
       <View style={styles.stopHeader}>
-        <Text style={[styles.stopName, { color: colors.text }]}>{stop.name}</Text>
-        <Text style={[styles.stopTemp, { color: colors.primary }]}>{formatTempShort(stop.temp)}</Text>
+        <Text style={styles.stopName}>{stop.name}</Text>
+        <Text style={styles.stopTemp}>{formatTempShort(stop.temp)}</Text>
       </View>
-      <Text style={[styles.stopWeather, { color: colors.textSecondary }]}>{icon} {description}</Text>
+      <Text style={styles.stopWeather}>{icon} {description}</Text>
       {stop.aqi != null && (
-        <Text style={[styles.aqiText, { color: colors.textSecondary }]}>AQI: {stop.aqi}</Text>
+        <Text style={styles.aqiText}>AQI: {stop.aqi}</Text>
       )}
       <View style={styles.badgeRow}>
-        {hasFog && <View style={[styles.badge, styles.warningBadge]}><Text style={styles.badgeText}>FOG RISK</Text></View>}
-        {hasSmog && <View style={[styles.badge, styles.warningBadge]}><Text style={styles.badgeText}>SMOG</Text></View>}
-        {hasFog && <View style={[styles.badge, styles.speedBadge]}><Text style={styles.badgeText}>Reduce to 60 km/h</Text></View>}
-        {!hasFog && hasRain && <View style={[styles.badge, styles.speedBadge]}><Text style={styles.badgeText}>Reduce to 80 km/h</Text></View>}
-        {isClear && <View style={[styles.badge, styles.clearBadge]}><Text style={styles.badgeText}>Clear</Text></View>}
+        {hasFog && <View style={[styles.badge, { backgroundColor: dc.warningGlass }]}><Text style={[styles.badgeText, { color: dc.accentOrange }]}>FOG RISK</Text></View>}
+        {hasSmog && <View style={[styles.badge, { backgroundColor: dc.dangerGlass }]}><Text style={[styles.badgeText, { color: dc.accentRed }]}>SMOG</Text></View>}
+        {hasFog && <View style={[styles.badge, { backgroundColor: dc.warningGlass }]}><Text style={[styles.badgeText, { color: dc.accentOrange }]}>Reduce to 60 km/h</Text></View>}
+        {!hasFog && hasRain && <View style={[styles.badge, { backgroundColor: dc.infoGlass }]}><Text style={[styles.badgeText, { color: dc.accentBlue }]}>Reduce to 80 km/h</Text></View>}
+        {isClear && <View style={[styles.badge, { backgroundColor: dc.successGlass }]}><Text style={[styles.badgeText, { color: dc.accentGreen }]}>Clear</Text></View>}
       </View>
     </View>
   );
@@ -253,7 +253,6 @@ function StopRow({ stop, colors, formatTempShort }) {
 
 /* ===== Main Screen ===== */
 export default function TravelScreen({ route }) {
-  const { colors, isDark } = useTheme();
   const { formatTempShort } = useSettings();
   const { isPremium } = useAuth();
   const [expandedMotorway, setExpandedMotorway] = useState(null);
@@ -263,7 +262,6 @@ export default function TravelScreen({ route }) {
   const scrollRef = useRef(null);
   const routeOffsetsRef = useRef({});
 
-  // NHMP live data
   const [nhmpData, setNhmpData] = useState([]);
   const [nhmpLoading, setNhmpLoading] = useState(true);
   const [nhmpRefreshing, setNhmpRefreshing] = useState(false);
@@ -272,7 +270,6 @@ export default function TravelScreen({ route }) {
   const [nhmpError, setNhmpError] = useState(false);
   const [nhmpAlertsExpanded, setNhmpAlertsExpanded] = useState(false);
 
-  // PMD data
   const [pmdCities, setPmdCities] = useState([]);
   const [pmdAlerts, setPmdAlerts] = useState([]);
   const [pmdLoading, setPmdLoading] = useState(true);
@@ -283,22 +280,16 @@ export default function TravelScreen({ route }) {
   const [pmdAlertsExpanded, setPmdAlertsExpanded] = useState(false);
 
   const loadNhmp = useCallback(async ({ silent = false } = {}) => {
-    if (!silent && nhmpData.length > 0) {
-      setNhmpRefreshing(true);
-    }
+    if (!silent && nhmpData.length > 0) setNhmpRefreshing(true);
     try {
       let json;
       if (Platform.OS === 'web') {
         json = await fetchApiJson('/api/nhmp');
       } else {
-        try {
-          json = await fetchNhmpDirect();
-        } catch {
-          json = await fetchApiJson('/api/nhmp');
-        }
+        try { json = await fetchNhmpDirect(); }
+        catch { json = await fetchApiJson('/api/nhmp'); }
       }
       if (nhmpCancelRef.current) return;
-
       if (json.success && Array.isArray(json.advisories) && json.advisories.length > 0) {
         setNhmpData(json.advisories);
         setNhmpTime(json.timestamp);
@@ -320,12 +311,8 @@ export default function TravelScreen({ route }) {
   useEffect(() => {
     nhmpCancelRef.current = false;
     loadNhmp();
+    const nhmpInterval = setInterval(() => loadNhmp({ silent: true }), NHMP_REFRESH_MS);
 
-    const nhmpInterval = setInterval(() => {
-      loadNhmp({ silent: true });
-    }, NHMP_REFRESH_MS);
-
-    // Fetch PMD
     (async () => {
       try {
         const json = await fetchApiJson('/api/pmd');
@@ -342,6 +329,7 @@ export default function TravelScreen({ route }) {
         if (!nhmpCancelRef.current) setPmdLoading(false);
       }
     })();
+
     return () => {
       nhmpCancelRef.current = true;
       clearInterval(nhmpInterval);
@@ -350,13 +338,10 @@ export default function TravelScreen({ route }) {
 
   useEffect(() => {
     let cancelled = false;
-
     if (!nhmpData.length && !pmdAlerts.length) return undefined;
-
     (async () => {
       const prefs = await loadStoredNotifications();
       if (cancelled) return;
-
       if (isPremium && prefs.routeClosureAlerts) {
         const closure = nhmpData.find((item) => item.severity === 'closed');
         if (closure) {
@@ -369,7 +354,6 @@ export default function TravelScreen({ route }) {
           });
         }
       }
-
       if (isPremium && prefs.fogWarnings) {
         const fogAlert = nhmpData.find((item) => item.severity === 'fog');
         if (fogAlert) {
@@ -382,7 +366,6 @@ export default function TravelScreen({ route }) {
           });
         }
       }
-
       if (isPremium && prefs.routeClosureAlerts && pmdAlerts.length > 0) {
         const northernAlert = pmdAlerts.find((alert) =>
           /(murree|naran|kaghan|swat|gilgit|hazara|karakoram|abbottabad|mansehra)/i.test(String(alert))
@@ -396,15 +379,11 @@ export default function TravelScreen({ route }) {
         }
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [isPremium, nhmpData, pmdAlerts]);
 
   const loadRouteStops = useCallback(async (routeIndex) => {
     if (stopData[routeIndex] || fetchingRef.current[routeIndex]) return;
-
     fetchingRef.current[routeIndex] = true;
     const motorway = TRAVEL_ROUTES[routeIndex];
     try {
@@ -412,9 +391,7 @@ export default function TravelScreen({ route }) {
         motorway.stops.map(async (stop) => {
           const weather = await fetchWeatherForLocation(stop.lat, stop.lon);
           let aqiData = { aqi: null };
-          try {
-            aqiData = await fetchAqiForLocation(stop.lat, stop.lon);
-          } catch {}
+          try { aqiData = await fetchAqiForLocation(stop.lat, stop.lon); } catch {}
           return {
             name: stop.name,
             temp: weather.current.temp,
@@ -433,55 +410,37 @@ export default function TravelScreen({ route }) {
     }
   }, [stopData]);
 
-  const toggleMotorway = useCallback(
-    async (index) => {
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      if (expandedMotorway === index) { setExpandedMotorway(null); return; }
-      setExpandedMotorway(index);
-      if (isPremium) {
-        loadRouteStops(index);
-      }
-    },
-    [expandedMotorway, isPremium, loadRouteStops]
-  );
+  const toggleMotorway = useCallback(async (index) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (expandedMotorway === index) { setExpandedMotorway(null); return; }
+    setExpandedMotorway(index);
+    if (isPremium) loadRouteStops(index);
+  }, [expandedMotorway, isPremium, loadRouteStops]);
 
   useEffect(() => {
     const highlightRoute = route?.params?.highlightRoute;
     const requestKey = route?.params?.requestKey;
     if (!highlightRoute || !requestKey) return;
-
     const routeIndex = TRAVEL_ROUTES.findIndex((item) => item.id === highlightRoute);
     if (routeIndex === -1) return;
-
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedMotorway(routeIndex);
-    if (isPremium) {
-      loadRouteStops(routeIndex);
-    }
+    if (isPremium) loadRouteStops(routeIndex);
     const timer = setTimeout(() => {
       const y = routeOffsetsRef.current[routeIndex];
       if (scrollRef.current && typeof y === 'number') {
-        scrollRef.current.scrollTo({
-          y: Math.max(0, y - 12),
-          animated: true,
-        });
+        scrollRef.current.scrollTo({ y: Math.max(0, y - 12), animated: true });
       }
     }, 220);
-
     return () => clearTimeout(timer);
   }, [route?.params?.highlightRoute, route?.params?.requestKey, isPremium, loadRouteStops]);
 
   const isLoading = (index) => expandedMotorway === index && !stopData[index];
 
-  // Separate active alerts from clear
   const activeAlerts = nhmpData.filter((a) => a.severity !== 'clear');
   const clearRoutes = nhmpData.filter((a) => a.severity === 'clear');
   const travelSummary = getTravelRiskSummary({ nhmpData, pmdAlerts });
-  const travelSnapshotStats = [
-    { label: 'Alerts', value: activeAlerts.length, tone: activeAlerts.length > 0 ? '#EF4444' : colors.textSecondary },
-    { label: 'Clear', value: clearRoutes.length, tone: '#22C55E' },
-    { label: 'PMD', value: pmdAlerts.length, tone: pmdAlerts.length > 0 ? '#F97316' : colors.textSecondary },
-  ];
+
   const focusRoute =
     expandedMotorway != null
       ? TRAVEL_ROUTES[expandedMotorway]
@@ -492,733 +451,634 @@ export default function TravelScreen({ route }) {
     focusRoute != null
       ? stopData[TRAVEL_ROUTES.findIndex((item) => item.id === focusRoute.id)] || []
       : [];
-  const travelAiPayload = useMemo(
-    () => ({
-      summaryLabel: travelSummary.label,
-      closureCount: activeAlerts.filter((item) => item.severity === 'closed').length,
-      fogCount: activeAlerts.filter((item) => item.severity === 'fog').length,
-      advisoryCount: activeAlerts.length,
-      clearRouteCount: clearRoutes.length,
-      pmdAlertCount: pmdAlerts.length,
-      pmdAlerts: pmdAlerts.slice(0, 3),
-      focusRoute: focusRoute
-        ? {
-            id: focusRoute.id,
-            name: focusRoute.name,
-            kind: focusRoute.kind,
-            stops: focusRouteStops.slice(0, 4).map((stop) => ({
-              name: stop.name,
-              temp: stop.temp,
-              aqi: stop.aqi,
-              windSpeed: stop.windSpeed,
-              humidity: stop.humidity,
-              weatherLabel: getWeatherDescription(stop.weatherCode).description,
-            })),
-          }
-        : null,
-    }),
-    [travelSummary.label, activeAlerts, clearRoutes.length, pmdAlerts, focusRoute, focusRouteStops]
-  );
-  const travelAiSignature = useMemo(
-    () =>
-      [
-        travelSummary.label,
-        activeAlerts.map((item) => `${item.severity}:${item.route || item.status}`).join('|'),
-        clearRoutes.length,
-        pmdAlerts.slice(0, 3).join('|'),
-        focusRoute?.id || 'all',
-        focusRouteStops.map((stop) => `${stop.name}:${stop.temp}:${stop.aqi}:${stop.weatherCode}`).join('|'),
-      ].join('||'),
-    [travelSummary.label, activeAlerts, clearRoutes.length, pmdAlerts, focusRoute?.id, focusRouteStops]
-  );
+
+  const travelAiPayload = useMemo(() => ({
+    summaryLabel: travelSummary.label,
+    closureCount: activeAlerts.filter((item) => item.severity === 'closed').length,
+    fogCount: activeAlerts.filter((item) => item.severity === 'fog').length,
+    advisoryCount: activeAlerts.length,
+    clearRouteCount: clearRoutes.length,
+    pmdAlertCount: pmdAlerts.length,
+    pmdAlerts: pmdAlerts.slice(0, 3),
+    focusRoute: focusRoute ? {
+      id: focusRoute.id, name: focusRoute.name, kind: focusRoute.kind,
+      stops: focusRouteStops.slice(0, 4).map((stop) => ({
+        name: stop.name, temp: stop.temp, aqi: stop.aqi, windSpeed: stop.windSpeed,
+        humidity: stop.humidity, weatherLabel: getWeatherDescription(stop.weatherCode).description,
+      })),
+    } : null,
+  }), [travelSummary.label, activeAlerts, clearRoutes.length, pmdAlerts, focusRoute, focusRouteStops]);
+
+  const travelAiSignature = useMemo(() => [
+    travelSummary.label,
+    activeAlerts.map((item) => `${item.severity}:${item.route || item.status}`).join('|'),
+    clearRoutes.length,
+    pmdAlerts.slice(0, 3).join('|'),
+    focusRoute?.id || 'all',
+    focusRouteStops.map((stop) => `${stop.name}:${stop.temp}:${stop.aqi}:${stop.weatherCode}`).join('|'),
+  ].join('||'), [travelSummary.label, activeAlerts, clearRoutes.length, pmdAlerts, focusRoute?.id, focusRouteStops]);
+
   const { data: travelAiBriefing, loading: travelAiLoading } = useAiBriefing({
     kind: 'travel',
     signature: travelAiSignature,
     payload: travelAiPayload,
     enabled: isPremium && (nhmpData.length > 0 || pmdAlerts.length > 0),
   });
-  const sortedRoutes = useMemo(
-    () =>
-      TRAVEL_ROUTES.map((route, sourceIndex) => {
-        const matchedAdvisory = route.kind === 'motorway' ? findNhmpRouteMatch(route, nhmpData) : null;
-        const matchedPmdAlerts = findRelevantPmdAlerts(route, pmdAlerts);
-        const stops = stopData[sourceIndex] || [];
-        return {
-          route,
-          sourceIndex,
-          matchedAdvisory,
-          matchedPmdAlerts,
-          riskScore: getRouteRiskScore(route, matchedAdvisory, matchedPmdAlerts, stops),
-        };
-      }).sort((a, b) => b.riskScore - a.riskScore || a.route.name.localeCompare(b.route.name)),
-    [nhmpData, pmdAlerts, stopData]
-  );
+
+  const sortedRoutes = useMemo(() =>
+    TRAVEL_ROUTES.map((r, sourceIndex) => {
+      const matchedAdvisory = r.kind === 'motorway' ? findNhmpRouteMatch(r, nhmpData) : null;
+      const matchedPmdAlerts = findRelevantPmdAlerts(r, pmdAlerts);
+      const stops = stopData[sourceIndex] || [];
+      return { route: r, sourceIndex, matchedAdvisory, matchedPmdAlerts,
+        riskScore: getRouteRiskScore(r, matchedAdvisory, matchedPmdAlerts, stops) };
+    }).sort((a, b) => b.riskScore - a.riskScore || a.route.name.localeCompare(b.route.name)),
+  [nhmpData, pmdAlerts, stopData]);
+
+  const nhmpStatus =
+    nhmpLoading ? 'unknown'
+    : nhmpError ? 'unknown'
+    : activeAlerts.length > 0 ? (activeAlerts.some((a) => a.severity === 'closed') ? 'danger' : 'caution')
+    : 'ok';
+
+  const pmdStatus =
+    pmdLoading ? 'unknown'
+    : pmdBlocked ? 'unknown'
+    : pmdAlerts.length > 0 ? 'caution'
+    : 'ok';
+
+  const nhmpTimestamp = nhmpTime
+    ? nhmpStale
+      ? `Last known: ${new Date(nhmpTime).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}, ${new Date(nhmpTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
+      : `Updated ${new Date(nhmpTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
+    : null;
 
   return (
-    <ScrollView
-      ref={scrollRef}
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.contentContainer}
-    >
-      {/* NHMP Live Advisories */}
-      <View style={styles.nhmpSection}>
-        <View style={styles.nhmpTitleRow}>
-          <Text style={[styles.title, { color: colors.text }]}>National Highways & Motorway Police</Text>
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              onPress={() => loadNhmp()}
-              activeOpacity={0.7}
-              disabled={nhmpRefreshing}
-            >
-              <Text style={[styles.nhmpLink, { color: colors.primary, opacity: nhmpRefreshing ? 0.6 : 1 }]}>
-                {nhmpRefreshing ? 'Refreshing…' : 'Refresh'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => Linking.openURL('https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.nhmpLink, { color: colors.primary }]}>View Full</Text>
-            </TouchableOpacity>
+    <ScreenGradient>
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.scroll}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Screen header */}
+          <View style={styles.screenHeader}>
+            <Text style={styles.screenTitle}>Road Intelligence</Text>
+            <Text style={styles.screenSubtitle}>Based on latest available advisories</Text>
           </View>
-        </View>
-        {nhmpTime && (
-          <Text style={[styles.nhmpTimestamp, { color: colors.textSecondary }]}>
-            {nhmpStale
-              ? `Last known official update: ${new Date(nhmpTime).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}, ${new Date(nhmpTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
-              : `Updated: ${new Date(nhmpTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`}
-          </Text>
-        )}
 
-        {nhmpLoading ? (
-          <View style={styles.nhmpLoadingWrap}>
-            <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading NHMP data...</Text>
+          {/* Travel snapshot */}
+          <TravelSnapshotCard
+            level={travelSummary.level}
+            title={travelSummary.label}
+            body={travelSummary.body}
+            stats={travelSummary.stats}
+          />
+
+          {/* Advisory sources row */}
+          <View style={styles.advisoryRow}>
+            <View style={styles.advisoryHalf}>
+              <AdvisorySourceCard
+                name="NHMP"
+                title={
+                  nhmpLoading ? 'Loading...'
+                  : nhmpError ? 'Unavailable'
+                  : activeAlerts.length > 0
+                    ? `${activeAlerts.length} route${activeAlerts.length > 1 ? 's' : ''} to review`
+                    : 'All clear'
+                }
+                subtitle={
+                  nhmpLoading ? null
+                  : nhmpError ? 'Check NHMP directly'
+                  : clearRoutes.length > 0 ? `${clearRoutes.length} route${clearRoutes.length > 1 ? 's' : ''} clear` : null
+                }
+                status={nhmpStatus}
+                onPress={() => openInApp('https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx')}
+              />
+            </View>
+            <View style={styles.advisoryHalf}>
+              <AdvisorySourceCard
+                name="PMD"
+                title={
+                  pmdLoading ? 'Loading...'
+                  : pmdBlocked ? 'Unavailable'
+                  : pmdAlerts.length > 0
+                    ? `${pmdAlerts.length} active alert${pmdAlerts.length > 1 ? 's' : ''}`
+                    : `${pmdCities.length} cities`
+                }
+                subtitle={
+                  pmdLoading || pmdBlocked ? null
+                  : nhmpTimestamp
+                }
+                status={pmdStatus}
+                onPress={() => openInApp('https://nwfc.pmd.gov.pk/new/3-days-forecast.php')}
+              />
+            </View>
           </View>
-        ) : nhmpError ? (
-          <View style={[styles.nhmpCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
-            <Text style={[styles.nhmpStatus, { color: colors.textSecondary }]}>
-              Could not load NHMP data. Tap "View Full" to check directly.
-            </Text>
-          </View>
-        ) : (
-          <>
-            {activeAlerts.length > 0 && (
-              <>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                    setNhmpAlertsExpanded((value) => !value);
-                  }}
-                  style={[
-                    styles.collapseToggle,
-                    {
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
-                      borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-                    },
-                  ]}
-                >
-                  <View style={styles.collapseToggleCopy}>
-                    <Text style={[styles.collapseToggleEyebrow, { color: colors.textSecondary }]}>Live advisories</Text>
-                    <Text style={[styles.collapseToggleTitle, { color: colors.text }]}>
-                      {activeAlerts.length} route{activeAlerts.length > 1 ? 's' : ''} to review first
-                    </Text>
-                  </View>
-                  <Text style={[styles.chevron, { color: colors.textSecondary }]}>
-                    {nhmpAlertsExpanded ? '▲' : '▼'}
+
+          {/* NHMP Live Advisories */}
+          <GlassCard style={styles.sectionCard} contentStyle={styles.sectionContent}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionEyebrow}>NHMP LIVE ADVISORIES</Text>
+              <View style={styles.sectionActions}>
+                <TouchableOpacity onPress={() => loadNhmp()} disabled={nhmpRefreshing} activeOpacity={0.7}>
+                  <Text style={[styles.sectionLink, nhmpRefreshing && { opacity: 0.5 }]}>
+                    {nhmpRefreshing ? 'Refreshing...' : 'Refresh'}
                   </Text>
                 </TouchableOpacity>
+                <TouchableOpacity onPress={() => openInApp('https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx')} activeOpacity={0.7}>
+                  <Text style={styles.sectionLink}>View Full</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {nhmpLoading ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator size="small" color={dc.accentCyan} />
+                <Text style={styles.loadingText}>Loading NHMP data...</Text>
+              </View>
+            ) : nhmpError ? (
+              <Text style={styles.errorText}>Could not load NHMP data. Tap "View Full" to check directly.</Text>
+            ) : (
+              <>
+                {activeAlerts.length > 0 ? (
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                      setNhmpAlertsExpanded((v) => !v);
+                    }}
+                    style={styles.collapseToggle}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.collapseEyebrow}>Live advisories</Text>
+                      <Text style={styles.collapseTitle}>
+                        {activeAlerts.length} route{activeAlerts.length > 1 ? 's' : ''} to review first
+                      </Text>
+                    </View>
+                    <Icon
+                      name={nhmpAlertsExpanded ? ICON.chevronUp : ICON.chevronDown}
+                      size={16}
+                      color={dc.textMuted}
+                    />
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.allClearRow}>
+                    <Icon name={ICON.success} size={16} color={dc.accentGreen} />
+                    <Text style={styles.allClearText}>All routes reporting clear conditions</Text>
+                  </View>
+                )}
                 {nhmpAlertsExpanded && activeAlerts.map((a, i) => (
-                  <NHMPAdvisory key={`alert-${i}`} advisory={a} colors={colors} isDark={isDark} />
+                  <NHMPAdvisoryCard key={`alert-${i}`} advisory={a} />
                 ))}
+                {clearRoutes.length > 0 && (
+                  <Text style={styles.clearCount}>{clearRoutes.length} route{clearRoutes.length > 1 ? 's' : ''} clear</Text>
+                )}
               </>
             )}
-            {activeAlerts.length === 0 && (
-              <View style={[styles.allClearBanner, { backgroundColor: 'rgba(34,197,94,0.1)' }]}>
-                <Text style={styles.allClearText}>✅ All routes reporting clear conditions</Text>
+          </GlassCard>
+
+          {/* PMD Section */}
+          <GlassCard style={styles.sectionCard} contentStyle={styles.sectionContent}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionEyebrow}>PMD OFFICIAL FORECAST</Text>
+              <TouchableOpacity onPress={() => openInApp('https://nwfc.pmd.gov.pk/new/3-days-forecast.php')} activeOpacity={0.7}>
+                <Text style={styles.sectionLink}>View Full</Text>
+              </TouchableOpacity>
+            </View>
+
+            {pmdLoading ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator size="small" color={dc.accentCyan} />
+                <Text style={styles.loadingText}>Loading PMD data...</Text>
               </View>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                  setPmdSectionExpanded((v) => !v);
+                }}
+                style={styles.collapseToggle}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.collapseEyebrow}>Official forecast</Text>
+                  <Text style={styles.collapseTitle}>
+                    {pmdBlocked
+                      ? 'Live data temporarily unavailable'
+                      : `${pmdCities.length} cities · ${pmdAlerts.length} alert${pmdAlerts.length === 1 ? '' : 's'}`}
+                  </Text>
+                </View>
+                <Icon
+                  name={pmdSectionExpanded ? ICON.chevronUp : ICON.chevronDown}
+                  size={16}
+                  color={dc.textMuted}
+                />
+              </TouchableOpacity>
             )}
-            {clearRoutes.length > 0 && (
-              <Text style={[styles.clearCount, { color: colors.textSecondary }]}>
-                {clearRoutes.length} route{clearRoutes.length > 1 ? 's' : ''} clear
-              </Text>
-            )}
-          </>
-        )}
-      </View>
 
-      {/* PMD Official Forecast */}
-      <View style={[styles.nhmpSection, { marginTop: 24 }]}>
-        <View style={styles.nhmpTitleRow}>
-          <Text style={[styles.title, { color: colors.text }]}>Pakistan Meteorological Department</Text>
-          <TouchableOpacity
-            onPress={() => Linking.openURL('https://nwfc.pmd.gov.pk/new/3-days-forecast.php')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.nhmpLink, { color: colors.primary }]}>View Full</Text>
-          </TouchableOpacity>
-        </View>
-        {pmdTime && (
-          <Text style={[styles.nhmpTimestamp, { color: colors.textSecondary }]}>
-            Updated: {new Date(pmdTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-          </Text>
-        )}
-
-        {pmdLoading ? (
-          <View style={styles.nhmpLoadingWrap}>
-            <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading PMD data...</Text>
-          </View>
-        ) : (
-          <>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => {
-                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                setPmdSectionExpanded((value) => !value);
-              }}
-              style={[
-                styles.collapseToggle,
-                {
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
-                  borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-                },
-              ]}
-            >
-              <View style={styles.collapseToggleCopy}>
-                <Text style={[styles.collapseToggleEyebrow, { color: colors.textSecondary }]}>Official forecast</Text>
-                <Text style={[styles.collapseToggleTitle, { color: colors.text }]}>
-                  {pmdBlocked
-                    ? 'PMD live data temporarily unavailable'
-                    : `${pmdCities.length} cities and ${pmdAlerts.length} active alert${pmdAlerts.length === 1 ? '' : 's'}`}
-                </Text>
-              </View>
-              <Text style={[styles.chevron, { color: colors.textSecondary }]}>
-                {pmdSectionExpanded ? '▲' : '▼'}
-              </Text>
-            </TouchableOpacity>
-
-            {pmdSectionExpanded && (
-              <>
-                {pmdBlocked ? (
-                  <View style={[styles.nhmpCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
-                    <Text style={[styles.pmdBlockedTitle, { color: colors.text }]}>
-                      Official PMD Forecasts
-                    </Text>
-                    <Text style={[styles.nhmpStatus, { color: colors.textSecondary }]}>
-                      Live data temporarily unavailable. Tap links below to view directly.
-                    </Text>
-                    <View style={styles.pmdLinksRow}>
-                      <TouchableOpacity
-                        style={[styles.pmdLinkBtn, { backgroundColor: colors.primary + '15' }]}
-                        onPress={() => Linking.openURL('https://nwfc.pmd.gov.pk/new/3-days-forecast.php')}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.pmdLinkText, { color: colors.primary }]}>3-Day Forecast</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.pmdLinkBtn, { backgroundColor: '#EF4444' + '15' }]}
-                        onPress={() => Linking.openURL('https://nwfc.pmd.gov.pk/new/daily-forecast-en.php')}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.pmdLinkText, { color: '#EF4444' }]}>Weather Alerts</Text>
-                      </TouchableOpacity>
-                    </View>
+            {pmdSectionExpanded && !pmdLoading && (
+              pmdBlocked ? (
+                <View style={styles.pmdBlockedWrap}>
+                  <Text style={styles.pmdBlockedBody}>
+                    Live data temporarily unavailable. Tap the links to view directly.
+                  </Text>
+                  <View style={styles.pmdLinksRow}>
+                    <TouchableOpacity
+                      style={[styles.pmdLinkBtn, { backgroundColor: dc.infoGlass }]}
+                      onPress={() => openInApp('https://nwfc.pmd.gov.pk/new/3-days-forecast.php')}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.pmdLinkText, { color: dc.accentBlue }]}>3-Day Forecast</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.pmdLinkBtn, { backgroundColor: dc.dangerGlass }]}
+                      onPress={() => openInApp('https://nwfc.pmd.gov.pk/new/daily-forecast-en.php')}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.pmdLinkText, { color: dc.accentRed }]}>Weather Alerts</Text>
+                    </TouchableOpacity>
                   </View>
-                ) : (
-                  <>
-                    {pmdAlerts.length > 0 && (
-                      <>
+                </View>
+              ) : (
+                <>
+                  {pmdAlerts.length > 0 && (
+                    <>
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                          setPmdAlertsExpanded((v) => !v);
+                        }}
+                        style={[styles.pmdAlertBanner]}
+                      >
+                        <Icon name={ICON.danger} size={18} color={dc.accentRed} />
+                        <View style={{ flex: 1, marginHorizontal: 10 }}>
+                          <Text style={styles.pmdAlertTitle}>Weather alerts</Text>
+                          <Text style={styles.pmdAlertSubtitle}>
+                            {pmdAlerts.length} active PMD alert{pmdAlerts.length > 1 ? 's' : ''}
+                          </Text>
+                        </View>
+                        <Icon
+                          name={pmdAlertsExpanded ? ICON.chevronUp : ICON.chevronDown}
+                          size={14}
+                          color={dc.accentRed}
+                        />
+                      </TouchableOpacity>
+                      {pmdAlertsExpanded && (
                         <TouchableOpacity
                           activeOpacity={0.8}
+                          onPress={() => openInApp('https://nwfc.pmd.gov.pk/new/daily-forecast-en.php')}
+                          style={styles.pmdAlertDetails}
+                        >
+                          {pmdAlerts.slice(0, 5).map((alert, i) => (
+                            <Text key={i} style={styles.pmdAlertItem}>{alert}</Text>
+                          ))}
+                          <Text style={styles.advisoryHint}>Tap for official PMD alert details</Text>
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  )}
+                  <View style={styles.pmdCityGrid}>
+                    {pmdCities.map((city, i) => {
+                      const isExpanded = expandedPmdCity === i;
+                      const today = city.forecast[0];
+                      const sev = PMD_SEVERITY_MAP[today?.severity] || PMD_SEVERITY_MAP.other;
+                      return (
+                        <TouchableOpacity
+                          key={city.city}
+                          style={[styles.pmdCityCard, { backgroundColor: dc.cardGlass, borderColor: dc.cardStrokeSoft }]}
                           onPress={() => {
                             LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                            setPmdAlertsExpanded((value) => !value);
+                            setExpandedPmdCity(isExpanded ? null : i);
                           }}
-                          style={[styles.pmdAlertBanner, { backgroundColor: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' }]}
+                          activeOpacity={0.7}
                         >
-                          <Text style={styles.pmdAlertIcon}>🚨</Text>
-                          <View style={styles.pmdAlertContent}>
-                            <Text style={[styles.pmdAlertTitle, { color: '#EF4444' }]}>Weather alerts</Text>
-                            <Text style={[styles.pmdAlertText, { color: isDark ? '#FCA5A5' : '#991B1B', marginBottom: 0 }]}>
-                              {pmdAlerts.length} active PMD alert{pmdAlerts.length > 1 ? 's' : ''}. Tap to {pmdAlertsExpanded ? 'hide' : 'view'} details.
-                            </Text>
-                          </View>
-                          <Text style={[styles.chevron, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>
-                            {pmdAlertsExpanded ? '▲' : '▼'}
-                          </Text>
-                        </TouchableOpacity>
-                        {pmdAlertsExpanded && (
-                          <TouchableOpacity
-                            activeOpacity={0.8}
-                            onPress={() => Linking.openURL('https://nwfc.pmd.gov.pk/new/daily-forecast-en.php')}
-                            style={[styles.pmdAlertDetails, { backgroundColor: isDark ? 'rgba(239,68,68,0.08)' : '#FFF7F7', borderColor: 'rgba(239,68,68,0.22)' }]}
-                          >
-                            {pmdAlerts.slice(0, 5).map((alert, i) => (
-                              <Text key={i} style={[styles.pmdAlertText, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>
-                                {alert}
+                          <View style={styles.pmdCityHeader}>
+                            <Text style={styles.pmdCityName}>{city.city}</Text>
+                            <View style={[styles.pmdTempBadge, { backgroundColor: sev.bg }]}>
+                              <Text style={[styles.pmdTempText, { color: sev.color }]}>
+                                {today ? `${today.minTemp}-${today.maxTemp}` : '--'}
                               </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.pmdCondition}>{today?.condition || 'N/A'}</Text>
+                          {city.humidity ? <Text style={styles.pmdHumidity}>Humidity: {city.humidity}</Text> : null}
+                          {isExpanded && city.forecast.length > 1 && (
+                            <View style={styles.pmdForecastDays}>
+                              {city.forecast.map((day, di) => {
+                                const daySev = PMD_SEVERITY_MAP[day.severity] || PMD_SEVERITY_MAP.other;
+                                return (
+                                  <View key={di} style={styles.pmdDayRow}>
+                                    <Text style={styles.pmdDayLabel}>{day.date}</Text>
+                                    <Text style={styles.pmdDayCondition}>{day.condition}</Text>
+                                    <Text style={[styles.pmdDayTemp, { color: daySev.color }]}>{day.minTemp}-{day.maxTemp}</Text>
+                                  </View>
+                                );
+                              })}
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </>
+              )
+            )}
+          </GlassCard>
+
+          {/* AI Trip Insight */}
+          <GlassCard contentStyle={styles.aiContent}>
+            <Text style={styles.aiEyebrow}>TRIP INSIGHT</Text>
+            <Text style={styles.aiTitle}>
+              {!isPremium
+                ? 'Upgrade for AI trip insight with a smarter route read before you leave.'
+                : travelAiLoading && !travelAiBriefing
+                ? 'Writing a quick route read...'
+                : travelAiBriefing?.headline || 'Live route guidance will appear here.'}
+            </Text>
+            {!!travelAiBriefing?.summary && (
+              <Text style={styles.aiBody}>{travelAiBriefing.summary}</Text>
+            )}
+            {!!travelAiBriefing?.tip && (
+              <Text style={styles.aiTip}>{travelAiBriefing.tip}</Text>
+            )}
+          </GlassCard>
+
+          {/* Route cards */}
+          <Text style={styles.routesTitle}>Weather Along Major Routes</Text>
+          <Text style={styles.routesSubtitle}>Motorways, northern highways, and mountain corridors.</Text>
+
+          {sortedRoutes.map(({ route: motorway, sourceIndex, matchedAdvisory, matchedPmdAlerts, riskScore }) => {
+            const isExpanded = expandedMotorway === sourceIndex;
+            const sourceSummary = getRouteSourceSummary(motorway, matchedAdvisory, matchedPmdAlerts);
+            const hasAlert = matchedAdvisory?.severity === 'closed' || matchedPmdAlerts.length > 0;
+            const tintColor = hasAlert ? dc.dangerGlass : dc.cardGlass;
+            const borderColor = hasAlert ? dc.dangerStroke : dc.cardStroke;
+
+            const badgeColor =
+              matchedAdvisory?.severity === 'closed' ? dc.accentRed
+              : matchedAdvisory?.severity === 'fog' ? dc.accentOrange
+              : matchedPmdAlerts.length > 0 ? dc.accentRed
+              : dc.accentCyan;
+
+            const badgeLabel =
+              matchedAdvisory
+                ? (SEVERITY_CONFIG[matchedAdvisory.severity]?.label || 'NHMP')
+                : matchedPmdAlerts.length > 0
+                ? 'PMD ALERT'
+                : 'STOP SCAN';
+
+            return (
+              <GlassCard
+                key={motorway.id}
+                tintColor={tintColor}
+                borderColor={borderColor}
+                contentStyle={styles.routeCardContent}
+                style={styles.routeCard}
+                onLayout={(event) => {
+                  routeOffsetsRef.current[sourceIndex] = event.nativeEvent.layout.y;
+                }}
+              >
+                <TouchableOpacity
+                  style={styles.routeCardHeader}
+                  onPress={() => toggleMotorway(sourceIndex)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.routeEmoji}>{motorway.emoji || ''}</Text>
+                  <View style={styles.routeTitleWrap}>
+                    <Text style={styles.routeName}>{motorway.name}</Text>
+                    <View style={styles.routeBadgeRow}>
+                      <View style={[styles.routeBadge, { backgroundColor: dc.cardGlassStrong }]}>
+                        <Text style={[styles.routeBadgeText, { color: dc.textMuted }]}>Risk {riskScore}</Text>
+                      </View>
+                      <View style={[styles.routeBadge, { backgroundColor: dc.cardGlassStrong }]}>
+                        <Text style={[styles.routeBadgeText, { color: dc.textSecondary }]}>{motorway.kind || 'route'}</Text>
+                      </View>
+                      <View style={[styles.routeBadge, { backgroundColor: `${badgeColor}22` }]}>
+                        <Text style={[styles.routeBadgeText, { color: badgeColor }]}>{badgeLabel}</Text>
+                      </View>
+                    </View>
+                    {matchedAdvisory?.status ? (
+                      <Text style={[styles.routeMeta, { color: matchedAdvisory.severity === 'clear' ? dc.textSecondary : dc.accentRed }]} numberOfLines={2}>
+                        {matchedAdvisory.status}
+                      </Text>
+                    ) : matchedPmdAlerts[0] ? (
+                      <Text style={styles.routeMeta} numberOfLines={2}>PMD: {matchedPmdAlerts[0]}</Text>
+                    ) : null}
+                  </View>
+                  <Icon
+                    name={isExpanded ? ICON.chevronUp : ICON.chevronDown}
+                    size={16}
+                    color={dc.textMuted}
+                  />
+                </TouchableOpacity>
+
+                {isExpanded && (
+                  <View style={styles.routeExpanded}>
+                    <View style={styles.routeDivider} />
+                    <Text style={styles.routeSourceText}>{sourceSummary}</Text>
+                    {!isPremium ? (
+                      <View style={styles.premiumGate}>
+                        <Icon name={ICON.premium} size={18} color={dc.accentCyan} />
+                        <View style={{ marginLeft: 10, flex: 1 }}>
+                          <Text style={styles.premiumTitle}>Premium route scan</Text>
+                          <Text style={styles.premiumBody}>
+                            Unlock stop-by-stop weather, AQI, and route-level scan details for this corridor.
+                          </Text>
+                        </View>
+                      </View>
+                    ) : (
+                      <>
+                        {matchedPmdAlerts.length > 0 && (
+                          <View style={styles.routeAlertNote}>
+                            <Text style={styles.routeAlertTitle}>PMD NOTE</Text>
+                            {matchedPmdAlerts.slice(0, 2).map((alert, alertIndex) => (
+                              <Text key={`${motorway.id}-alert-${alertIndex}`} style={styles.routeAlertBody}>{alert}</Text>
                             ))}
-                            <Text style={[styles.bannerHint, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>Tap for official PMD alert details</Text>
-                          </TouchableOpacity>
+                          </View>
+                        )}
+                        {isLoading(sourceIndex) ? (
+                          <View style={styles.loadingRow}>
+                            <ActivityIndicator size="small" color={dc.accentCyan} />
+                            <Text style={styles.loadingText}>Fetching conditions...</Text>
+                          </View>
+                        ) : stopData[sourceIndex] && stopData[sourceIndex].length > 0 ? (
+                          stopData[sourceIndex].map((stop, i) => (
+                            <StopRow key={`${motorway.id}-${i}`} stop={stop} formatTempShort={formatTempShort} />
+                          ))
+                        ) : (
+                          <Text style={styles.noDataText}>Unable to load conditions. Collapse and try again.</Text>
                         )}
                       </>
                     )}
-                    <View style={styles.pmdCityGrid}>
-                      {pmdCities.map((city, i) => {
-                        const isExpanded = expandedPmdCity === i;
-                        const today = city.forecast[0];
-                        const severityConf = PMD_SEVERITY_MAP[today?.severity] || PMD_SEVERITY_MAP.other;
-                        return (
-                          <TouchableOpacity
-                            key={city.city}
-                            style={[styles.pmdCityCard, {
-                              backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
-                              borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-                            }]}
-                            onPress={() => {
-                              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                              setExpandedPmdCity(isExpanded ? null : i);
-                            }}
-                            activeOpacity={0.7}
-                          >
-                            <View style={styles.pmdCityHeader}>
-                              <Text style={[styles.pmdCityName, { color: colors.text }]}>{city.city}</Text>
-                              <View style={[styles.pmdTempBadge, { backgroundColor: severityConf.bg }]}>
-                                <Text style={[styles.pmdTempText, { color: severityConf.color }]}>
-                                  {today ? `${today.minTemp}°-${today.maxTemp}°` : '--'}
-                                </Text>
-                              </View>
-                            </View>
-                            <Text style={[styles.pmdCondition, { color: colors.textSecondary }]}>
-                              {severityConf.icon} {today?.condition || 'N/A'}
-                            </Text>
-                            {city.humidity && (
-                              <Text style={[styles.pmdHumidity, { color: colors.textSecondary }]}>
-                                Humidity: {city.humidity}
-                              </Text>
-                            )}
-                            {isExpanded && city.forecast.length > 1 && (
-                              <View style={[styles.pmdForecastDays, { borderTopColor: colors.border }]}>
-                                {city.forecast.map((day, di) => {
-                                  const daySev = PMD_SEVERITY_MAP[day.severity] || PMD_SEVERITY_MAP.other;
-                                  return (
-                                    <View key={di} style={styles.pmdDayRow}>
-                                      <Text style={[styles.pmdDayLabel, { color: colors.textSecondary }]}>{day.date}</Text>
-                                      <Text style={[styles.pmdDayCondition, { color: colors.text }]}>{daySev.icon} {day.condition}</Text>
-                                      <Text style={[styles.pmdDayTemp, { color: daySev.color }]}>{day.minTemp}°-{day.maxTemp}°</Text>
-                                    </View>
-                                  );
-                                })}
-                              </View>
-                            )}
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </>
-                )}
-              </>
-            )}
-          </>
-        )}
-      </View>
-
-      <View
-        style={[
-          styles.travelSummaryCard,
-          {
-            backgroundColor: travelSummary.bg,
-            borderColor: travelSummary.border,
-          },
-        ]}
-      >
-        <Text style={[styles.travelSummaryEyebrow, { color: colors.textSecondary }]}>Travel snapshot</Text>
-        <Text style={[styles.travelSummaryTitle, { color: travelSummary.tone }]}>{travelSummary.label}</Text>
-        <Text style={[styles.travelSummaryBody, { color: colors.text }]}>
-          {travelSummary.body}
-        </Text>
-        <View style={styles.travelSnapshotStats}>
-          {travelSnapshotStats.map((item) => (
-            <View
-              key={item.label}
-              style={[
-                styles.travelSnapshotStat,
-                { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFFB8', borderColor: travelSummary.border },
-              ]}
-            >
-              <Text style={[styles.travelSnapshotValue, { color: item.tone }]}>{item.value}</Text>
-              <Text style={[styles.travelSnapshotLabel, { color: colors.textSecondary }]}>{item.label}</Text>
-            </View>
-          ))}
-        </View>
-        <View style={styles.travelSummaryChips}>
-          {travelSummary.chips.map((chip) => (
-            <View
-              key={chip}
-              style={[
-                styles.travelSummaryChip,
-                { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFFAA', borderColor: travelSummary.border },
-              ]}
-            >
-              <Text style={[styles.travelSummaryChipText, { color: colors.text }]}>{chip}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      <View style={[styles.aiTravelCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.aiTravelEyebrow, { color: colors.primary }]}>Trip insight</Text>
-        <Text style={[styles.aiTravelTitle, { color: colors.text }]}>
-          {!isPremium
-            ? 'Premium unlock: AI trip insight with a smarter route read before you leave.'
-            : travelAiLoading && !travelAiBriefing
-            ? 'Writing a quick route read…'
-            : travelAiBriefing?.headline || 'Live route guidance will appear here.'}
-        </Text>
-        {!!travelAiBriefing?.summary && (
-          <Text style={[styles.aiTravelBody, { color: colors.textSecondary }]}>{travelAiBriefing.summary}</Text>
-        )}
-        {!!travelAiBriefing?.tip && (
-          <Text style={[styles.aiTravelTip, { color: colors.text }]}>{travelAiBriefing.tip}</Text>
-        )}
-      </View>
-
-      {/* Weather-Based Route Conditions */}
-      <Text style={[styles.title, { color: colors.text, marginTop: 24 }]}>
-        Weather Along Major Routes
-      </Text>
-      <Text style={[styles.routeSubtitle, { color: colors.textSecondary }]}>
-        Includes motorways, northern highways, and mountain access corridors.
-      </Text>
-
-      {sortedRoutes.map(({ route: motorway, sourceIndex, matchedAdvisory, matchedPmdAlerts, riskScore }) => {
-        const isExpanded = expandedMotorway === sourceIndex;
-        const sourceSummary = getRouteSourceSummary(motorway, matchedAdvisory, matchedPmdAlerts);
-        const sourceBadge =
-          motorway.kind === 'motorway'
-            ? matchedAdvisory
-              ? matchedAdvisory.severity === 'clear'
-                ? { label: 'NHMP Match', color: '#22C55E', bg: 'rgba(34,197,94,0.14)' }
-                : { label: 'NHMP Match', color: '#EF4444', bg: 'rgba(239,68,68,0.14)' }
-              : { label: 'Stop Scan', color: colors.primary, bg: colors.primary + '15' }
-            : matchedPmdAlerts.length > 0
-            ? { label: 'PMD Alert', color: '#EF4444', bg: 'rgba(239,68,68,0.14)' }
-            : { label: 'Stop Scan', color: colors.primary, bg: colors.primary + '15' };
-
-        return (
-          <View
-            key={motorway.id}
-            style={[
-              styles.card,
-              {
-                backgroundColor: colors.card,
-                borderColor:
-                  sourceBadge.label === 'PMD Alert' || matchedAdvisory?.severity === 'closed'
-                    ? 'rgba(239,68,68,0.20)'
-                    : colors.border,
-              },
-            ]}
-            onLayout={(event) => {
-              routeOffsetsRef.current[sourceIndex] = event.nativeEvent.layout.y;
-            }}
-          >
-            <TouchableOpacity
-              style={styles.cardHeader}
-              onPress={() => toggleMotorway(sourceIndex)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.cardHeaderLeft}>
-                <Text style={styles.roadEmoji}>{motorway.emoji || '🛣️'}</Text>
-                <View style={styles.routeTitleWrap}>
-                  <Text style={[styles.motorwayName, { color: colors.text }]}>{motorway.name}</Text>
-                  <View style={styles.routeBadgeRow}>
-                    <View style={[styles.routeKindBadge, { backgroundColor: '#11182710' }]}>
-                      <Text style={[styles.routeKindText, { color: colors.textSecondary }]}>
-                        Travel Caution {riskScore}
-                      </Text>
-                    </View>
-                    <View style={[styles.routeKindBadge, { backgroundColor: colors.primary + '15' }]}>
-                      <Text style={[styles.routeKindText, { color: colors.primary }]}>
-                        {motorway.kind || 'route'}
-                      </Text>
-                    </View>
-                    <View style={[styles.routeKindBadge, { backgroundColor: sourceBadge.bg }]}>
-                      <Text style={[styles.routeKindText, { color: sourceBadge.color }]}>
-                        {sourceBadge.label}
-                      </Text>
-                    </View>
-                  </View>
-                  {matchedAdvisory?.status ? (
-                    <Text style={[styles.routeMetaText, { color: matchedAdvisory.severity === 'clear' ? colors.textSecondary : '#EF4444' }]} numberOfLines={2}>
-                      {matchedAdvisory.status}
-                    </Text>
-                  ) : matchedPmdAlerts[0] ? (
-                    <Text style={[styles.routeMetaText, { color: colors.textSecondary }]} numberOfLines={2}>
-                      PMD: {matchedPmdAlerts[0]}
-                    </Text>
-                  ) : null}
-                </View>
-              </View>
-              <Text style={[styles.chevron, { color: colors.textSecondary }]}>
-                {isExpanded ? '▲' : '▼'}
-              </Text>
-            </TouchableOpacity>
-
-            {isExpanded && (
-              <View style={styles.expandedContent}>
-                <Text style={[styles.routeSourceText, { color: colors.textSecondary }]}>
-                  {sourceSummary}
-                </Text>
-                {!isPremium ? (
-                  <View
-                    style={[
-                      styles.routePremiumGate,
-                      {
-                        backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC',
-                        borderColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.routePremiumTitle, { color: colors.text }]}>Premium route scan</Text>
-                    <Text style={[styles.routePremiumBody, { color: colors.textSecondary }]}>
-                      Unlock stop-by-stop weather, AQI, and route-level scan details for this corridor.
-                    </Text>
-                  </View>
-                ) : (
-                  <>
-                {matchedPmdAlerts.length > 0 && (
-                  <View style={[styles.routeAlertNote, { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.18)' }]}>
-                    <Text style={[styles.routeAlertTitle, { color: '#EF4444' }]}>PMD note</Text>
-                    {matchedPmdAlerts.slice(0, 2).map((alert, alertIndex) => (
-                      <Text key={`${motorway.id}-alert-${alertIndex}`} style={[styles.routeAlertBody, { color: colors.textSecondary }]}>
-                        {alert}
-                      </Text>
-                    ))}
                   </View>
                 )}
-                {isLoading(sourceIndex) ? (
-                  <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color={colors.primary} />
-                    <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Fetching conditions...</Text>
-                  </View>
-                ) : stopData[sourceIndex] && stopData[sourceIndex].length > 0 ? (
-                  stopData[sourceIndex].map((stop, i) => (
-                    <StopRow key={`${motorway.id}-${i}`} stop={stop} colors={colors} formatTempShort={formatTempShort} />
-                  ))
-                ) : (
-                  <Text style={[styles.noDataText, { color: colors.textSecondary }]}>
-                    Unable to load conditions. Collapse and try again.
-                  </Text>
-                )}
-                  </>
-                )}
-              </View>
-            )}
-          </View>
-        );
-      })}
-    </ScrollView>
+              </GlassCard>
+            );
+          })}
+
+          <Text style={styles.footer}>Conditions may change. Recheck before departure.</Text>
+        </ScrollView>
+      </SafeAreaView>
+    </ScreenGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  contentContainer: { padding: 16, paddingBottom: 32 },
-  title: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
-  subTitle: { fontSize: 14, fontWeight: '700', marginTop: 12, marginBottom: 10 },
+  safeArea: { flex: 1 },
+  scroll: { flex: 1 },
+  contentContainer: { padding: 20, paddingBottom: 40, gap: 14 },
 
-  /* NHMP Section */
-  nhmpSection: { marginBottom: 8 },
-  nhmpTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  nhmpLink: { fontSize: 12, fontWeight: '600' },
-  nhmpTimestamp: { fontSize: 11, marginBottom: 10 },
-  nhmpLoadingWrap: { flexDirection: 'row', alignItems: 'center', paddingVertical: 20, justifyContent: 'center' },
-  nhmpCard: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
+  screenHeader: { marginBottom: 4 },
+  screenTitle: {
+    fontSize: 34,
+    fontWeight: '800',
+    color: dc.textPrimary,
+    letterSpacing: -0.8,
   },
-  collapseToggle: {
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginTop: 2,
-    marginBottom: 10,
+  screenSubtitle: {
+    fontSize: 13,
+    color: dc.textMuted,
+    marginTop: 4,
+  },
+
+  advisoryRow: { flexDirection: 'row', gap: 12 },
+  advisoryHalf: { flex: 1 },
+
+  sectionCard: {},
+  sectionContent: { padding: 18 },
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  collapseToggleCopy: { flex: 1, paddingRight: 10 },
-  collapseToggleEyebrow: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 },
-  collapseToggleTitle: { fontSize: 14, fontWeight: '700', lineHeight: 19 },
-  nhmpHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  severityBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, gap: 4 },
-  severityIcon: { fontSize: 14 },
-  severityLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
-  nhmpRoute: { fontSize: 13, fontWeight: '700', marginBottom: 2 },
-  nhmpSector: { fontSize: 12, marginBottom: 4 },
-  nhmpStatus: { fontSize: 12, lineHeight: 18 },
-  bannerHint: { fontSize: 11, marginTop: 8, fontWeight: '600' },
-  allClearBanner: { borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 8 },
-  allClearText: { fontSize: 15, fontWeight: '600', color: '#22C55E' },
-  clearCount: { fontSize: 12, marginTop: 6, textAlign: 'center' },
+  sectionEyebrow: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: dc.textMuted,
+    letterSpacing: 1.8,
+  },
+  sectionActions: { flexDirection: 'row', gap: 14 },
+  sectionLink: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: dc.accentCyan,
+  },
 
-  /* PMD Section */
-  pmdBlockedTitle: { fontSize: 14, fontWeight: '700', marginBottom: 6 },
-  pmdLinksRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  pmdLinkBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, gap: 10 },
+  loadingText: { fontSize: 13, color: dc.textSecondary },
+  errorText: { fontSize: 13, color: dc.textSecondary, textAlign: 'center', paddingVertical: 12 },
+
+  collapseToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: dc.cardGlassStrong,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  collapseEyebrow: { fontSize: 10, fontWeight: '700', color: dc.textMuted, letterSpacing: 0.5, marginBottom: 3 },
+  collapseTitle: { fontSize: 14, fontWeight: '700', color: dc.textPrimary },
+
+  allClearRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
+  allClearText: { fontSize: 15, fontWeight: '600', color: dc.accentGreen },
+  clearCount: { fontSize: 12, color: dc.textMuted, marginTop: 8, textAlign: 'center' },
+
+  advisoryContent: { padding: 16 },
+  advisoryBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  severityDot: { width: 8, height: 8, borderRadius: 4 },
+  severityLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
+  advisoryRoute: { fontSize: 14, fontWeight: '700', color: dc.textPrimary, marginBottom: 2 },
+  advisorySector: { fontSize: 12, color: dc.textSecondary, marginBottom: 4 },
+  advisoryStatus: { fontSize: 12, lineHeight: 18 },
+  advisoryFooter: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 10 },
+  advisoryHint: { fontSize: 11, color: dc.textMuted, fontWeight: '600' },
+
+  pmdBlockedWrap: { marginTop: 10 },
+  pmdBlockedBody: { fontSize: 13, color: dc.textSecondary, marginBottom: 12, lineHeight: 19 },
+  pmdLinksRow: { flexDirection: 'row', gap: 10 },
+  pmdLinkBtn: { flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center' },
   pmdLinkText: { fontSize: 13, fontWeight: '700' },
-  pmdAlertBanner: { borderWidth: 1, borderRadius: 14, padding: 14, flexDirection: 'row', marginBottom: 12 },
-  pmdAlertDetails: { borderWidth: 1, borderRadius: 14, padding: 14, marginTop: -2, marginBottom: 12 },
-  pmdAlertIcon: { fontSize: 20, marginRight: 10, marginTop: 2 },
-  pmdAlertContent: { flex: 1 },
-  pmdAlertTitle: { fontSize: 13, fontWeight: '800', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
-  pmdAlertText: { fontSize: 12, lineHeight: 17, marginBottom: 4 },
-  pmdCityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 8 },
-  pmdCityCard: { borderWidth: 1, borderRadius: 14, padding: 12, width: '48%', minWidth: 150 },
+
+  pmdAlertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: dc.dangerGlass,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 10,
+  },
+  pmdAlertTitle: { fontSize: 12, fontWeight: '800', color: dc.accentRed, letterSpacing: 0.5, textTransform: 'uppercase' },
+  pmdAlertSubtitle: { fontSize: 12, color: dc.textSecondary, marginTop: 2 },
+  pmdAlertDetails: { backgroundColor: dc.dangerGlass, borderRadius: 12, padding: 12, marginTop: 4 },
+  pmdAlertItem: { fontSize: 12, color: dc.textSecondary, lineHeight: 17, marginBottom: 4 },
+
+  pmdCityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 },
+  pmdCityCard: { borderWidth: 1, borderRadius: 14, padding: 12, width: '48%', minWidth: 140 },
   pmdCityHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  pmdCityName: { fontSize: 14, fontWeight: '700', flexShrink: 1 },
-  pmdTempBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  pmdTempText: { fontSize: 12, fontWeight: '700' },
-  pmdCondition: { fontSize: 12, marginBottom: 2 },
-  pmdHumidity: { fontSize: 11 },
-  pmdForecastDays: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 8, paddingTop: 8 },
-  pmdDayRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
-  pmdDayLabel: { fontSize: 11, flex: 1 },
-  pmdDayCondition: { fontSize: 11, flex: 2, textAlign: 'center' },
+  pmdCityName: { fontSize: 13, fontWeight: '700', color: dc.textPrimary, flexShrink: 1 },
+  pmdTempBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
+  pmdTempText: { fontSize: 11, fontWeight: '700' },
+  pmdCondition: { fontSize: 12, color: dc.textSecondary, marginBottom: 2 },
+  pmdHumidity: { fontSize: 11, color: dc.textMuted },
+  pmdForecastDays: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: dc.cardStrokeSoft, marginTop: 8, paddingTop: 8 },
+  pmdDayRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 3 },
+  pmdDayLabel: { fontSize: 11, color: dc.textMuted, flex: 1 },
+  pmdDayCondition: { fontSize: 11, color: dc.textSecondary, flex: 2, textAlign: 'center' },
   pmdDayTemp: { fontSize: 12, fontWeight: '700', flex: 1, textAlign: 'right' },
 
-  /* Motorway Cards */
-  card: { borderRadius: 18, borderWidth: 1, marginBottom: 12, overflow: 'hidden' },
-  routeSubtitle: { fontSize: 13, marginBottom: 12, lineHeight: 18 },
-  travelSummaryCard: {
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 8,
-  },
-  travelSummaryEyebrow: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  travelSummaryTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 6,
-  },
-  travelSummaryBody: {
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  travelSnapshotStats: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
-  },
-  travelSnapshotStat: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  travelSnapshotValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 2,
-  },
-  travelSnapshotLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  travelSummaryChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 12,
-  },
-  travelSummaryChip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  travelSummaryChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  aiTravelCard: {
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 12,
-  },
-  aiTravelEyebrow: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  aiTravelTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    lineHeight: 24,
-    marginBottom: 8,
-  },
-  aiTravelBody: {
-    fontSize: 14,
-    lineHeight: 21,
-    marginBottom: 8,
-  },
-  aiTravelTip: {
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '600',
-  },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18 },
-  cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  roadEmoji: { fontSize: 22, marginRight: 10 },
-  routeTitleWrap: { flex: 1 },
-  motorwayName: { fontSize: typography.subtitle, fontWeight: '700', flexShrink: 1 },
-  routeBadgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
-  routeKindBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, marginTop: 6 },
-  routeKindText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  routeMetaText: { fontSize: 12, marginTop: 8, lineHeight: 18 },
-  chevron: { fontSize: 14, marginLeft: 8 },
-  expandedContent: { paddingHorizontal: 16, paddingBottom: 12 },
-  routeSourceText: { fontSize: 12, lineHeight: 18, marginBottom: 10 },
-  routeAlertNote: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
-  routeAlertTitle: { fontSize: 11, fontWeight: '800', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
-  routeAlertBody: { fontSize: 12, lineHeight: 18, marginBottom: 4 },
-  routePremiumGate: { borderWidth: 1, borderRadius: 14, padding: 14, marginTop: 2 },
-  routePremiumTitle: { fontSize: 14, fontWeight: '700', marginBottom: 6 },
-  routePremiumBody: { fontSize: 13, lineHeight: 19 },
-  loadingContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 20 },
-  loadingText: { fontSize: 13, marginLeft: 10 },
-  noDataText: { fontSize: typography.body, textAlign: 'center', paddingVertical: 16 },
+  aiContent: { padding: 20 },
+  aiEyebrow: { fontSize: 11, fontWeight: '800', color: dc.accentCyan, letterSpacing: 1.8, marginBottom: 10 },
+  aiTitle: { fontSize: 17, fontWeight: '700', color: dc.textPrimary, lineHeight: 24, marginBottom: 8 },
+  aiBody: { fontSize: 14, color: dc.textSecondary, lineHeight: 21, marginBottom: 8 },
+  aiTip: { fontSize: 13, fontWeight: '600', color: dc.textPrimary, lineHeight: 19 },
 
-  /* Stop rows */
-  stopRow: { paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  routesTitle: { fontSize: 22, fontWeight: '800', color: dc.textPrimary, letterSpacing: -0.4, marginTop: 8 },
+  routesSubtitle: { fontSize: 13, color: dc.textSecondary, marginBottom: 4, lineHeight: 18 },
+
+  routeCard: {},
+  routeCardContent: { padding: 0 },
+  routeCardHeader: { flexDirection: 'row', alignItems: 'center', padding: 18 },
+  routeEmoji: { fontSize: 22, marginRight: 12 },
+  routeTitleWrap: { flex: 1 },
+  routeName: { fontSize: 16, fontWeight: '700', color: dc.textPrimary, flexShrink: 1 },
+  routeBadgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  routeBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
+  routeBadgeText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  routeMeta: { fontSize: 12, color: dc.textSecondary, marginTop: 6, lineHeight: 18 },
+
+  routeExpanded: { paddingHorizontal: 18, paddingBottom: 16 },
+  routeDivider: { height: 1, backgroundColor: dc.cardStrokeSoft, marginBottom: 12 },
+  routeSourceText: { fontSize: 12, color: dc.textMuted, lineHeight: 18, marginBottom: 10 },
+
+  routeAlertNote: { backgroundColor: dc.dangerGlass, borderRadius: 12, padding: 12, marginBottom: 12 },
+  routeAlertTitle: { fontSize: 10, fontWeight: '800', color: dc.accentRed, letterSpacing: 1, marginBottom: 6 },
+  routeAlertBody: { fontSize: 12, color: dc.textSecondary, lineHeight: 18, marginBottom: 4 },
+
+  premiumGate: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: dc.infoGlass, borderRadius: 14, padding: 14 },
+  premiumTitle: { fontSize: 14, fontWeight: '700', color: dc.textPrimary, marginBottom: 4 },
+  premiumBody: { fontSize: 13, color: dc.textSecondary, lineHeight: 19 },
+
+  stopRow: { paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: dc.cardStrokeSoft },
   stopHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  stopName: { fontSize: typography.body, fontWeight: '600' },
-  stopTemp: { fontSize: typography.body, fontWeight: '700' },
-  stopWeather: { fontSize: typography.caption + 2, marginBottom: 4 },
-  aqiText: { fontSize: typography.caption, marginBottom: 6 },
+  stopName: { fontSize: 14, fontWeight: '700', color: dc.textPrimary },
+  stopTemp: { fontSize: 14, fontWeight: '700', color: dc.accentCyan },
+  stopWeather: { fontSize: 13, color: dc.textSecondary, marginBottom: 4 },
+  aqiText: { fontSize: 12, color: dc.textMuted, marginBottom: 6 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  warningBadge: { backgroundColor: '#F97316' },
-  speedBadge: { backgroundColor: '#EAB308' },
-  clearBadge: { backgroundColor: '#22C55E' },
-  badgeText: { color: '#FFFFFF', fontSize: typography.caption, fontWeight: '600' },
+  badgeText: { fontSize: 11, fontWeight: '700' },
+
+  noDataText: { fontSize: 13, color: dc.textMuted, textAlign: 'center', paddingVertical: 16 },
+
+  footer: {
+    fontSize: 11,
+    color: dc.textMuted,
+    textAlign: 'center',
+    marginTop: 8,
+    letterSpacing: 0.3,
+  },
 });

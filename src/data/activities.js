@@ -113,21 +113,6 @@ export const ACTIVITY_CATALOG = [
     indoorAlt: 'Dine indoors at restaurants with good ventilation. Host meals at home with air purifiers running. Try a picnic-style indoor dinner setup.',
   },
   {
-    id: 'schoolpe',
-    name: 'School PE',
-    emoji: '\u{1F3EB}',
-    timeWindows: [{ startHour: 7, endHour: 15 }],
-    placesQuery: 'school',
-    healthImpact:
-      "Children's lungs are still developing, making them especially vulnerable to air pollution during physical education classes. Vigorous outdoor exercise at school forces children to breathe in large amounts of polluted air, which can worsen asthma, reduce lung growth, and impair concentration for the rest of the school day.",
-    tips: [
-      'Schools should monitor AQI and move PE indoors on bad air days.',
-      'Reduce intensity of outdoor activities when AQI exceeds 100.',
-      'Ensure children with asthma have inhalers readily accessible.',
-    ],
-    indoorAlt: 'Conduct PE in the school gymnasium or multipurpose hall. Indoor activities like dance, yoga, stretching, and light calisthenics are excellent substitutes.',
-  },
-  {
     id: 'biking',
     name: 'Biking',
     emoji: '\u{1F6B2}',
@@ -418,7 +403,7 @@ export const ACTIVITY_CATALOG = [
 // IDs enabled by default (the original 10 activities)
 export const DEFAULT_ENABLED_ACTIVITY_IDS = [
   'running', 'cricket', 'cycling', 'walking', 'swimming',
-  'gardening', 'dining', 'schoolpe', 'biking', 'tennis', 'gym',
+  'gardening', 'dining', 'biking', 'tennis', 'gym',
 ];
 
 export function getActivityById(id) {

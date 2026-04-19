@@ -29,13 +29,14 @@ export default function CacheIndicator({ visible, updatedAt }) {
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    marginBottom: 8,
+    marginTop: 2,
+    marginBottom: 10,
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 5,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
     borderRadius: 20,
     gap: 6,
   },

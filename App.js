@@ -2,7 +2,8 @@ import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text, View, StyleSheet, Platform } from 'react-native';
+import { View, Platform, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { SettingsProvider } from './src/context/SettingsContext';
 import { AuthProvider } from './src/context/AuthContext';
@@ -33,33 +34,50 @@ const fonts = Platform.select({
 
 import HomeScreen from './src/screens/HomeScreen';
 import TravelScreen from './src/screens/TravelScreen';
-import RoutePlannerScreen from './src/screens/RoutePlannerScreen';
 import ActivitiesScreen from './src/screens/ActivitiesScreen';
 import AlertsScreen from './src/screens/AlertsScreen';
+import { GlassTabBar } from './src/components/glass';
+import Icon, { ICON } from './src/components/Icon';
+import { colors as dc } from './src/design';
 
 const Tab = createBottomTabNavigator();
 
-const TAB_ICONS = {
-  Home: { icon: '🏠', label: 'Home' },
-  Travel: { icon: '🛣️', label: 'Travel' },
-  Planner: { icon: '🧭', label: 'Planner' },
-  Activities: { icon: '🏃', label: 'Activities' },
-  Settings: { icon: '⚙️', label: 'Settings' },
-};
+const TABS = [
+  { key: 'Home',       label: 'Home',       icon: ICON.home },
+  { key: 'Travel',     label: 'Travel',     icon: ICON.travel },
+  { key: 'Activities', label: 'Outdoors',   icon: ICON.activities },
+  { key: 'Settings',   label: 'Settings',   icon: ICON.settings },
+];
 
-function TabIcon({ name, focused, color }) {
-  const config = TAB_ICONS[name];
+function GlassNavBar({ state, navigation }) {
+  const insets = useSafeAreaInsets();
+  const activeKey = state.routes[state.index].name;
+
+  const items = TABS.map(({ key, label, icon }) => ({
+    key,
+    label,
+    icon: (
+      <Icon
+        name={icon}
+        size={20}
+        color={key === activeKey ? dc.accentCyan : dc.textSecondary}
+      />
+    ),
+  }));
+
   return (
-    <View style={styles.tabIconContainer}>
-      <Text style={[styles.tabEmoji, focused && styles.tabEmojiActive]}>{config.icon}</Text>
-      <Text
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.85}
-        style={[styles.tabLabel, { color }, focused && styles.tabLabelActive]}
-      >
-        {config.label}
-      </Text>
+    <View
+      pointerEvents="box-none"
+      style={[
+        styles.tabBarShell,
+        { paddingBottom: Math.max(insets.bottom - 2, 6) },
+      ]}
+    >
+      <GlassTabBar
+        items={items}
+        activeKey={activeKey}
+        onChange={(key) => navigation.navigate(key)}
+      />
     </View>
   );
 }
@@ -67,63 +85,49 @@ function TabIcon({ name, focused, color }) {
 function AppNavigator() {
   const { isDark, colors } = useTheme();
 
-  const tabBarShadow = !isDark
-    ? {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        elevation: 8,
-      }
-    : {};
-
   return (
     <>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <StatusBar style="light" />
       <NavigationContainer
         theme={{
           dark: isDark,
           colors: {
             primary: colors.primary,
-            background: colors.background,
-            card: colors.card,
+            background: 'transparent',
+            card: 'transparent',
             text: colors.text,
-            border: colors.border,
+            border: 'transparent',
             notification: colors.primary,
           },
           fonts,
         }}
       >
         <Tab.Navigator
-          screenOptions={({ route }) => ({
+          screenOptions={{
             headerShown: false,
-            tabBarIcon: ({ focused, color }) => (
-              <TabIcon name={route.name} focused={focused} color={color} />
-            ),
-            tabBarShowLabel: false,
-            tabBarActiveTintColor: colors.primary,
-            tabBarInactiveTintColor: colors.textSecondary,
-            tabBarStyle: {
-              backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#FFFFFF',
-              borderTopColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-              borderTopWidth: 1,
-              height: Platform.OS === 'ios' ? 78 : 68,
-              paddingBottom: Platform.OS === 'ios' ? 18 : 8,
-              paddingTop: 8,
-              ...tabBarShadow,
-            },
-          })}
+            sceneStyle: { backgroundColor: 'transparent' },
+          }}
+          tabBar={(props) => <GlassNavBar {...props} />}
         >
-          <Tab.Screen name="Home" component={HomeScreen} />
-          <Tab.Screen name="Travel" component={TravelScreen} />
-          <Tab.Screen name="Planner" component={RoutePlannerScreen} />
+          <Tab.Screen name="Home"       component={HomeScreen} />
+          <Tab.Screen name="Travel"     component={TravelScreen} />
           <Tab.Screen name="Activities" component={ActivitiesScreen} />
-          <Tab.Screen name="Settings" component={AlertsScreen} />
+          <Tab.Screen name="Settings"   component={AlertsScreen} />
         </Tab.Navigator>
       </NavigationContainer>
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBarShell: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+  },
+});
 
 export default function App() {
   return (
@@ -136,29 +140,3 @@ export default function App() {
     </AuthProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  tabIconContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    paddingHorizontal: 2,
-  },
-  tabEmoji: {
-    fontSize: 24,
-  },
-  tabEmojiActive: {
-    fontSize: 26,
-  },
-  tabLabel: {
-    fontSize: 10.5,
-    fontWeight: '500',
-    marginTop: 2,
-    letterSpacing: 0.1,
-    textAlign: 'center',
-    includeFontPadding: false,
-  },
-  tabLabelActive: {
-    fontWeight: '600',
-  },
-});

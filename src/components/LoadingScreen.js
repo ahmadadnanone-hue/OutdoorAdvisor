@@ -1,15 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { useTheme } from '../context/ThemeContext';
-import typography from '../theme/typography';
+import { colors as dc } from '../design';
 
 export default function LoadingScreen() {
-  const { colors } = useTheme();
-
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ActivityIndicator size="large" color={colors.primary} />
-      <Text style={[styles.text, { color: colors.textSecondary }]}>Loading...</Text>
+    <View style={styles.container}>
+      <ActivityIndicator size="large" color={dc.accentCyan} />
+      <Text style={styles.text}>Loading…</Text>
     </View>
   );
 }
@@ -19,9 +16,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: dc.bgTop,
   },
   text: {
-    fontSize: typography.body,
+    fontSize: 17,
+    color: dc.textSecondary,
     marginTop: 16,
   },
 });

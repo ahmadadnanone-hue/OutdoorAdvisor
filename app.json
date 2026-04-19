@@ -48,7 +48,8 @@
         {
           "locationWhenInUsePermission": "OutdoorAdvisor needs your location to show air quality and weather for your area."
         }
-      ]
+      ],
+      "expo-web-browser"
     ]
   }
 }

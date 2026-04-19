@@ -69,9 +69,8 @@ export async function reverseGeocode(lat, lon) {
       if (area && cityName) break;
     }
 
-    if (area && cityName && area !== cityName) return `${area}, ${cityName}`;
-    if (area) return area;
     if (cityName) return cityName;
+    if (area) return area;
     // Fallback to the first formatted address's short form
     return json.results[0].formatted_address?.split(',').slice(0, 2).join(',').trim() || null;
   } catch (e) {

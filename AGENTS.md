@@ -108,6 +108,22 @@ It is not meant to feel like a generic weather app.
 - avoid redundant location labels
 - premium UI should feel subtle, not noisy
 
+## UI Overhaul Status
+
+- Canonical UI plan lives in `UI_OVERHAUL_BLUEPRINT.md`
+- Current audited status of the overhaul:
+  - phases 0–5 complete
+  - phase 6 partial
+  - phase 7 partial
+  - phase 8 complete
+- Do not assume the blueprint checklist is current unless you also read its Progress Log and latest audit notes
+- The design-system foundation now exists in:
+  - `src/design/`
+  - `src/components/glass/`
+  - `src/components/cards/`
+  - `src/components/layout/`
+- Important current gap: `RouteOptionCard` exists, but `RoutePlannerScreen` still uses the older route-results rendering path
+
 ## Workflow Notes
 
 - use `apply_patch` for manual file edits
@@ -138,6 +154,20 @@ It is not meant to feel like a generic weather app.
 - update it when a new major route, AI behavior, or notification rule is added
 
 ## Recent Changes
+- 2026-04-18 — Removed the circular ring/orb wallpaper treatment from `ScreenGradient` and made `GlassTabBar` denser/less transparent for a cleaner iPhone-first look.
+
+### 2026-04-18 — Tide Guide-inspired atmosphere + tap feedback polish
+- Lightened the design gradient in `src/design/colors.js` from the earlier heavier navy into a softer slate/blue Tide Guide-inspired backdrop
+- `src/components/layout/ScreenGradient.js` now defaults to showing background graphics with dark circular rings/orbs and softer atmospheric blobs
+- Strengthened outlined glass styling and pressed/highlight feedback in `src/components/glass/GlassCard.js`, `src/components/glass/GlassButton.js`, `src/components/glass/GlassPill.js`, and `src/components/glass/GlassTabBar.js`
+- Haptic defaults are now more consistently applied across shared glass controls so taps feel more intentional on iPhone
+- Verified with `npx expo export -p web`, deployed to production on Vercel, and rebuilt/launched the iOS simulator app
+
+### 2026-04-18 — Blueprint and agent docs synced to actual overhaul state
+- Audited the repo against `UI_OVERHAUL_BLUEPRINT.md` after Claude handoff review
+- Confirmed phases 0–5 are implemented in code, phase 6 is partial, phase 7 is partial, and phase 8 is implemented
+- Updated `UI_OVERHAUL_BLUEPRINT.md` phase checklist and progress log to match reality instead of the older planned state
+- Added a dedicated `UI Overhaul Status` section here so future agents do not confuse the design-system branch progress with the older app notes
 
 ### 2026-04-17 — Motorbike alternates (N-5), scooter toggle, signed-in card fix
 - `src/data/cities.js`: added **N-5 GT Road** (`id: 'N5'`, `kind: 'highway'`) — Peshawar → Nowshera → Attock → Rawalpindi → Islamabad → Jhelum → Kharian → Gujrat → Gujranwala → Lahore. Gives motorbike/scooter users a legal corridor across the M-1/M-2 axis. Adds Rawalpindi, Jhelum, Gujrat as new planner cities via the auto-merge in `getPlannerCityOptions`
@@ -147,7 +177,7 @@ It is not meant to feel like a generic weather app.
 - `src/screens/RoutePlannerScreen.js`: reads `showScooterVehicle` from settings and passes through to `VehicleToggle`. Rephrased the **"Best route right now"** card when `bestPlan.motorwayBlocked` — eyebrow becomes "No legal match on the mapped network" and body suggests "Consider GT Road (N-5) or local city streets instead". Non-blocked case unchanged
 - With N-5 added, Lahore → Islamabad on Motorbike now ranks **N-5 as the best route** (kind: highway, no motorway penalty) with M-2 appearing below at red "Not allowed" — instead of only red cards
 - Verified with `npx expo export -p web` — bundles cleanly
-- **Deferred to next turn**: true Liquid Glass polish (needs `expo-blur` install + native rebuild — it's not in Expo 55's default bundle). EV charging / POI overlays (need a `/api/poi/chargers` endpoint; filter brand=="BMW destination" server-side)
+- **Deferred to next turn**: EV charging / POI overlays (need a `/api/poi/chargers` endpoint; filter brand=="BMW destination" server-side)
 
 ### 2026-04-17 — Route planner: explicit Plan-route button + motorbike restriction
 - `src/screens/RoutePlannerScreen.js`: added `hasSearched` state + a primary "Plan route" button. Auto-fetch of NHMP/PMD/AQI now only fires after the user taps the button; changing From/To/Vehicle invalidates the prior search. New copy ("Ready when you are…") replaces results area until first tap. Button disables to "Pick two different cities" when From === To
