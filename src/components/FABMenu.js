@@ -29,6 +29,7 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { colors as dc } from '../design';
+import Icon from './Icon';
 
 // ─── Layout constants ────────────────────────────────────────────────────────
 const BTN   = 60;   // main FAB diameter
@@ -42,40 +43,35 @@ const ANGLES_DEG = [-180, -157.5, -135, -112.5, -90];
 const ACTIONS = [
   {
     id: 'refresh',
-    icon: '↺',
-    label: 'Refresh',
+    icon: 'refresh-outline',
     bg: 'rgba(143,240,183,0.22)',
     stroke: 'rgba(143,240,183,0.40)',
     fg: dc.accentGreen,
   },
   {
     id: 'location',
-    icon: '📍',
-    label: 'Location',
+    icon: 'location-outline',
     bg: 'rgba(155,200,255,0.22)',
     stroke: 'rgba(155,200,255,0.40)',
     fg: dc.accentCyan,
   },
   {
     id: 'share',
-    icon: '↑',
-    label: 'Share',
+    icon: 'share-outline',
     bg: 'rgba(127,178,255,0.22)',
     stroke: 'rgba(127,178,255,0.40)',
     fg: dc.accentBlue,
   },
   {
     id: 'travel',
-    icon: '🛣️',
-    label: 'Travel',
+    icon: 'navigate-outline',
     bg: 'rgba(255,175,102,0.22)',
     stroke: 'rgba(255,175,102,0.40)',
     fg: dc.accentOrange,
   },
   {
     id: 'alerts',
-    icon: '🔔',
-    label: 'Alerts',
+    icon: 'notifications-outline',
     bg: 'rgba(255,216,116,0.22)',
     stroke: 'rgba(255,216,116,0.40)',
     fg: dc.accentYellow,
@@ -124,7 +120,7 @@ function FABItem({ action, index, open, onPress }) {
         hitSlop={10}
       >
         <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} />
-        <Text style={[styles.itemIcon, { color: action.fg }]}>{action.icon}</Text>
+        <Icon name={action.icon} size={20} color={action.fg} />
       </Pressable>
     </Animated.View>
   );
@@ -276,11 +272,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.32,
     shadowRadius: 10,
   },
-  itemIcon: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-
   // ── Main button ──────────────────────────────────────────────────────────
   mainBtn: {
     position: 'absolute',
