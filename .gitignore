@@ -50,3 +50,7 @@ yarn-error.*
 /android
 
 .vercel
+
+# WeatherKit credentials — never commit
+src/config/weatherkit.js
+*.p8
