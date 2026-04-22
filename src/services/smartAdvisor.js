@@ -8,10 +8,77 @@ import { sendSmartNotification } from './notificationService';
 import { getNotificationDeliveryState } from './notificationService';
 
 const SMART_STATE_KEY = 'outdooradvisor_smart_advisor_state_v1';
-const WALK_NUDGE_COOLDOWN_MS = 4 * 60 * 60 * 1000;
+const WALK_NUDGE_COOLDOWN_MS    = 4 * 60 * 60 * 1000;
 const MORNING_SUMMARY_HOUR_START = 6;
-const MORNING_SUMMARY_HOUR_END = 10;
-const DAILY_STEP_GOAL = 5000;
+const MORNING_SUMMARY_HOUR_END   = 10;
+const DAILY_STEP_GOAL            = 5000;
+const CAP_ALERT_COOLDOWN_MS      = 6 * 60 * 60 * 1000; // only once per alert title per 6h
+
+// ─── CAP alert push trigger ───────────────────────────────────────────────────
+
+async function fetchActiveCapAlerts() {
+  try {
+    const r = await Promise.race([
+      fetch('https://cap-sources.s3.amazonaws.com/pk-pmd-en/rss.xml'),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000)),
+    ]);
+    if (!r.ok) return [];
+    const xml = await r.text();
+    const items = [];
+    const re = /<item>([\s\S]*?)<\/item>/gi;
+    let m;
+    while ((m = re.exec(xml)) !== null) {
+      const block = m[1];
+      const titleMatch = block.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i);
+      const pubMatch   = block.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i);
+      const title = titleMatch?.[1]?.trim();
+      const pub   = pubMatch?.[1]?.trim();
+      if (!title) continue;
+      const tl  = title.toLowerCase();
+      const sev = /extreme|flash flood|cyclone/i.test(tl) ? 'Extreme'
+        : /severe|warning|heavy rain|thunder/i.test(tl) ? 'Severe'
+        : null; // only care about Extreme + Severe for immediate push
+      if (!sev) continue;
+      const age = pub ? Date.now() - new Date(pub).getTime() : Infinity;
+      if (age < 24 * 3_600_000) items.push({ title, severity: sev, pubDate: pub });
+    }
+    return items;
+  } catch {
+    return [];
+  }
+}
+
+async function maybeSendCapAlert({ state, prefs }) {
+  if (!prefs.severeAqiWarnings) return false; // reuse "severe warnings" pref as the gate
+  const alerts = await fetchActiveCapAlerts();
+  if (!alerts.length) return false;
+
+  const sentTitles = state.sentCapAlerts || {};
+  const now = Date.now();
+
+  for (const alert of alerts) {
+    const key       = alert.title.slice(0, 60); // stable short key
+    const lastSent  = sentTitles[key] || 0;
+    if (now - lastSent < CAP_ALERT_COOLDOWN_MS) continue;
+
+    const title = alert.severity === 'Extreme'
+      ? `PMD Extreme Alert`
+      : `PMD Weather Warning`;
+    const body = alert.title.length > 100 ? alert.title.slice(0, 97) + '…' : alert.title;
+
+    const sent = await sendSmartNotification(title, body, {
+      category: 'Alert',
+      tag: `cap-${key.replace(/\s+/g, '-').slice(0, 40)}`,
+      promptForPermission: false,
+    });
+
+    if (sent) {
+      sentTitles[key] = now;
+      return { sentTitles };
+    }
+  }
+  return false;
+}
 
 function dateKey(date = new Date()) {
   return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
@@ -232,6 +299,12 @@ export async function runSmartAdvisorCheck({ reason = 'manual', promptForHealth 
     now,
     promptForPermission: reason !== 'background',
   });
+
+  // Tier 3: fire push immediately for Extreme/Severe CAP alerts
+  const capResult = await maybeSendCapAlert({ state, prefs });
+  if (capResult?.sentTitles) {
+    await saveSmartState({ ...state, sentCapAlerts: capResult.sentTitles });
+  }
 
   const smartWalkEnabled = prefs.smartWalkNudges !== false;
   if (!smartWalkEnabled) {

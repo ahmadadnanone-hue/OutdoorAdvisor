@@ -13,6 +13,7 @@ import useWeather from '../hooks/useWeather';
 import usePollen from '../hooks/usePollen';
 import useAiBriefing from '../hooks/useAiBriefing';
 import useAlerts from '../hooks/useAlerts';
+import useSynthesis from '../hooks/useSynthesis';
 import { getWeatherDescription, isNight } from '../utils/weatherCodes';
 import { maybeSendLocalAlert } from '../utils/alertNotifications';
 import { loadStoredNotifications, loadStoredThresholds } from '../utils/alertPreferences';
@@ -29,6 +30,7 @@ import { getSmartAdvisorSnapshot } from '../services/smartAdvisor';
 // Home sub-components
 import HomeHeader from '../components/home/HomeHeader';
 import DecisionSection from '../components/home/DecisionSection';
+import SynthesisCard from '../components/home/SynthesisCard';
 import AqiSection from '../components/home/AqiSection';
 import WindSection from '../components/home/WindSection';
 import DetailsSection from '../components/home/DetailsSection';
@@ -107,6 +109,15 @@ export default function HomeScreen({ navigation }) {
   const homeAiSignature = useMemo(() => [locationDisplay.primary, decision.label, aqi ?? 'na', pm25 ?? 'na', weatherCurrent?.temp ?? 'na', feelsLikeTemp ?? 'na', weatherCurrent?.humidity ?? 'na', weatherCurrent?.windSpeed ?? 'na', weatherCurrent?.weatherCode ?? 'na', pollenValue ?? 'na', peakRainChance].join('|'), [locationDisplay.primary, decision.label, aqi, pm25, weatherCurrent?.temp, feelsLikeTemp, weatherCurrent?.humidity, weatherCurrent?.windSpeed, weatherCurrent?.weatherCode, pollenValue, peakRainChance]);
   const { alerts } = useAlerts();
   const { data: homeAiBriefing, loading: homeAiLoading } = useAiBriefing({ kind: 'home', signature: homeAiSignature, payload: homeAiPayload, enabled: isPremium && (aqi != null || weatherCurrent?.weatherCode != null || weatherCurrent?.temp != null || pollenValue != null) });
+
+  // ── Unified synthesis (all sources → one brief) ───────────────────────────
+  const { synthesis, loading: synthesisLoading, fetchedAt: synthesisFetchedAt, refresh: refreshSynthesis } = useSynthesis({
+    lat:          location.lat,
+    lon:          location.lon,
+    locationName: locationDisplay.primary,
+    pollenLabel:  pollenCategory !== '--' ? pollenCategory : null,
+    enabled:      location.lat != null && location.lon != null,
+  });
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [refreshing, setRefreshing]           = useState(false);
@@ -252,6 +263,15 @@ export default function HomeScreen({ navigation }) {
 
           <CacheIndicator visible={aqiCached || weatherCached} updatedAt={lastUpdated !== '--' ? lastUpdated : null} />
           {!!refreshNote && <Text style={styles.refreshNote}>{refreshNote}</Text>}
+
+          {/* ── Unified outdoor brief (all sources) ── */}
+          <SynthesisCard
+            synthesis={synthesis}
+            loading={synthesisLoading}
+            fetchedAt={synthesisFetchedAt}
+            isPremium={isPremium}
+            onRefresh={() => refreshSynthesis(true)}
+          />
 
           <AlertBanner alerts={alerts} />
 
