@@ -217,6 +217,15 @@ async function fetchGoogleAqi(lat, lon, apiKey) {
   return { aqi: idx?.aqi ?? null, pm25: pm25?.concentration?.value ?? null };
 }
 
+function extractXmlTag(block, tag) {
+  const m = block.match(new RegExp(`<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`, 'i'));
+  return m?.[1]?.trim() || null;
+}
+
+function cleanCdata(text) {
+  return (text || '').replace(/<!\[CDATA\[|\]\]>/g, '').trim();
+}
+
 async function fetchCapSummary() {
   const r = await withTimeout(fetch('https://cap-sources.s3.amazonaws.com/pk-pmd-en/rss.xml'), 8000);
   if (!r.ok) return [];
@@ -225,15 +234,16 @@ async function fetchCapSummary() {
   const re = /<item>([\s\S]*?)<\/item>/gi;
   let m;
   while ((m = re.exec(xml)) !== null) {
-    const t = extractTag(m[1], 'title');
-    const pub = extractTag(m[1], 'pubDate');
+    const t = extractXmlTag(m[1], 'title');
+    const pub = extractXmlTag(m[1], 'pubDate');
     if (!t) continue;
-    const tl = t.toLowerCase();
+    const title = cleanCdata(t);
+    const tl = title.toLowerCase();
     const sev = /extreme|flash flood|cyclone/i.test(tl) ? 'Extreme'
       : /severe|warning|heavy rain|thunder/i.test(tl) ? 'Severe'
       : /moderate|advisory/i.test(tl) ? 'Moderate' : 'Minor';
     const age = pub ? Date.now() - new Date(pub).getTime() : Infinity;
-    if (age < 48 * 3_600_000) items.push({ title: cleanText(t), severity: sev });
+    if (age < 48 * 3_600_000) items.push({ title, severity: sev });
   }
   return items.slice(0, 5);
 }
@@ -373,7 +383,7 @@ function synthesisFallback(signals, locationName, pollenLabel) {
 // ─── Synthesis: Gemini call (extended schema) ──────────────────────────────────
 
 async function callGeminiSynthesis(model, apiKey, prompt) {
-  const response = await fetch(
+  const response = await withTimeout(fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
     {
       method: 'POST',
@@ -383,18 +393,17 @@ async function callGeminiSynthesis(model, apiKey, prompt) {
         generationConfig: {
           temperature: 0.4,
           topP: 0.85,
-          maxOutputTokens: 300,
-          responseMimeType: 'application/json',
+          maxOutputTokens: 400,
         },
       }),
     }
-  );
+  ), 12000);
   const json = await response.json();
   if (!response.ok) throw new Error(json?.error?.message || `Gemini error (${response.status})`);
   const text = extractTextFromResponse(json);
   const parsed = tryParseJson(text);
   if (!parsed?.headline || !parsed?.summary || !parsed?.severity) {
-    throw new Error('Invalid synthesis response from Gemini.');
+    throw new Error(`Bad Gemini output: ${text?.slice(0, 120)}`);
   }
   return {
     provider: 'gemini',
@@ -479,7 +488,7 @@ export default async function handler(req, res) {
 
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '';
   const googleKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY || '';
-  const model     = process.env.GEMINI_MODEL || 'gemini-2.0-flash-lite';
+  const model     = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
   // ── Synthesize: server fetches all sources, returns unified brief ─────────
   if (kind === 'synthesize') {
@@ -491,15 +500,16 @@ export default async function handler(req, res) {
     const signals = await fetchSynthesisData(Number(lat), Number(lon), googleKey);
     const fallback = synthesisFallback(signals, locationName, pollenLabel);
 
-    const premiumState = await getRequestPremiumState(req);
-    if (!geminiKey || !premiumState.isPremium) return sendJson(res, 200, fallback);
+    // Synthesis is gated by GEMINI_API_KEY on the server — no token check needed.
+    // Free/premium distinction is handled in the app UI (refresh limits, badge).
+    if (!geminiKey) return sendJson(res, 200, fallback);
 
     try {
       const prompt = buildSynthesisPrompt(signals, locationName, pollenLabel);
       const result = await callGeminiSynthesis(model, geminiKey, prompt);
       return sendJson(res, 200, result);
-    } catch {
-      return sendJson(res, 200, fallback);
+    } catch (err) {
+      return sendJson(res, 200, { ...fallback, _debug: err?.message, _model: model });
     }
   }
 
