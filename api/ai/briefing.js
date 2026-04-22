@@ -346,14 +346,21 @@ function synthesisFallback(signals, locationName, pollenLabel) {
   const RAIN_CODES = [51,53,55,61,63,65,80,81,82,95,96,99];
   const isRaining = weatherCode != null && RAIN_CODES.includes(weatherCode);
   const aqiNum = aqi ?? 0;
+  const heatVal = feelsLike ?? temp ?? null;
+  const isExtremeHeat = heatVal != null && heatVal >= 45;
+  const isHot        = heatVal != null && heatVal >= 38;
   const hasExtreme = capAlerts?.some((a) => a.severity === 'Extreme' || a.severity === 'Severe');
   const hasMod = capAlerts?.some((a) => a.severity === 'Moderate');
 
-  const severity = aqiNum > 200 || hasExtreme ? 'danger'
-    : aqiNum > 100 || hasMod || isRaining ? 'caution'
+  const severity = aqiNum > 200 || hasExtreme || isExtremeHeat ? 'danger'
+    : aqiNum > 100 || hasMod || isRaining || isHot ? 'caution'
     : 'go';
 
-  const headline = severity === 'danger'
+  const headline = isExtremeHeat
+    ? `Dangerous heat at ${Math.round(heatVal)}°C — stay indoors if possible.`
+    : isHot && severity === 'caution'
+    ? `Hot at ${Math.round(heatVal)}°C — avoid midday and stay hydrated.`
+    : severity === 'danger'
     ? 'Conditions are difficult — plan outdoor exposure carefully.'
     : severity === 'caution'
     ? 'Some caution needed before heading outside.'
@@ -366,15 +373,24 @@ function synthesisFallback(signals, locationName, pollenLabel) {
 
   const weatherNote = isRaining
     ? 'Rain is active — carry gear and add road margin.'
+    : isExtremeHeat ? `Extreme heat at ${Math.round(heatVal)}°C. Avoid outdoor activity until evening.`
+    : isHot ? `It feels like ${Math.round(heatVal)}°C — the heat is the main risk right now.`
     : temp != null ? `It feels like ${Math.round(feelsLike ?? temp)}°C outside.`
     : 'Check the live conditions below.';
 
   const actions = [
+    isExtremeHeat ? 'Stay indoors during 10 AM – 6 PM' : null,
+    isHot && !isExtremeHeat ? 'Avoid 11 AM – 4 PM peak heat' : null,
+    isHot ? 'Drink water every 20–30 minutes' : null,
     aqiNum > 150 ? 'Wear N95 mask outdoors' : null,
     isRaining ? 'Carry rain gear and drive carefully' : null,
     hasExtreme ? 'Review the PMD alert details below' : null,
-    severity === 'go' && !isRaining ? 'Morning or evening slots are ideal' : null,
+    !isHot && !isRaining && severity === 'go' ? 'Morning or evening slots are ideal' : null,
   ].filter(Boolean).slice(0, 3);
+
+  const window = isExtremeHeat ? 'After 6 PM when heat drops'
+    : isHot ? 'Before 10 AM or after 5 PM'
+    : null;
 
   return {
     provider: 'fallback',
@@ -382,7 +398,7 @@ function synthesisFallback(signals, locationName, pollenLabel) {
     headline,
     summary: [aqiNote, weatherNote].filter(Boolean).join(' ') || `${locationName || 'Your area'} — check the conditions below.`,
     actions: actions.length ? actions : ['Review the condition cards below'],
-    window: null,
+    window,
   };
 }
 
