@@ -8,8 +8,10 @@ import { getAqiColor, getAqiCategory, getWeatherIcon } from './homeUtils';
 function NightPartlyCloudyIcon() {
   return (
     <View style={styles.nightIcon}>
-      <Icon name={ICON.weatherNight} size={34} color="rgba(155,200,255,0.95)" style={styles.moon} />
-      <Icon name={ICON.weatherCloudy} size={48} color={dc.accentCyan} style={styles.cloud} />
+      {/* Moon sits top-left behind the cloud */}
+      <Icon name={ICON.weatherNight} size={30} color="rgba(155,200,255,0.95)" style={styles.moon} />
+      {/* Cloud is in front and partially covers the moon */}
+      <Icon name={ICON.weatherCloudy} size={44} color={dc.accentCyan} style={styles.cloud} />
     </View>
   );
 }
@@ -22,9 +24,11 @@ export default function AqiSection({ aqi, pm25, weather, weatherCurrent, locatio
         country={isUsingDeviceLocation ? '' : locationDisplay.secondary}
         condition={weather.description}
         tempLabel={settings.formatTempShort(weatherCurrent?.temp)}
+        feelsLike={weatherCurrent?.feelsLike ?? weatherCurrent?.temp ?? null}
         feelsLikeLabel={weatherCurrent?.feelsLike != null ? `Feels like ${settings.formatTemp(weatherCurrent.feelsLike)}` : null}
+        weatherCode={weatherCurrent?.weatherCode}
         weatherIcon={getWeatherIcon(weatherCurrent?.weatherCode, nightMode)}
-        weatherIconNode={nightMode && weatherCurrent?.weatherCode != null && weatherCurrent.weatherCode <= 3 ? <NightPartlyCloudyIcon /> : null}
+        weatherIconNode={nightMode && weatherCurrent?.weatherCode != null && weatherCurrent.weatherCode >= 1 && weatherCurrent.weatherCode <= 3 ? <NightPartlyCloudyIcon /> : null}
         aqi={aqi}
         aqiCategory={getAqiCategory(aqi)}
         aqiColor={aqi != null ? getAqiColor(aqi) : dc.accentOrange}
@@ -39,7 +43,9 @@ export default function AqiSection({ aqi, pm25, weather, weatherCurrent, locatio
 
 const styles = StyleSheet.create({
   section: {},
-  nightIcon: { width: 56, height: 56, position: 'relative' },
-  moon: { position: 'absolute', top: 0, left: 0, zIndex: 2 },
-  cloud: { position: 'absolute', bottom: 0, right: 0, zIndex: 1 },
+  nightIcon: { width: 56, height: 56 },
+  // zIndex: 1 — moon is behind the cloud
+  moon: { position: 'absolute', top: 0, left: 2, zIndex: 1 },
+  // zIndex: 2 — cloud is in front, bottom-right overlap covers lower part of moon
+  cloud: { position: 'absolute', bottom: 0, right: 0, zIndex: 2 },
 });
