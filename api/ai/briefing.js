@@ -77,14 +77,16 @@ function extractTextFromResponse(json) {
 
 function tryParseJson(text) {
   if (!text) return null;
+  // Strip markdown code fences (```json ... ``` or ``` ... ```)
+  const stripped = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
   try {
-    return JSON.parse(text);
+    return JSON.parse(stripped);
   } catch {
-    const start = text.indexOf('{');
-    const end = text.lastIndexOf('}');
+    const start = stripped.indexOf('{');
+    const end = stripped.lastIndexOf('}');
     if (start !== -1 && end !== -1 && end > start) {
       try {
-        return JSON.parse(text.slice(start, end + 1));
+        return JSON.parse(stripped.slice(start, end + 1));
       } catch {
         return null;
       }
@@ -486,9 +488,9 @@ export default async function handler(req, res) {
   const { kind } = body;
   if (!kind) return sendJson(res, 400, { error: 'kind is required.' });
 
-  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '';
-  const googleKey = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY || '';
-  const model     = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+  const geminiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '').trim();
+  const googleKey = (process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
+  const model     = (process.env.GEMINI_MODEL || 'gemini-2.0-flash').trim();
 
   // ── Synthesize: server fetches all sources, returns unified brief ─────────
   if (kind === 'synthesize') {
