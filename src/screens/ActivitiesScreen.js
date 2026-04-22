@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,18 +9,23 @@ import {
   StyleSheet,
   ActivityIndicator,
   SafeAreaView,
+  Platform,
+  Linking,
 } from 'react-native';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import useAQI from '../hooks/useAQI';
 import useWeather from '../hooks/useWeather';
-import useLocation from '../hooks/useLocation';
+import { useLocationContext } from '../context/LocationContext';
 import { getWeatherDescription } from '../utils/weatherCodes';
 import { getActivitySummary } from '../utils/activityScoring';
 import { ACTIVITY_CATALOG, getActivityById } from '../data/activities';
 import { ScreenGradient } from '../components/layout';
 import { GlassCard } from '../components/glass';
 import { colors as dc } from '../design';
+import { fetchApiJson } from '../config/api';
+import { GOOGLE_MAPS_API_KEY } from '../config/googleApi';
+import Icon, { ICON } from '../components/Icon';
 
 function getScoreBand(score) {
   if (score >= 75) return 'Great now';
@@ -30,6 +35,7 @@ function getScoreBand(score) {
 }
 
 function getSmartAdvisory(activity, aqi, weather) {
+  const indoorShelterActivities = new Set(['gym', 'yoga', 'badminton', 'squash', 'bowling', 'martial_arts']);
   const temp = weather?.temp;
   const humidity = weather?.humidity;
   const windSpeed = weather?.windSpeed;
@@ -49,8 +55,12 @@ function getSmartAdvisory(activity, aqi, weather) {
   const isSmoggy = aqi > 150;
   const isHazardousAir = aqi > 300;
   const isVeryUnhealthyAir = aqi > 200;
+  const prefersIndoor = indoorShelterActivities.has(activity.id);
 
   const recs = [];
+  if (prefersIndoor && aqi > 100) {
+    recs.push('This is one of the better options today because the session can happen indoors, away from the worst outdoor air and heat.');
+  }
   if (aqi <= 50) recs.push('Air quality is excellent right now, so most outdoor plans should feel comfortable.');
   else if (aqi <= 100) recs.push('Air quality is generally fine for going out. Sensitive users may want lighter effort near busy roads.');
   else if (aqi <= 150) recs.push('Air quality is elevated, but most people can still go out if they keep sessions moderate and avoid high-traffic routes.');
@@ -68,6 +78,7 @@ function getSmartAdvisory(activity, aqi, weather) {
   if (isHighHumidity && isVeryHot) recs.push(`Humidity is ${humidity}%, which makes the heat feel heavier. Take cooling breaks and do less than you normally would.`);
   else if (isHighHumidity) recs.push(`Humidity is high at ${humidity}%, so effort may feel tougher than usual even if the temperature looks manageable.`);
   if (isHighWind) recs.push(`Strong winds at ${Math.round(windSpeed)} km/h. Cycling, tennis, and cricket may be significantly affected.`);
+  if (prefersIndoor && aqi > 100) recs.push('If you go, choose a gym, studio, court, or hall with HEPA filters or visible air purifiers running.');
 
   if (recs.length === 1 && aqi <= 50 && !isVeryHot && !isCold && !isRaining) {
     recs.push('Weather conditions are favorable, so this is a good window for outdoor plans.');
@@ -82,6 +93,7 @@ function getSmartAdvisory(activity, aqi, weather) {
   if (isRaining) tips.unshift('Wear waterproof gear and shoes with good grip. Avoid flooded areas and give yourself extra travel time.');
   if (isSmoggy) tips.unshift('Wear an N95 mask, choose a cleaner route, and keep the session shorter than usual.');
   if (isHighHumidity && isVeryHot) tips.unshift('Take breaks in air-conditioned spaces every 15 minutes to prevent heat exhaustion.');
+  if (prefersIndoor) tips.unshift('Prefer venues with air purifiers, HEPA filtration, or a visibly well-managed ventilation system.');
 
   let healthImpact = activity.healthImpact;
   if (isHazardousAir) healthImpact += ` Current AQI (${aqi}) is hazardous, so even brief exposure can aggravate breathing and cardiovascular symptoms.`;
@@ -96,18 +108,85 @@ function getSmartAdvisory(activity, aqi, weather) {
   else if (isExtremeHeat) indoorAlt = 'If you still want activity today, indoor options are the cooler and safer call. ' + indoorAlt;
   else if (isHazardousAir) indoorAlt = 'With hazardous air quality, indoor options are strongly recommended right now. ' + indoorAlt;
   else if (isVeryUnhealthyAir) indoorAlt = 'If you want to avoid heavy smoke exposure, indoor options are the better choice for longer or harder sessions. ' + indoorAlt;
+  if (prefersIndoor) indoorAlt += ' Try to pick a venue with air purifiers or strong HVAC filtration so the indoor air is meaningfully cleaner than outside.';
 
   return { recommendation: recs.join(' '), tips: tips.slice(0, 5), healthImpact, indoorAlt };
+}
+
+async function fetchNearbyPlacesDirect({ activity, lat, lon }) {
+  const textQuery = activity.placesQuery || activity.name;
+  const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+      'X-Goog-FieldMask':
+        'places.id,places.displayName,places.types,places.rating,places.userRatingCount,places.location,places.shortFormattedAddress,places.formattedAddress',
+    },
+    body: JSON.stringify({
+      textQuery,
+      pageSize: 6,
+      rankPreference: 'DISTANCE',
+      locationBias: {
+        circle: {
+          center: { latitude: lat, longitude: lon },
+          radius: 4500,
+        },
+      },
+    }),
+  });
+
+  const json = await response.json();
+  if (!response.ok || json.error) {
+    throw new Error(json.error?.message || 'Direct Places lookup failed.');
+  }
+
+  return Array.isArray(json.places)
+    ? json.places.map((p) => ({
+        id: p.id,
+        name: p.displayName?.text || '',
+        types: p.types || [],
+        rating: p.rating ?? null,
+        userRatingCount: p.userRatingCount ?? null,
+        location: p.location
+          ? { lat: p.location.latitude, lon: p.location.longitude }
+          : null,
+        address: p.shortFormattedAddress || p.formattedAddress || '',
+      }))
+    : [];
+}
+
+async function openPlaceInMaps(place) {
+  const label = encodeURIComponent(place?.name || 'Location');
+  const hasCoords = place?.location?.lat != null && place?.location?.lon != null;
+  const coords = hasCoords ? `${place.location.lat},${place.location.lon}` : null;
+  const appleUrl = hasCoords
+    ? `http://maps.apple.com/?ll=${coords}&q=${label}`
+    : `http://maps.apple.com/?q=${encodeURIComponent(place?.address || place?.name || 'Location')}`;
+  const webUrl = hasCoords
+    ? `https://www.google.com/maps/search/?api=1&query=${coords}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place?.address || place?.name || 'Location')}`;
+
+  try {
+    const preferred = Platform.OS === 'ios' ? appleUrl : webUrl;
+    const supported = await Linking.canOpenURL(preferred);
+    await Linking.openURL(supported ? preferred : webUrl);
+  } catch {
+    await Linking.openURL(webUrl);
+  }
 }
 
 export default function ActivitiesScreen() {
   const { enabledActivities, addActivity, removeActivity } = useSettings();
   const { isPremium } = useAuth();
-  const { city, location, loading: locLoading } = useLocation();
+  const { city, location, loading: locLoading } = useLocationContext();
   const { aqi, loading: aqiLoading } = useAQI(location.lat, location.lon);
   const { current: weatherCurrent, hourly } = useWeather(location.lat, location.lon);
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [addModalVisible, setAddModalVisible] = useState(false);
+  const [nearbyPlaces, setNearbyPlaces] = useState([]);
+  const [nearbyLoading, setNearbyLoading] = useState(false);
+  const [nearbyError, setNearbyError] = useState('');
 
   const loading = locLoading || aqiLoading;
   const currentAqi = aqi ?? 0;
@@ -118,6 +197,68 @@ export default function ActivitiesScreen() {
     : currentAqi <= 150 ? dc.accentOrange
     : currentAqi <= 200 ? dc.accentOrange
     : dc.accentRed;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadNearbyPlaces() {
+      if (!selectedActivity || !isPremium || !selectedActivity.placesQuery) {
+        setNearbyPlaces([]);
+        setNearbyError('');
+        setNearbyLoading(false);
+        return;
+      }
+
+      setNearbyLoading(true);
+      setNearbyError('');
+
+      try {
+        const params = new URLSearchParams({
+          lat: String(location.lat),
+          lon: String(location.lon),
+          radius: '4500',
+          maxResults: '6',
+        });
+
+        if (selectedActivity.placesType) {
+          params.set('types', selectedActivity.placesType);
+        } else {
+          params.set('query', selectedActivity.placesQuery);
+        }
+
+        let places = [];
+        try {
+          const json = await fetchApiJson(`/api/poi/nearby?${params.toString()}`);
+          places = Array.isArray(json.places) ? json.places : [];
+        } catch (apiError) {
+          if (Platform.OS === 'web') throw apiError;
+          places = await fetchNearbyPlacesDirect({
+            activity: selectedActivity,
+            lat: location.lat,
+            lon: location.lon,
+          });
+        }
+
+        if (!cancelled) {
+          setNearbyPlaces(places);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setNearbyPlaces([]);
+          setNearbyError('Could not load nearby places right now.');
+        }
+      } finally {
+        if (!cancelled) {
+          setNearbyLoading(false);
+        }
+      }
+    }
+
+    loadNearbyPlaces();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedActivity, isPremium, location.lat, location.lon]);
 
   const rankedActivities = useMemo(
     () =>
@@ -167,7 +308,7 @@ export default function ActivitiesScreen() {
         onPress={() => setSelectedActivity(item)}
       >
         <View style={styles.cardTopRow}>
-          <Text style={styles.cardEmoji}>{item.emoji}</Text>
+          <Icon name={item.icon} size={36} color={activitySummary.color} style={styles.cardEmoji} />
           <View style={[styles.rankPill, { backgroundColor: activitySummary.color + '22' }]}>
             <Text style={[styles.rankPillText, { color: activitySummary.color }]}>#{rank}</Text>
           </View>
@@ -249,7 +390,7 @@ export default function ActivitiesScreen() {
                       activeOpacity={0.7}
                       onPress={() => (enabled ? removeActivity(act.id) : addActivity(act.id))}
                     >
-                      <Text style={styles.addRowEmoji}>{act.emoji}</Text>
+                      <Icon name={act.icon} size={28} color={dc.accentCyan} style={styles.addRowEmoji} />
                       <View style={styles.addRowInfo}>
                         <Text style={styles.addRowName}>{act.name}</Text>
                         {act.placesQuery && (
@@ -299,7 +440,7 @@ export default function ActivitiesScreen() {
               <ScreenGradient>
                 <SafeAreaView style={styles.modalContainer}>
                   <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
-                    <Text style={styles.modalEmoji}>{selectedActivity.emoji}</Text>
+                    <Icon name={selectedActivity.icon} size={64} color={dc.accentCyan} style={styles.modalEmoji} />
                     <Text style={styles.modalTitle}>{selectedActivity.name}</Text>
 
                     {/* Conditions bar */}
@@ -386,6 +527,51 @@ export default function ActivitiesScreen() {
                     <DetailSection title="Indoor Alternatives" accentColor={dc.accentCyan}>
                       <Text style={styles.sectionBody}>{advisory.indoorAlt}</Text>
                     </DetailSection>
+
+                    {selectedActivity.placesQuery ? (
+                      <DetailSection title="Recommended Nearby Places" accentColor={dc.accentCyan}>
+                        {!isPremium ? (
+                          <Text style={styles.sectionBodyMuted}>
+                            Premium unlock: nearby places for this activity around your current location.
+                          </Text>
+                        ) : nearbyLoading ? (
+                          <Text style={styles.sectionBodyMuted}>Loading nearby places…</Text>
+                        ) : nearbyError ? (
+                          <Text style={styles.sectionBodyMuted}>{nearbyError}</Text>
+                        ) : nearbyPlaces.length === 0 ? (
+                          <Text style={styles.sectionBodyMuted}>
+                            No strong nearby matches found for {selectedActivity.placesQuery} around your current area.
+                          </Text>
+                        ) : (
+                          <View style={styles.placesList}>
+                            {nearbyPlaces.map((place, idx) => (
+                              <View key={place.id || `${place.name}-${idx}`} style={styles.placeRow}>
+                                <View style={styles.placeCopy}>
+                                  <Text style={styles.placeName}>{place.name || 'Nearby place'}</Text>
+                                  {!!place.address && (
+                                    <Text style={styles.placeMeta}>{place.address}</Text>
+                                  )}
+                                </View>
+                                <View style={styles.placeActions}>
+                                  <View style={styles.placeBadge}>
+                                    <Text style={styles.placeBadgeText}>
+                                      {place.rating ? `${Number(place.rating).toFixed(1)}★` : 'Nearby'}
+                                    </Text>
+                                  </View>
+                                  <TouchableOpacity
+                                    style={styles.mapButton}
+                                    onPress={() => openPlaceInMaps(place)}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Icon name={ICON.external} size={14} color={dc.accentCyan} />
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+                      </DetailSection>
+                    ) : null}
                   </ScrollView>
 
                   <TouchableOpacity
@@ -456,7 +642,7 @@ const styles = StyleSheet.create({
   },
   addPlus: { fontSize: 44, fontWeight: '300', lineHeight: 48, marginBottom: 4, color: dc.accentCyan },
   addCardName: { fontSize: 15, fontWeight: '700', color: dc.accentCyan },
-  cardEmoji: { fontSize: 38 },
+  cardEmoji: { marginBottom: 4 },
   rankPill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   rankPillText: { fontSize: 11, fontWeight: '700' },
   cardName: { fontSize: 15, fontWeight: '700', color: dc.textPrimary, marginBottom: 10, textAlign: 'center', minHeight: 42 },
@@ -478,7 +664,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     marginBottom: 10,
   },
-  addRowEmoji: { fontSize: 30, marginRight: 12 },
+  addRowEmoji: { marginRight: 12 },
   addRowInfo: { flex: 1 },
   addRowName: { fontSize: 15, fontWeight: '600', color: dc.textPrimary },
   addRowHint: { fontSize: 12, color: dc.textSecondary, marginTop: 2 },
@@ -489,7 +675,7 @@ const styles = StyleSheet.create({
   addToggleIcon: { fontSize: 18, fontWeight: '700' },
 
   modalContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 16, alignItems: 'center' },
-  modalEmoji: { fontSize: 72, marginBottom: 8 },
+  modalEmoji: { marginBottom: 12 },
   modalTitle: { fontSize: 28, fontWeight: '800', color: dc.textPrimary, marginBottom: 20 },
 
   conditionsCard: { width: '100%', marginBottom: 16 },
@@ -518,6 +704,39 @@ const styles = StyleSheet.create({
   tipRow: { flexDirection: 'row', marginBottom: 6, paddingRight: 8 },
   tipBullet: { fontSize: 15, fontWeight: '700', color: dc.accentCyan, marginRight: 8, minWidth: 18 },
   tipText: { fontSize: 15, color: dc.textPrimary, lineHeight: 24, flex: 1 },
+  placesList: { gap: 10 },
+  placeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: dc.cardGlass,
+    borderWidth: 1,
+    borderColor: dc.cardStrokeSoft,
+  },
+  placeCopy: { flex: 1, paddingRight: 10 },
+  placeName: { fontSize: 14, fontWeight: '700', color: dc.textPrimary, marginBottom: 3 },
+  placeMeta: { fontSize: 12, color: dc.textSecondary, lineHeight: 18 },
+  placeActions: { alignItems: 'flex-end', gap: 8 },
+  placeBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: dc.accentCyanBg,
+  },
+  placeBadgeText: { fontSize: 11, fontWeight: '700', color: dc.accentCyan },
+  mapButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: dc.cardStrokeSoft,
+    backgroundColor: dc.cardGlassSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   closeBtn: {
     marginHorizontal: 20, marginBottom: 16, paddingVertical: 14,

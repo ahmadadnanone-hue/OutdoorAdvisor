@@ -32,6 +32,7 @@ import { fetchNhmpDirect } from '../utils/nhmpParser';
 import { loadStoredNotifications } from '../utils/alertPreferences';
 import { maybeSendLocalAlert } from '../utils/alertNotifications';
 import useAiBriefing from '../hooks/useAiBriefing';
+import useTouristWeather from '../hooks/useTouristWeather';
 
 import { ScreenGradient } from '../components/layout';
 import { GlassCard } from '../components/glass';
@@ -248,6 +249,103 @@ function StopRow({ stop, formatTempShort }) {
         {isClear && <View style={[styles.badge, { backgroundColor: dc.successGlass }]}><Text style={[styles.badgeText, { color: dc.accentGreen }]}>Clear</Text></View>}
       </View>
     </View>
+  );
+}
+
+/* ===== Tourist Station Card ===== */
+const CONDITION_ICON = {
+  'Clear':         { name: 'sunny-outline',         color: '#FCD34D' },
+  'Partly Cloudy': { name: 'partly-sunny-outline',  color: '#93C5FD' },
+  'Overcast':      { name: 'cloudy-outline',         color: '#94A3B8' },
+  'Rain':          { name: 'rainy-outline',          color: '#60A5FA' },
+  'Heavy Rain':    { name: 'thunderstorm-outline',   color: '#F87171' },
+  'Drizzle':       { name: 'rainy-outline',          color: '#93C5FD' },
+  'Snow':          { name: 'snow-outline',           color: '#E2E8F0' },
+  'Sleet':         { name: 'rainy-outline',          color: '#CBD5E1' },
+  'Thunderstorm':  { name: 'thunderstorm-outline',   color: '#F87171' },
+  'Fog':           { name: 'cloud-outline',          color: '#CBD5E1' },
+  'Variable':      { name: 'partly-sunny-outline',   color: '#94A3B8' },
+};
+
+function conditionMeta(condition) {
+  return CONDITION_ICON[condition] || { name: 'cloud-outline', color: dc.textMuted };
+}
+
+function TouristStationCard({ station }) {
+  const [expanded, setExpanded] = useState(false);
+  const { current, forecast, name, region, lastUpdated } = station;
+  const meta = conditionMeta(current?.condition);
+  const tempStr = current?.tempC != null ? `${current.tempC}°` : '--';
+
+  return (
+    <TouchableOpacity
+      style={styles.touristCard}
+      onPress={() => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setExpanded((v) => !v);
+      }}
+      activeOpacity={0.75}
+    >
+      {/* Header row */}
+      <View style={styles.touristCardHeader}>
+        <View style={styles.touristIconWrap}>
+          <Icon name={meta.name} size={20} color={meta.color} />
+        </View>
+        <View style={styles.touristCardBody}>
+          <Text style={styles.touristName}>{name}</Text>
+          <Text style={styles.touristRegion}>{region}</Text>
+        </View>
+        <View style={styles.touristRight}>
+          <Text style={styles.touristTemp}>{tempStr}</Text>
+          <Text style={styles.touristCondition} numberOfLines={1}>{current?.condition || '—'}</Text>
+        </View>
+      </View>
+
+      {/* Quick stats strip */}
+      <View style={styles.touristStatsRow}>
+        {current?.humidity != null && (
+          <View style={styles.touristStat}>
+            <Icon name="water-outline" size={11} color={dc.accentCyan} />
+            <Text style={styles.touristStatText}>{current.humidity}%</Text>
+          </View>
+        )}
+        {current?.windKph != null && (
+          <View style={styles.touristStat}>
+            <Icon name="navigate-outline" size={11} color={dc.accentCyan} />
+            <Text style={styles.touristStatText}>{current.windKph} km/h</Text>
+          </View>
+        )}
+        {current?.visibilityKm != null && (
+          <View style={styles.touristStat}>
+            <Icon name="eye-outline" size={11} color={dc.accentCyan} />
+            <Text style={styles.touristStatText}>{current.visibilityKm} km</Text>
+          </View>
+        )}
+        {!!lastUpdated && (
+          <Text style={styles.touristUpdated}>{lastUpdated}</Text>
+        )}
+      </View>
+
+      {/* Expanded 3-day forecast */}
+      {expanded && forecast && forecast.length > 0 && (
+        <View style={styles.touristForecast}>
+          <View style={styles.touristForecastDivider} />
+          {forecast.map((day, i) => {
+            const dayMeta = conditionMeta(day.condition);
+            return (
+              <View key={i} style={styles.touristForecastRow}>
+                <Text style={styles.touristForecastDay}>{day.day}</Text>
+                <Icon name={dayMeta.name} size={13} color={dayMeta.color} />
+                <Text style={styles.touristForecastCondition} numberOfLines={1}>{day.condition}</Text>
+                <Text style={styles.touristForecastRange}>
+                  {day.minTemp != null ? `${day.minTemp}–${day.maxTemp}°` : '—'}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
+    </TouchableOpacity>
   );
 }
 
@@ -484,6 +582,9 @@ export default function TravelScreen({ route }) {
     payload: travelAiPayload,
     enabled: isPremium && (nhmpData.length > 0 || pmdAlerts.length > 0),
   });
+
+  const { stations: touristStations, bulletin: touristBulletin, loading: touristLoading, refresh: refreshTourist } = useTouristWeather();
+  const [touristExpanded, setTouristExpanded] = useState(true);
 
   const sortedRoutes = useMemo(() =>
     TRAVEL_ROUTES.map((r, sourceIndex) => {
@@ -806,6 +907,57 @@ export default function TravelScreen({ route }) {
             )}
           </GlassCard>
 
+          {/* Tourist Destinations */}
+          <GlassCard style={styles.sectionCard} contentStyle={styles.sectionContent}>
+            <TouchableOpacity
+              style={styles.sectionHeader}
+              onPress={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setTouristExpanded((v) => !v);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.sectionEyebrow}>PMD TOURIST STATIONS</Text>
+              <View style={styles.sectionActions}>
+                <TouchableOpacity
+                  onPress={() => refreshTourist({ force: true })}
+                  disabled={touristLoading}
+                  activeOpacity={0.7}
+                  hitSlop={8}
+                >
+                  <Text style={[styles.sectionLink, touristLoading && { opacity: 0.4 }]}>
+                    {touristLoading ? 'Loading...' : 'Refresh'}
+                  </Text>
+                </TouchableOpacity>
+                <Icon
+                  name={touristExpanded ? ICON.chevronUp : ICON.chevronDown}
+                  size={14}
+                  color={dc.textMuted}
+                />
+              </View>
+            </TouchableOpacity>
+
+            {!!touristBulletin && touristExpanded && (
+              <Text style={styles.touristBulletin} numberOfLines={3}>{touristBulletin}</Text>
+            )}
+
+            {touristLoading && touristStations.length === 0 ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator size="small" color={dc.accentCyan} />
+                <Text style={styles.loadingText}>Loading station data...</Text>
+              </View>
+            ) : touristExpanded ? (
+              <View style={styles.touristGrid}>
+                {touristStations.map((station) => (
+                  <TouristStationCard key={station.id} station={station} />
+                ))}
+                {touristStations.length === 0 && !touristLoading && (
+                  <Text style={styles.noDataText}>Station data unavailable. Tap Refresh to retry.</Text>
+                )}
+              </View>
+            ) : null}
+          </GlassCard>
+
           {/* Route cards */}
           <Text style={styles.routesTitle}>Weather Along Major Routes</Text>
           <Text style={styles.routesSubtitle}>Motorways, northern highways, and mountain corridors.</Text>
@@ -846,7 +998,9 @@ export default function TravelScreen({ route }) {
                   onPress={() => toggleMotorway(sourceIndex)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.routeEmoji}>{motorway.emoji || ''}</Text>
+                  <View style={styles.routeEmoji}>
+                    <Icon name={motorway.icon || 'car-outline'} size={26} color={dc.accentCyan} />
+                  </View>
                   <View style={styles.routeTitleWrap}>
                     <Text style={styles.routeName}>{motorway.name}</Text>
                     <View style={styles.routeBadgeRow}>
@@ -1042,7 +1196,7 @@ const styles = StyleSheet.create({
   routeCard: {},
   routeCardContent: { padding: 0 },
   routeCardHeader: { flexDirection: 'row', alignItems: 'center', padding: 18 },
-  routeEmoji: { fontSize: 22, marginRight: 12 },
+  routeEmoji: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(155,200,255,0.12)', alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   routeTitleWrap: { flex: 1 },
   routeName: { fontSize: 16, fontWeight: '700', color: dc.textPrimary, flexShrink: 1 },
   routeBadgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
@@ -1080,5 +1234,121 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     letterSpacing: 0.3,
+  },
+
+  // Tourist stations
+  touristBulletin: {
+    fontSize: 12,
+    color: dc.textSecondary,
+    lineHeight: 18,
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  touristGrid: {
+    gap: 10,
+  },
+  touristCard: {
+    backgroundColor: dc.cardGlass,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: dc.cardStrokeSoft,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 10,
+  },
+  touristCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  touristIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(155,200,255,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  touristCardBody: {
+    flex: 1,
+  },
+  touristName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: dc.textPrimary,
+  },
+  touristRegion: {
+    fontSize: 11,
+    color: dc.textMuted,
+    marginTop: 1,
+  },
+  touristRight: {
+    alignItems: 'flex-end',
+  },
+  touristTemp: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: dc.accentCyan,
+    lineHeight: 26,
+  },
+  touristCondition: {
+    fontSize: 10,
+    color: dc.textMuted,
+    marginTop: 2,
+    textAlign: 'right',
+  },
+  touristStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  touristStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  touristStatText: {
+    fontSize: 11,
+    color: dc.textSecondary,
+    fontWeight: '500',
+  },
+  touristUpdated: {
+    fontSize: 10,
+    color: dc.textMuted,
+    marginLeft: 'auto',
+  },
+  touristForecast: {
+    marginTop: 6,
+  },
+  touristForecastDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: dc.cardStrokeSoft,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  touristForecastRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  touristForecastDay: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: dc.textSecondary,
+    width: 50,
+  },
+  touristForecastCondition: {
+    flex: 1,
+    fontSize: 12,
+    color: dc.textMuted,
+  },
+  touristForecastRange: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: dc.textPrimary,
+    textAlign: 'right',
   },
 });

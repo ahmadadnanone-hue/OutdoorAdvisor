@@ -147,11 +147,17 @@ export function getUserGreetingName(user) {
   return titleCaseWord(String(user?.email || '').split('@')[0].split(/[._-]/)[0]);
 }
 
-export function getLocationDisplay(label) {
+export function getLocationDisplay(label, region) {
   if (!label) return { primary: 'Lahore', secondary: 'Pakistan' };
+  // If an explicit region was stored (from Google Places or GPS), use it directly
+  if (region != null && region !== '') {
+    return { primary: String(label).trim(), secondary: String(region).trim() };
+  }
+  // Fallback: try to split a compound label like "Area, City"
   const parts = String(label).split(',').map((p) => p.trim()).filter(Boolean);
-  if (parts.length >= 2) return { primary: parts[0], secondary: `${parts.slice(1).join(', ')}, Pakistan` };
-  return { primary: label, secondary: `${label}, Pakistan` };
+  if (parts.length >= 2) return { primary: parts[0], secondary: parts.slice(1).join(', ') };
+  // Single-word city from local Pakistan list — default to Pakistan
+  return { primary: label, secondary: 'Pakistan' };
 }
 
 export function getActivityToneColor(label) {
