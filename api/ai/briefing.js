@@ -79,19 +79,23 @@ function tryParseJson(text) {
   if (!text) return null;
   // Strip markdown code fences (```json ... ``` or ``` ... ```)
   const stripped = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
-  try {
-    return JSON.parse(stripped);
-  } catch {
-    const start = stripped.indexOf('{');
-    const end = stripped.lastIndexOf('}');
-    if (start !== -1 && end !== -1 && end > start) {
-      try {
-        return JSON.parse(stripped.slice(start, end + 1));
-      } catch {
-        return null;
-      }
-    }
+
+  // Try 1: direct parse
+  try { return JSON.parse(stripped); } catch {}
+
+  // Try 2: replace literal newlines inside the text (Gemini sometimes emits bare \n in strings)
+  const oneLiner = stripped.replace(/\r?\n/g, ' ');
+  try { return JSON.parse(oneLiner); } catch {}
+
+  // Try 3: extract first { ... } block and retry both forms
+  const start = stripped.indexOf('{');
+  const end   = stripped.lastIndexOf('}');
+  if (start !== -1 && end !== -1 && end > start) {
+    const slice = stripped.slice(start, end + 1);
+    try { return JSON.parse(slice); } catch {}
+    try { return JSON.parse(slice.replace(/\r?\n/g, ' ')); } catch {}
   }
+
   return null;
 }
 
@@ -405,7 +409,7 @@ async function callGeminiSynthesis(model, apiKey, prompt) {
   const text = extractTextFromResponse(json);
   const parsed = tryParseJson(text);
   if (!parsed?.headline || !parsed?.summary || !parsed?.severity) {
-    throw new Error(`Bad Gemini output: ${text?.slice(0, 120)}`);
+    throw new Error(`Bad Gemini output: ${text?.slice(0, 500)}`);
   }
   return {
     provider: 'gemini',
