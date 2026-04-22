@@ -39,11 +39,13 @@ export default async function handler(req, res) {
     const remaining = items.slice(CAP_FETCH_LIMIT).map((item) => item);
     const all = [...enriched, ...remaining];
 
-    // Filter to non-expired alerts only
+    // Filter to non-expired alerts only.
+    // If no explicit expiry, assume 48h from pubDate (PMD alerts are 24-48h windows).
     const now = Date.now();
     const active = all.filter((a) => {
-      if (!a.expires) return true; // no expiry = keep
-      return new Date(a.expires).getTime() > now;
+      if (a.expires) return new Date(a.expires).getTime() > now;
+      if (a.pubDate) return (new Date(a.pubDate).getTime() + 48 * 3_600_000) > now;
+      return false; // no date at all — discard
     });
 
     res.status(200).json({

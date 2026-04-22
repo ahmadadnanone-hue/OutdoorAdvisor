@@ -3,15 +3,16 @@
  * All UI sections live in src/components/home/.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, SafeAreaView, RefreshControl, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, SafeAreaView, RefreshControl, ActivityIndicator, Platform, Modal, TouchableOpacity } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
-import useLocation from '../hooks/useLocation';
+import { useLocationContext } from '../context/LocationContext';
 import useAQI from '../hooks/useAQI';
 import useWeather from '../hooks/useWeather';
 import usePollen from '../hooks/usePollen';
 import useAiBriefing from '../hooks/useAiBriefing';
+import useAlerts from '../hooks/useAlerts';
 import { getWeatherDescription, isNight } from '../utils/weatherCodes';
 import { maybeSendLocalAlert } from '../utils/alertNotifications';
 import { loadStoredNotifications, loadStoredThresholds } from '../utils/alertPreferences';
@@ -20,6 +21,10 @@ import { getActivityById } from '../data/activities';
 import { ScreenGradient } from '../components/layout';
 import { colors as dc } from '../design';
 import CacheIndicator from '../components/CacheIndicator';
+import { GlassCard } from '../components/glass';
+import useHealthData from '../hooks/useHealthData';
+import { requestNotificationPermission } from '../services/notificationService';
+import { getSmartAdvisorSnapshot } from '../services/smartAdvisor';
 
 // Home sub-components
 import HomeHeader from '../components/home/HomeHeader';
@@ -31,6 +36,8 @@ import PollenSection from '../components/home/PollenSection';
 import ForecastSection from '../components/home/ForecastSection';
 import ActivitySection from '../components/home/ActivitySection';
 import TravelSection from '../components/home/TravelSection';
+import AlertBanner from '../components/home/AlertBanner';
+import HealthStatsSection from '../components/home/HealthStatsSection';
 import CityPickerModal from '../components/home/CityPickerModal';
 import InsightModal from '../components/home/InsightModal';
 import ForecastDetailModal from '../components/home/ForecastDetailModal';
@@ -40,6 +47,7 @@ import {
   getActivityToneColor, buildAqiHistoryInsight, getWindInsight, getPollenInsight,
   isRainCode, isStormCode, isFogCode,
 } from '../components/home/homeUtils';
+import { loadNotificationInbox, markInboxSeen } from '../utils/notificationInbox';
 
 const LIVE_REFRESH_WINDOW_MS   = 5 * 60 * 1000;
 const MAX_LIVE_REFRESHES       = 2;
@@ -50,9 +58,10 @@ export default function HomeScreen({ navigation }) {
   const { colors } = useTheme();
   const settings = useSettings();
   const { isPremium, user } = useAuth();
+  const health = useHealthData({ prompt: false });
 
   // ── Location ──────────────────────────────────────────────────────────────
-  const { location, city, isUsingDeviceLocation, loading: locationLoading, refresh: refreshLocation, selectCity, selectPlace } = useLocation();
+  const { location, city, region, isUsingDeviceLocation, loading: locationLoading, refresh: refreshLocation, selectCity, selectPlace } = useLocationContext();
 
   // ── Data ──────────────────────────────────────────────────────────────────
   const { aqi, pm25, history: aqiHistory, loading: aqiLoading, isUsingCache: aqiCached, updatedAt: aqiUpdatedAt, refresh: refreshAqi } = useAQI(location.lat, location.lon);
@@ -61,9 +70,13 @@ export default function HomeScreen({ navigation }) {
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const greetingName      = useMemo(() => getUserGreetingName(user), [user]);
-  const locationDisplay   = getLocationDisplay(city);
+  const locationDisplay   = getLocationDisplay(city, region);
   const todayForecast     = daily?.[0] || null;
-  const nightMode         = isNight(new Date(), todayForecast?.sunrise, todayForecast?.sunset);
+  // Prefer the API's own day/night flag (WeatherKit: daylight bool, Open-Meteo: is_day).
+  // Fall back to sunrise/sunset math, then a simple hour-of-day heuristic.
+  const nightMode         = weatherCurrent?.daylight != null
+    ? !weatherCurrent.daylight
+    : isNight(new Date(), todayForecast?.sunrise, todayForecast?.sunset);
   const weather           = getWeatherDescription(weatherCurrent?.weatherCode, { isNight: nightMode });
   const displayWindGusts  = weatherCurrent?.windGusts ?? todayForecast?.windGusts ?? null;
   const displayWindDir    = weatherCurrent?.windDirection ?? todayForecast?.windDirection ?? null;
@@ -92,6 +105,7 @@ export default function HomeScreen({ navigation }) {
   // ── AI briefing ───────────────────────────────────────────────────────────
   const homeAiPayload   = useMemo(() => ({ locationName: locationDisplay.primary, decisionLabel: decision.label, decisionTone: decision.tone, aqi, pm25, temp: weatherCurrent?.temp, feelsLike: feelsLikeTemp, humidity: weatherCurrent?.humidity, windSpeed: weatherCurrent?.windSpeed, weatherLabel: weather.description, weatherCode: weatherCurrent?.weatherCode, pollenLabel: pollenCategory, pollenValue, peakRainChance, nextActivityWindows }), [locationDisplay.primary, decision.label, decision.tone, aqi, pm25, weatherCurrent?.temp, feelsLikeTemp, weatherCurrent?.humidity, weatherCurrent?.windSpeed, weatherCurrent?.weatherCode, weather.description, pollenCategory, pollenValue, peakRainChance, nextActivityWindows]);
   const homeAiSignature = useMemo(() => [locationDisplay.primary, decision.label, aqi ?? 'na', pm25 ?? 'na', weatherCurrent?.temp ?? 'na', feelsLikeTemp ?? 'na', weatherCurrent?.humidity ?? 'na', weatherCurrent?.windSpeed ?? 'na', weatherCurrent?.weatherCode ?? 'na', pollenValue ?? 'na', peakRainChance].join('|'), [locationDisplay.primary, decision.label, aqi, pm25, weatherCurrent?.temp, feelsLikeTemp, weatherCurrent?.humidity, weatherCurrent?.windSpeed, weatherCurrent?.weatherCode, pollenValue, peakRainChance]);
+  const { alerts } = useAlerts();
   const { data: homeAiBriefing, loading: homeAiLoading } = useAiBriefing({ kind: 'home', signature: homeAiSignature, payload: homeAiPayload, enabled: isPremium && (aqi != null || weatherCurrent?.weatherCode != null || weatherCurrent?.temp != null || pollenValue != null) });
 
   // ── UI state ──────────────────────────────────────────────────────────────
@@ -100,6 +114,9 @@ export default function HomeScreen({ navigation }) {
   const [forecastDetail, setForecastDetail]   = useState(null);
   const [insightModal, setInsightModal]       = useState(null);
   const [refreshNote, setRefreshNote]         = useState('');
+  const [notificationCenterVisible, setNotificationCenterVisible] = useState(false);
+  const [notificationInbox, setNotificationInbox] = useState([]);
+  const [smartSnapshot, setSmartSnapshot] = useState(null);
   const refreshWindowRef                      = useRef([]);
 
   useEffect(() => {
@@ -107,6 +124,36 @@ export default function HomeScreen({ navigation }) {
     const t = setTimeout(() => setRefreshNote(''), 5000);
     return () => clearTimeout(t);
   }, [refreshNote]);
+
+  const unreadNotificationCount = useMemo(
+    () => notificationInbox.filter((item) => !item.seen).length,
+    [notificationInbox]
+  );
+
+  const refreshNotificationInbox = useCallback(async () => {
+    const items = await loadNotificationInbox();
+    setNotificationInbox(items);
+  }, []);
+
+  useEffect(() => {
+    refreshNotificationInbox();
+  }, [refreshNotificationInbox]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSmartSnapshot = async () => {
+      const snapshot = await getSmartAdvisorSnapshot({ promptForHealth: false });
+      if (!cancelled) {
+        setSmartSnapshot(snapshot);
+      }
+    };
+
+    loadSmartSnapshot();
+    return () => {
+      cancelled = true;
+    };
+  }, [health.steps, health.distanceKm, health.calories, aqi, weatherCurrent?.temp, weatherCurrent?.weatherCode]);
 
   // ── Pull-to-refresh ───────────────────────────────────────────────────────
   const onRefresh = useCallback(async () => {
@@ -147,9 +194,28 @@ export default function HomeScreen({ navigation }) {
       if (isPremium && prefs.pollenAlerts && pollenValue >= 4)                                               maybeSendLocalAlert(`pollen-${key}`, { title: 'High pollen alert',      body: `${pollenDisplayName} pollen is elevated near ${label}. A mask and allergy medication can help.` });
       if (prefs.heatAlerts && weatherCurrent?.feelsLike >= thresholds.heatAlert)                            maybeSendLocalAlert(`heat-${key}`,   { title: 'Heat alert',             body: `Feels-like heat is high around ${label}. Go later, hydrate well, and take shade breaks.` });
       if (isPremium && prefs.fogWarnings && isFogCode(weatherCurrent?.weatherCode))                         maybeSendLocalAlert(`fog-${key}`,    { title: 'Low-visibility alert',   body: `Visibility looks reduced around ${label}. Slow down and leave extra margin while driving.` });
+      setTimeout(() => {
+        refreshNotificationInbox();
+      }, 250);
     })();
     return () => { cancelled = true; };
-  }, [aqi, city, displayWindGusts, location.lat, location.lon, locationDisplay.primary, pm25, pollenDisplayName, pollenValue, weatherCurrent?.feelsLike, weatherCurrent?.weatherCode, weatherCurrent?.windSpeed, isPremium]);
+  }, [aqi, city, displayWindGusts, location.lat, location.lon, locationDisplay.primary, pm25, pollenDisplayName, pollenValue, weatherCurrent?.feelsLike, weatherCurrent?.weatherCode, weatherCurrent?.windSpeed, isPremium, refreshNotificationInbox]);
+
+  const openNotificationCenter = useCallback(() => {
+    setNotificationCenterVisible(true);
+  }, []);
+
+  const markAllNotificationsRead = useCallback(async () => {
+    const next = await markInboxSeen();
+    setNotificationInbox(next);
+  }, []);
+
+  const enableHealthAndNotifications = useCallback(async () => {
+    await requestNotificationPermission({ prompt: true }).catch(() => {});
+    await health.requestAccess().catch(() => {});
+    const snapshot = await getSmartAdvisorSnapshot({ promptForHealth: false });
+    setSmartSnapshot(snapshot);
+  }, [health]);
 
   // ── Loading state ─────────────────────────────────────────────────────────
   if (locationLoading) {
@@ -176,15 +242,28 @@ export default function HomeScreen({ navigation }) {
           <HomeHeader
             greeting={getGreeting()}
             greetingName={greetingName}
-            locationLabel={locationDisplay.primary}
             isPremium={isPremium}
+            locationLabel={locationDisplay.primary}
             onLocationPress={() => setCityPickerVisible(true)}
-            onSettingsPress={() => navigation.navigate('Settings')}
             onRefresh={onRefresh}
+            onNotificationsPress={openNotificationCenter}
+            unreadNotificationCount={unreadNotificationCount}
           />
 
           <CacheIndicator visible={aqiCached || weatherCached} updatedAt={lastUpdated !== '--' ? lastUpdated : null} />
           {!!refreshNote && <Text style={styles.refreshNote}>{refreshNote}</Text>}
+
+          <AlertBanner alerts={alerts} />
+
+          <HealthStatsSection
+            steps={health.steps}
+            distanceKm={health.distanceKm}
+            outdoorScore={smartSnapshot?.outdoorScore ?? 0}
+            healthAuthorized={health.authorized}
+            notificationsReady={!!smartSnapshot?.notificationsReady}
+            loading={health.loading}
+            onRequestAccess={enableHealthAndNotifications}
+          />
 
           {settings.homeSections.map((key) => {
             if (PREMIUM_SECTIONS.has(key) && !isPremium) return null;
@@ -290,6 +369,7 @@ export default function HomeScreen({ navigation }) {
           visible={cityPickerVisible}
           onClose={() => setCityPickerVisible(false)}
           city={city}
+          isPremium={isPremium}
           refreshLocation={refreshLocation}
           refreshAqi={refreshAqi}
           refreshWeather={refreshWeather}
@@ -299,6 +379,54 @@ export default function HomeScreen({ navigation }) {
         />
         <InsightModal insightModal={insightModal} onClose={() => setInsightModal(null)} />
         <ForecastDetailModal forecastDetail={forecastDetail} onClose={() => setForecastDetail(null)} settings={settings} />
+        <Modal
+          visible={notificationCenterVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setNotificationCenterVisible(false)}
+        >
+          <ScreenGradient>
+            <SafeAreaView style={styles.notificationSafe}>
+              <View style={styles.notificationHeader}>
+                <Text style={styles.notificationTitle}>Notifications</Text>
+                <TouchableOpacity onPress={markAllNotificationsRead} activeOpacity={0.8}>
+                  <Text style={styles.notificationAction}>Mark all read</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={styles.notificationList} showsVerticalScrollIndicator={false}>
+                {notificationInbox.length === 0 ? (
+                  <GlassCard contentStyle={styles.notificationCardContent}>
+                    <Text style={styles.notificationEmptyTitle}>No alerts saved yet</Text>
+                    <Text style={styles.notificationEmptyBody}>
+                      Weather, AQI, pollen, and travel alerts you receive will appear here with time and category.
+                    </Text>
+                  </GlassCard>
+                ) : notificationInbox.map((item) => (
+                  <GlassCard key={item.id} style={styles.notificationCard} contentStyle={styles.notificationCardContent}>
+                    <View style={styles.notificationRowTop}>
+                      <View style={styles.notificationMetaGroup}>
+                        {!item.seen ? <View style={styles.notificationDot} /> : null}
+                        <Text style={styles.notificationCategory}>{item.category}</Text>
+                      </View>
+                      <Text style={styles.notificationTime}>
+                        {new Date(item.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                      </Text>
+                    </View>
+                    <Text style={styles.notificationItemTitle}>{item.title}</Text>
+                    <Text style={styles.notificationItemBody}>{item.body}</Text>
+                  </GlassCard>
+                ))}
+              </ScrollView>
+              <TouchableOpacity
+                style={styles.notificationCloseButton}
+                onPress={() => setNotificationCenterVisible(false)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.notificationCloseText}>Close</Text>
+              </TouchableOpacity>
+            </SafeAreaView>
+          </ScreenGradient>
+        </Modal>
       </SafeAreaView>
     </ScreenGradient>
   );
@@ -312,4 +440,29 @@ const styles = StyleSheet.create({
   content:     { padding: 16, paddingBottom: 120, gap: 16 },
   refreshNote: { fontSize: 12, color: dc.textMuted, textAlign: 'center', paddingVertical: 6 },
   footer:      { fontSize: 11, color: dc.textMuted, textAlign: 'center', marginTop: 8 },
+  notificationSafe: { flex: 1, padding: 16, gap: 14 },
+  notificationHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8 },
+  notificationTitle: { fontSize: 22, fontWeight: '700', color: dc.textPrimary, letterSpacing: -0.25 },
+  notificationAction: { fontSize: 13, fontWeight: '700', color: dc.accentCyan },
+  notificationList: { gap: 12, paddingTop: 4, paddingBottom: 8 },
+  notificationCard: { marginBottom: 12 },
+  notificationCardContent: { padding: 16, gap: 8 },
+  notificationRowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  notificationMetaGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  notificationDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF4D5F' },
+  notificationCategory: { fontSize: 11, fontWeight: '700', color: dc.accentCyan, textTransform: 'uppercase', letterSpacing: 0.6 },
+  notificationTime: { fontSize: 11, color: dc.textMuted },
+  notificationItemTitle: { fontSize: 15, fontWeight: '700', color: dc.textPrimary },
+  notificationItemBody: { fontSize: 13, lineHeight: 19, color: dc.textSecondary },
+  notificationEmptyTitle: { fontSize: 15, fontWeight: '700', color: dc.textPrimary },
+  notificationEmptyBody: { fontSize: 13, lineHeight: 19, color: dc.textSecondary },
+  notificationCloseButton: {
+    marginTop: 'auto',
+    height: 50,
+    borderRadius: 18,
+    backgroundColor: dc.accentCyan,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationCloseText: { fontSize: 15, fontWeight: '700', color: dc.bgTop },
 });
