@@ -30,6 +30,77 @@ function getScoreBand(score) {
   return 'Better later';
 }
 
+function getDiningAdvisories(aqi, weather) {
+  const temp = weather?.temp;
+  const feelsLike = weather?.feelsLike;
+  const heatValue = feelsLike ?? temp;
+
+  const isExtremeHeat = heatValue != null && heatValue >= 47;
+  const isVeryHot = heatValue != null && heatValue >= 38;
+  const isCold = temp != null && temp <= 10;
+  const isHazardousAir = aqi > 300;
+  const isVeryUnhealthyAir = aqi > 200;
+  const isSmoggy = aqi > 150;
+
+  const alerts = [];
+
+  if (isHazardousAir) {
+    alerts.push({
+      icon: '☣',
+      color: '#991B1B',
+      title: 'Hazardous Air — Avoid Outdoor Dining',
+      message: `AQI ${aqi}: Toxic particles settle on food and saturate the air you breathe throughout the meal. Dine strictly indoors in a well-ventilated restaurant.`,
+      action: 'Move all meals indoors immediately.',
+    });
+  } else if (isVeryUnhealthyAir) {
+    alerts.push({
+      icon: '⚠',
+      color: '#7C3AED',
+      title: 'Very Poor Air — Indoor Dining Advised',
+      message: `AQI ${aqi}: Smog particles contaminate food and air during the meal. Choose fully enclosed patios or move indoors.`,
+      action: 'Prefer enclosed patios or indoor seating.',
+    });
+  } else if (isSmoggy) {
+    alerts.push({
+      icon: '😷',
+      color: '#D97706',
+      title: 'Smog Advisory',
+      message: `AQI ${aqi}: Elevated pollution settles on outdoor food. Choose covered seating away from busy roads, or dine indoors.`,
+      action: 'Seek covered or enclosed dining areas.',
+    });
+  }
+
+  if (isExtremeHeat) {
+    alerts.push({
+      icon: '🌡',
+      color: '#DC2626',
+      title: 'Extreme Heat — Avoid Outdoor Dining',
+      message: `Feels like ${Math.round(heatValue)}°C — prolonged outdoor exposure risks heat exhaustion. Dine in air-conditioned indoor restaurants.`,
+      action: 'Dine indoors in air-conditioned spaces.',
+    });
+  } else if (isVeryHot) {
+    alerts.push({
+      icon: '☀',
+      color: '#EA580C',
+      title: 'High Heat Advisory',
+      message: `Feels like ${Math.round(heatValue)}°C. Request shaded, covered, or umbrella seating. Dine before 11am or after 7pm. Drink water throughout the meal.`,
+      action: 'Seek shaded, covered, or umbrella seating.',
+    });
+  }
+
+  if (isCold) {
+    alerts.push({
+      icon: '🥶',
+      color: '#0284C7',
+      title: 'Cold Weather — Seek Shelter',
+      message: `${Math.round(temp)}°C outdoor temperatures make extended meals uncomfortable quickly. Look for heated patios, enclosed outdoor sections, or dine indoors.`,
+      action: 'Look for heated or enclosed outdoor seating.',
+    });
+  }
+
+  return alerts;
+}
+
 function getSmartAdvisory(activity, aqi, weather) {
   const temp = weather?.temp;
   const humidity = weather?.humidity;
@@ -83,6 +154,14 @@ function getSmartAdvisory(activity, aqi, weather) {
   if (isRaining) tips.unshift('Wear waterproof gear and shoes with good grip. Avoid flooded areas and give yourself extra travel time.');
   if (isSmoggy) tips.unshift('Wear an N95 mask, choose a cleaner route, and keep the session shorter than usual.');
   if (isHighHumidity && isVeryHot) tips.unshift('Take breaks in air-conditioned spaces every 15 minutes to prevent heat exhaustion.');
+
+  if (activity.id === 'dining') {
+    if (isHazardousAir) tips.unshift('Skip outdoor dining — fine particles settle on food and saturate the air you breathe. Eat indoors.');
+    else if (isSmoggy) tips.unshift('Choose enclosed or covered patio seating away from busy roads to reduce smog exposure during the meal.');
+    if (isExtremeHeat) tips.unshift('Avoid outdoor dining today — dine in air-conditioned restaurants to prevent heat stress.');
+    else if (isVeryHot) tips.unshift('Ask for shaded, covered, or umbrella seating and plan the meal for after 7pm when it cools down.');
+    if (isCold) tips.unshift('Request a heated outdoor section or move indoors — cold temperatures make long outdoor meals uncomfortable.');
+  }
 
   let healthImpact = activity.healthImpact;
   if (isHazardousAir) healthImpact += ` Current AQI (${aqi}) is hazardous, so even brief exposure can aggravate breathing and cardiovascular symptoms.`;
@@ -186,6 +265,17 @@ export default function ActivitiesScreen() {
         <View style={[styles.badge, { backgroundColor: activitySummary.color + '16' }]}>
           <Text style={[styles.badgeText, { color: activitySummary.color }]}>{activitySummary.label}</Text>
         </View>
+        {item.id === 'dining' && (() => {
+          const dAlerts = getDiningAdvisories(currentAqi, weatherCurrent);
+          if (!dAlerts.length) return null;
+          return (
+            <View style={[styles.diningStrip, { backgroundColor: dAlerts[0].color + '18' }]}>
+              <Text style={[styles.diningStripText, { color: dAlerts[0].color }]} numberOfLines={1}>
+                {dAlerts[0].icon}  {dAlerts[0].action}
+              </Text>
+            </View>
+          );
+        })()}
       </TouchableOpacity>
     );
   };
@@ -353,6 +443,27 @@ export default function ActivitiesScreen() {
                     </Text>
                   </View>
                 </View>
+
+                {selectedActivity.id === 'dining' && (() => {
+                  const dAlerts = getDiningAdvisories(currentAqi, weatherCurrent);
+                  if (!dAlerts.length) return null;
+                  return (
+                    <View style={{ width: '100%', marginBottom: 12 }}>
+                      {dAlerts.map((alert, idx) => (
+                        <View key={idx} style={[styles.diningAdvisory, { backgroundColor: alert.color + '14', borderColor: alert.color + '44' }]}>
+                          <View style={styles.diningAdvisoryRow}>
+                            <Text style={styles.diningAdvisoryIcon}>{alert.icon}</Text>
+                            <Text style={[styles.diningAdvisoryTitle, { color: alert.color }]}>{alert.title}</Text>
+                          </View>
+                          <Text style={[styles.diningAdvisoryMsg, { color: colors.text }]}>{alert.message}</Text>
+                          <View style={[styles.diningActionTag, { backgroundColor: alert.color + '20' }]}>
+                            <Text style={[styles.diningActionLabel, { color: alert.color }]}>{alert.action}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })()}
 
                 <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <Text style={[styles.sectionTitle, { color: colors.primary }]}>Why This Score</Text>
@@ -570,4 +681,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   closeBtnText: { color: '#FFFFFF', fontSize: typography.body, fontWeight: '700' },
+
+  diningStrip: { width: '100%', marginTop: 8, paddingHorizontal: 6, paddingVertical: 5, borderRadius: 8 },
+  diningStripText: { fontSize: 9, fontWeight: '700', textAlign: 'center' },
+  diningAdvisory: { width: '100%', borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 10 },
+  diningAdvisoryRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  diningAdvisoryIcon: { fontSize: 18, marginRight: 8 },
+  diningAdvisoryTitle: { fontSize: 13, fontWeight: '800', flex: 1, lineHeight: 18 },
+  diningAdvisoryMsg: { fontSize: 13, lineHeight: 20, marginBottom: 10 },
+  diningActionTag: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  diningActionLabel: { fontSize: 11, fontWeight: '700' },
 });

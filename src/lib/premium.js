@@ -14,7 +14,7 @@ export const PREMIUM_FEATURES = {
 };
 
 const ACTIVE_STATUSES = new Set(['active', 'premium', 'pro', 'paid', 'trialing', 'trial']);
-const SEEDED_PREMIUM_EMAILS = ['ahmadadnanone@gmail.com', 'saqibmasoodcma@google.com'];
+const SEEDED_PREMIUM_EMAILS = ['ahmadadnanone@gmail.com', 'saqibmasoodcma@google.com', 'tipu0002017@gmail.com'];
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
