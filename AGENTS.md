@@ -96,6 +96,16 @@ It is not meant to feel like a generic weather app.
 - Google weather, AQI, pollen, and geocode are proxied through Vercel API routes
 - AI summaries are served through `/api/ai/briefing`
 - NHMP and PMD are scraped/proxied through server routes
+- Native iOS push registration and delivery now use the single Hobby-plan-friendly `/api/push` route with `action=register`, `action=unregister`, `action=test`, and `action=cron`
+
+### Notifications
+- Full notification plan and implementation notes live in `NOTIFICATION_ARCHITECTURE.md`
+- Native iOS push is the primary timely-alert path: the app registers Expo push tokens through `src/services/pushRegistration.js`, and Vercel sends through Expo Push Service from server routes
+- Local notifications and the existing Expo background task remain as fallback/app-open helpers; do not treat iOS background tasks as reliable for success-critical timely alerts
+- GitHub Actions workflow `.github/workflows/push-cron.yml` calls `/api/push?action=cron` every 15 minutes because Vercel Hobby only allows daily cron jobs
+- Push token, preference, location, and receipt state use the existing Vercel KV helpers under `api/_lib/kv.js`
+- Required production env vars for the push backend: `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `CRON_SECRET`; GitHub secret `OA_CRON_SECRET` must match `CRON_SECRET`; optional `PUSH_TEST_SECRET` can protect manual test sends separately
+- Initial server alert engine covers PMD severe/extreme CAP alerts, severe AQI threshold alerts, and morning summaries; NHMP closure/fog, weather threshold, route-specific, and richer delivery dashboards are still hardening follow-ups
 
 ### AI
 - Home and Travel use `src/hooks/useAiBriefing.js`
@@ -252,12 +262,12 @@ Use this section as the cross-platform handoff checklist for both Claude and Cod
 - Premium gating: email allowlist bridge in place (`src/lib/premium.js`)
 
 ### ❌ Blockers — must fix before public App Store review
-1. **Privacy Policy not hosted publicly** — text exists in `AboutTab.js` but Apple requires a live URL in App Store Connect. Host at `outdooradvisor.app/privacy`.
-2. **App Store Connect metadata missing** — no screenshots (6.7" + 5.5"), description, keywords, age rating (4+), or category set yet.
-3. **Store subscription path not implemented** — premium is still email-allowlist based. If premium features are visible during full review, App Review may ask for real in-app purchases or clearer positioning.
+1. **App Store Connect metadata/screenshots not submitted** — paste-ready metadata exists in `APP_STORE_METADATA.md`, but screenshots (6.7" + 5.5"), age rating, category, support URL, and privacy URL still need to be entered in App Store Connect.
+2. **Store subscription path not implemented** — premium is still email-allowlist based. If premium features are visible during full review, App Review may ask for real in-app purchases or clearer positioning.
 
 ### ⚠️ Known gaps (won't block build #10 TestFlight, will matter for build #11 / full review)
 - No StoreKit 2 real subscriptions — premium is email-allowlist only; may be flagged in App Store review if premium features are visible
+- Native push backbone now exists, but production verification still needs a fresh iOS build/device token registration plus a protected `/api/push?action=test` send while the app is closed
 - UI Blueprint phases 6, 7, 9, 10 not complete (Route Planner results card, motion polish, safety copy pass)
 - `expo-font` and SDK patch mismatches were fixed after the audit; `npx expo install --check` is clean and `npx expo-doctor` passes
 - `expo-background-task` duplicate plugin entry was removed from `app.json`
@@ -267,8 +277,8 @@ Use this section as the cross-platform handoff checklist for both Claude and Cod
 ### Immediate next steps (in order)
 1. ✅ Submit build #10 to TestFlight — Done 2026-04-27.
 2. ✅ Build #14 FINISHED and submitted to TestFlight — 2026-04-27. Includes: Supabase auth working, dev message removed, FAB overlap fixed, WeatherKit server proxy, privacy policy live, dependency cleanup.
-3. ✅ Build #15 in progress — Contains: FAB customization (premium + rate-limit), Apple Health heart icon, AI badge on brief card, bottom background fix, tab haptics, notification modal clipping fix, Codex's Entitlements + dependency cleanup.
-4. App Store Connect: screenshots (6.7" + 5.5"), description, keywords, age rating (4+), category (Weather + Health & Fitness), support URL (`https://outdooradvisor.app`), privacy URL (`https://outdooradvisor.app/privacy`). Draft copy is in `APP_STORE_METADATA.md`.
+3. ✅ Latest checked iOS build is build version `16`, EAS build `786cc27f-c545-4c37-a271-0b003957e5c8`, status `FINISHED`, distribution `STORE`, profile `production`. It was built from commit `4ceffa4` and includes the Build #15 FAB customization / UI polish / dependency + entitlement cleanup batch.
+4. App Store Connect: screenshots (6.7" + 5.5"), description, keywords, age rating (4+), category (Weather + Health & Fitness), support URL (`https://outdooradvisor.app`), privacy URL (`https://outdooradvisor.app/privacy`). Full paste-ready submission pack is in `APP_STORE_METADATA.md`.
 5. Set `GEMINI_API_KEY` in Vercel env — AI Brief FAB shortcut and SynthesisCard will show full Gemini synthesis once key is set.
 6. Decide whether premium needs to be hidden, reframed, or backed by StoreKit before full public review.
 7. Submit for App Store review once metadata + screenshots are done.
@@ -280,6 +290,9 @@ Use this section as the cross-platform handoff checklist for both Claude and Cod
 - update it when a new major route, AI behavior, or notification rule is added
 
 ## Recent Changes
+- 2026-04-27 — Added the native timely-notification backbone. New `NOTIFICATION_ARCHITECTURE.md` records the full notification plan, current notification types, delivery model, priority tiers, test flow, and hardening backlog. Client now registers Expo push tokens through `src/services/pushRegistration.js`; `App.js` syncs native push registration on boot/foreground; `AlertsScreen.js` updates server-side preferences and thresholds when notification toggles/thresholds change. Server additions: `api/_lib/nativePush.js` for Expo Push API delivery + receipt storage/checking, `api/_lib/alertEngine.js` for initial PMD critical alert + severe AQI threshold + morning summary sends, and the single Hobby-plan-friendly `/api/push` route with `action=register|unregister|test|cron`. Removed the old unused browser-push subscription route at `api/notifications/index.js` to stay within Vercel Hobby's 12-function limit. Vercel Hobby rejected sub-daily cron, so timely scheduling is via `.github/workflows/push-cron.yml` every 15 minutes with GitHub secret `OA_CRON_SECRET` matching Vercel `CRON_SECRET`. Required production env: `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `CRON_SECRET`; optional `PUSH_TEST_SECRET`.
+- 2026-04-27 — Expanded `APP_STORE_METADATA.md` from a light draft into a reusable App Store submission pack. It now includes current release state, paste-ready App Store Connect fields, 89/100-character keywords, review notes, TestFlight "What To Test", age-rating answer sheet, screenshot order/captions, premium/App Review risk recommendation, and final submission checklist. Use it for current TestFlight/App Store Connect work and later public review prep.
+- 2026-04-27 — Codex resumed after rereading `AGENTS.md` per live coordination rule. Rechecked EAS: latest iOS build is now build version `16`, build ID `786cc27f-c545-4c37-a271-0b003957e5c8`, status `FINISHED`, from commit `4ceffa4`; the earlier "Build #15 in progress" handoff is stale. Updated `APP_STORE_METADATA.md` to align secondary category with current plan (`Health & Fitness`), added paste-ready TestFlight "What To Test" notes, and expanded screenshot checklist for Home AI, FAB customization, and About/privacy screens.
 - 2026-04-27 — Build #15 batch. Claude: FAB fully customizable (Settings → Customize → Quick Action Button section); 6-action pool (`refresh`, `ai-brief`, `location`, `activities`, `travel`, `share`); premium gate on refresh + ai-brief; AsyncStorage rate limiter (5 refreshes/hr) with animated toast; `toggleFabAction` in SettingsContext; HomeScreen watches `route.params.fabTrigger` to handle `refresh-*`, `ai-brief-*`, `location-*` prefixes; scrollRef added for scroll-to-top on AI brief. UI polish: tab haptics upgraded to `impactAsync(Light)`; tab bar shell gets `backgroundColor: dc.bgTop` to kill white gap below home indicator; SynthesisCard AI badge always visible (cyan=Gemini, gray=rule-based); notification modal "Mark all read" clipping fixed with `useSafeAreaInsets` explicit padding; Apple Health heart icon `#FF2D55` added beside Health section eyebrow. Codex: HealthKit entitlements added to `OutdoorAdvisor.entitlements`; dependency updates in `package.json`.
 - 2026-04-27 — Completed the next launch-support tasks while Claude handled TestFlight. Downloaded and inspected build #10 IPA entitlements with `codesign`; actual signed `aps-environment` is `production`, so no rebuild is needed solely for APNs entitlement. Added `public/privacy.html`, rewired Vercel `/privacy` to `/privacy.html`, deployed production, and verified `https://outdooradvisor.app/privacy` returns `200`. Added WeatherKit production env vars to Vercel without printing the private key, fixed the server route's signing/runtime compatibility, redeployed, and verified `https://outdooradvisor.app/api/weatherkit?lat=31.5204&lon=74.3587` returns WeatherKit data. Added `.vercelignore` to reduce future manual deploy upload size.
 - 2026-04-27 — Added `APP_STORE_METADATA.md` with paste-ready App Store Connect draft copy: name, subtitle, promo text, description, keywords, categories, support/privacy/marketing URLs, review notes, and screenshot checklist. Use it as a starting point, not final legal/marketing approval.

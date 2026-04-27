@@ -30,6 +30,7 @@ import {
   saveStoredThresholds,
 } from '../utils/alertPreferences';
 import { ensureLocalNotificationPermission } from '../utils/alertNotifications';
+import { registerNativePushToken } from '../services/pushRegistration';
 import { GlassCard } from '../components/glass';
 import { ScreenGradient } from '../components/layout';
 import AboutTab from '../components/settings/AboutTab';
@@ -249,13 +250,19 @@ export default function AlertsScreen() {
     const updated = { ...thresholds, [key]: value };
     setThresholds(updated);
     saveStoredThresholds(updated).catch(() => {});
+    registerNativePushToken({ prompt: false, thresholdsOverride: updated }).catch(() => {});
   }, [thresholds]);
 
   const updateNotification = useCallback(async (key, value) => {
     const updated = { ...notifications, [key]: value };
     setNotifications(updated);
     saveStoredNotifications(updated).catch(() => {});
-    if (value) ensureLocalNotificationPermission({ prompt: true }).catch(() => {});
+    if (value) {
+      ensureLocalNotificationPermission({ prompt: true }).catch(() => {});
+      registerNativePushToken({ prompt: true, preferencesOverride: updated }).catch(() => {});
+    } else {
+      registerNativePushToken({ prompt: false, preferencesOverride: updated }).catch(() => {});
+    }
     if (Platform.OS === 'web' && isWebPushSupported() && isPremium) {
       if (value) ensureWebPush(updated, { prompt: true }).catch(() => {});
       else syncWebPushPreferences(updated).catch(() => {});

@@ -1,20 +1,40 @@
-# OutdoorAdvisor App Store Metadata Draft
+# OutdoorAdvisor App Store Submission Pack
 
-Use this as paste-ready starting copy for App Store Connect. Adjust wording after screenshots are final.
+Last updated: 2026-04-27
 
-## App Name
+This file is the reusable paste-ready source for App Store Connect, TestFlight, review notes, screenshot planning, and later public-release polish.
+
+## Current Release State
+
+- Latest checked iOS build: build version `16`
+- EAS build ID: `786cc27f-c545-4c37-a271-0b003957e5c8`
+- Status: `FINISHED`
+- Distribution: `STORE`
+- Privacy URL live: `https://outdooradvisor.app/privacy`
+- Support URL: `https://outdooradvisor.app`
+- Marketing URL: `https://outdooradvisor.app`
+- WeatherKit: server-side Vercel proxy is live, with Open-Meteo fallback
+- Premium: currently allowlist/tester based, not StoreKit
+
+## App Store Connect Fields
+
+### App Name
 
 OutdoorAdvisor
 
-## Subtitle
+### Subtitle
 
 Weather, AQI and road guidance
 
-## Promotional Text
+Character count: 30 / 30
+
+### Promotional Text
 
 Plan your day outside with a calm read on weather, air quality, pollen, and Pakistan travel advisories.
 
-## Description
+Character count: 105 / 170
+
+### Description
 
 OutdoorAdvisor helps you decide what the conditions outside actually mean for your day.
 
@@ -35,53 +55,171 @@ OutdoorAdvisor is not a generic weather app. It is designed to help you make cal
 
 Important: Weather, air quality, pollen, and road-condition data is provided for general information only. Do not use OutdoorAdvisor for emergency, aviation, mountaineering, evacuation, flood, landslide, or other safety-critical decisions. Always consult official government and emergency sources for high-risk situations.
 
-## Keywords
+### Keywords
 
-weather,AQI,air quality,smog,Pakistan,Lahore,Islamabad,Karachi,Murree,travel,motorway,PMD,NHMP,pollen,outdoor
+weather,AQI,smog,Pakistan,Lahore,Islamabad,Karachi,Murree,travel,motorway,PMD,NHMP,pollen
 
-## Category
+Character count: 89 / 100
 
-Weather
+### Categories
 
-## Secondary Category
+Primary category: Weather
 
-Travel
+Secondary category: Health & Fitness
 
-## Age Rating Notes
+### URLs
 
-Suggested rating: 4+
-
-The app contains weather, air quality, pollen, route advisory, and outdoor activity guidance. It does not contain user-generated content, gambling, medical treatment claims, or mature content.
-
-## Support URL
+Support URL:
 
 https://outdooradvisor.app
 
-## Privacy Policy URL
+Privacy Policy URL:
 
 https://outdooradvisor.app/privacy
 
-## Marketing URL
+Marketing URL:
 
 https://outdooradvisor.app
 
-## Copyright
+### Copyright
 
 2026 Ahmad Adnan
 
-## Review Notes
+## App Review Notes
 
 OutdoorAdvisor provides general weather, air-quality, pollen, and travel-advisory context for Pakistan. It is not intended for emergency or safety-critical use.
 
-Premium functionality is currently limited and may be enabled for allowlisted test accounts during TestFlight. If a reviewer needs a premium-enabled account, contact support@outdooradvisor.app.
-
 WeatherKit is accessed through a server-side Vercel proxy. The app also has Open-Meteo fallback behavior if WeatherKit is unavailable.
 
-## Screenshot Checklist
+Premium functionality is currently limited during TestFlight and may be enabled for allowlisted tester accounts. If a reviewer needs a premium-enabled account or a specific test account, please contact support@outdooradvisor.app.
+
+The app may request location permission to show local weather, air quality, and travel context. If Health access is granted, the app reads step count, walking/running distance, and active energy to support optional smart movement nudges. Health data is not sold, not used for advertising, and not written back to Apple Health.
+
+## TestFlight What To Test
+
+Please test the core OutdoorAdvisor flow on iPhone:
+
+- Home screen weather, AQI, and outdoor decision guidance
+- AI / rule-based briefing card behavior
+- Quick Action Button customization from Settings
+- Refresh and AI brief premium/rate-limit handling
+- Travel screen advisory cards and PMD/NHMP source links
+- Activities scoring and nearby place behavior
+- Settings, notifications, About, privacy, and support/contact links
+- Health permission flow and Health & Outdoor Score display if you are comfortable granting Health access
+
+Known testing note: premium and subscription behavior is currently allowlist-based during TestFlight.
+
+## Age Rating Answer Sheet
+
+Suggested age rating: 4+
+
+Use these answers unless the app content changes materially:
+
+- Cartoon or Fantasy Violence: None
+- Realistic Violence: None
+- Prolonged Graphic or Sadistic Realistic Violence: None
+- Profanity or Crude Humor: None
+- Mature or Suggestive Themes: None
+- Horror/Fear Themes: None
+- Medical/Treatment Information: None
+- Alcohol, Tobacco, Drug Use or References: None
+- Simulated Gambling: None
+- Sexual Content or Nudity: None
+- Graphic Sexual Content and Nudity: None
+- Contests: No
+- Gambling: No
+- Unrestricted Web Access: No
+- User Generated Content or Social Networking: No
+- Messaging and Chat: No
+- Advertising: No
+- In-App Purchases: No for the current allowlist/TestFlight build; change to Yes only when StoreKit/subscriptions are implemented.
+- Location: Yes, app uses location for weather, AQI, pollen, and travel context.
+- Health or Fitness: Yes, optional Apple Health read access can support smart movement nudges.
+
+Notes for reviewer-facing interpretation:
+
+- OutdoorAdvisor gives general informational guidance, not medical advice.
+- It does not diagnose, treat, prevent, or monitor medical conditions.
+- It does not provide emergency alerts or safety-critical routing.
+
+## Screenshot Plan
+
+Required sizes:
 
 - 6.7-inch iPhone screenshots
-- 5.5-inch iPhone screenshots if App Store Connect requires them
-- Home screen with outdoor decision card
-- Activity recommendations screen
-- Travel / road intelligence screen
-- Settings / About or privacy-support screen
+- 5.5-inch iPhone screenshots if App Store Connect requests them
+
+Recommended order:
+
+1. Home / Outdoor Decision
+   Caption: Know what outside means today
+   Capture: Home screen showing live conditions, AQI, and the outdoor decision card.
+
+2. AI / What Today Means
+   Caption: A calmer read on weather and air
+   Capture: Home screen with the AI or rule-based briefing card visible.
+
+3. Activities
+   Caption: Pick the right activity window
+   Capture: Activities screen showing ranked activity scores.
+
+4. Travel
+   Caption: Check road and weather context
+   Capture: Travel screen showing Road Intelligence, NHMP/PMD source cards, or route cards.
+
+5. Quick Action Button
+   Caption: Keep your fastest actions close
+   Capture: Settings → Customize → Quick Action Button section.
+
+6. Privacy / About
+   Caption: Built with privacy in mind
+   Capture: About screen showing privacy/support/contact surfaces.
+
+Screenshot capture tips:
+
+- Use a real-looking Pakistan city/location, preferably Lahore or Islamabad.
+- Avoid showing impossible, broken, or empty states.
+- Avoid showing premium-locked UI as the primary screenshot until StoreKit is implemented.
+- Avoid screenshots with debug/dev messages.
+- Keep status bar and bottom safe area visually clean.
+
+## Premium / Review-Risk Recommendation
+
+Current risk:
+
+Premium is still allowlist-based and StoreKit subscriptions are not implemented. If public App Review sees visible premium promises, locked paid features, or upgrade language without in-app purchases, Apple may ask for StoreKit or reject the binary.
+
+Recommended path for TestFlight:
+
+- Keep current allowlist behavior acceptable for internal/external TestFlight testing.
+- In review notes, say premium functionality is limited during TestFlight and reviewer access can be provided on request.
+
+Recommended path before public App Store review:
+
+- Either hide/reframe premium surfaces as "Preview", "Experimental", or "Tester access" until StoreKit is ready, or implement StoreKit subscriptions before public submission.
+- Avoid language that implies users can purchase premium if no purchase flow exists.
+- Do not make premium screenshots part of the first App Store screenshot set until StoreKit is live.
+
+Preferred conservative choice:
+
+For the first public review, hide or soften premium purchase language and keep the visible product focused on weather, AQI, activities, travel awareness, privacy, and Health-powered nudges.
+
+## App Store Connect Checklist
+
+- App name set to OutdoorAdvisor
+- Subtitle pasted
+- Promotional text pasted
+- Description pasted
+- Keywords pasted, under 100 characters
+- Category set to Weather
+- Secondary category set to Health & Fitness
+- Support URL set to `https://outdooradvisor.app`
+- Privacy URL set to `https://outdooradvisor.app/privacy`
+- Marketing URL set to `https://outdooradvisor.app`
+- Age rating questionnaire completed using answer sheet above
+- Screenshots uploaded for required iPhone sizes
+- Review notes pasted
+- Build selected, preferably latest approved TestFlight/App Store candidate
+- Export compliance answered consistently with `ITSAppUsesNonExemptEncryption: false`
+- Submit for review only after premium positioning is decided
