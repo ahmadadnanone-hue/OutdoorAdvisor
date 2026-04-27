@@ -14,36 +14,36 @@ function getConditionTheme(code, feelsLike, aqi) {
 
   // ── AQI hazardous / very unhealthy (>200) ─────────────────────────────────
   if (aqiNum > 200) return {
-    tint:   'rgba(185,28,28,0.20)',    // deep red haze
-    border: 'rgba(239,68,68,0.42)',
+    tint:   'rgba(185,28,28,0.34)',    // deep red haze
+    border: 'rgba(239,68,68,0.65)',
     icon:   '#FCA5A5',
   };
 
   // ── Extreme heat ≥45°C ────────────────────────────────────────────────────
   if (heat != null && heat >= 45) return {
-    tint:   'rgba(220,38,38,0.20)',    // danger red-orange
-    border: 'rgba(239,68,68,0.40)',
+    tint:   'rgba(220,38,38,0.32)',    // danger red-orange
+    border: 'rgba(239,68,68,0.62)',
     icon:   '#FCA5A5',
   };
 
   // ── AQI unhealthy (151–200) ───────────────────────────────────────────────
   if (aqiNum > 150) return {
-    tint:   'rgba(194,65,12,0.18)',    // deep orange-red
-    border: 'rgba(234,88,12,0.38)',
+    tint:   'rgba(194,65,12,0.30)',    // deep orange-red
+    border: 'rgba(234,88,12,0.58)',
     icon:   '#FB923C',
   };
 
   // ── High heat 38–44°C ─────────────────────────────────────────────────────
   if (heat != null && heat >= 38) return {
-    tint:   'rgba(234,88,12,0.16)',    // warm amber-orange
-    border: 'rgba(251,146,60,0.36)',
+    tint:   'rgba(234,88,12,0.26)',    // warm amber-orange
+    border: 'rgba(251,146,60,0.56)',
     icon:   '#FD8C3A',
   };
 
   // ── AQI moderate (101–150) ────────────────────────────────────────────────
   if (aqiNum > 100) return {
-    tint:   'rgba(202,138,4,0.16)',    // amber-yellow
-    border: 'rgba(234,179,8,0.34)',
+    tint:   'rgba(202,138,4,0.26)',    // amber-yellow
+    border: 'rgba(234,179,8,0.54)',
     icon:   '#FDE047',
   };
 
@@ -53,68 +53,68 @@ function getConditionTheme(code, feelsLike, aqi) {
 
   // Thunderstorm
   if (code >= 95) return {
-    tint:   'rgba(109,40,217,0.18)',
-    border: 'rgba(139,92,246,0.40)',
+    tint:   'rgba(109,40,217,0.30)',
+    border: 'rgba(139,92,246,0.60)',
     icon:   '#A78BFA',
   };
   // Snow / blizzard
   if (code >= 71 && code <= 77) return {
-    tint:   'rgba(186,230,253,0.15)',
-    border: 'rgba(186,230,253,0.36)',
+    tint:   'rgba(186,230,253,0.24)',
+    border: 'rgba(186,230,253,0.55)',
     icon:   '#BAE6FD',
   };
   // Heavy showers / showers
   if (code >= 80 && code <= 82) return {
-    tint:   'rgba(37,99,235,0.16)',
-    border: 'rgba(59,130,246,0.38)',
+    tint:   'rgba(37,99,235,0.26)',
+    border: 'rgba(59,130,246,0.56)',
     icon:   '#60A5FA',
   };
   // Heavy rain
   if (code >= 63 && code <= 65) return {
-    tint:   'rgba(29,78,216,0.18)',
-    border: 'rgba(59,130,246,0.42)',
+    tint:   'rgba(29,78,216,0.28)',
+    border: 'rgba(59,130,246,0.60)',
     icon:   '#3B82F6',
   };
   // Light / moderate rain
   if (code >= 61 && code <= 62) return {
-    tint:   'rgba(37,99,235,0.14)',
-    border: 'rgba(96,165,250,0.34)',
+    tint:   'rgba(37,99,235,0.22)',
+    border: 'rgba(96,165,250,0.52)',
     icon:   '#60A5FA',
   };
   // Drizzle
   if (code >= 51 && code <= 55) return {
-    tint:   'rgba(56,189,248,0.13)',
-    border: 'rgba(56,189,248,0.32)',
+    tint:   'rgba(56,189,248,0.20)',
+    border: 'rgba(56,189,248,0.50)',
     icon:   '#38BDF8',
   };
   // Freezing rain
   if (code === 66 || code === 67) return {
-    tint:   'rgba(148,163,184,0.16)',
-    border: 'rgba(148,163,184,0.34)',
+    tint:   'rgba(148,163,184,0.24)',
+    border: 'rgba(148,163,184,0.52)',
     icon:   '#CBD5E1',
   };
   // Fog / haze
   if (code === 45 || code === 48) return {
-    tint:   'rgba(100,116,139,0.14)',
-    border: 'rgba(100,116,139,0.28)',
+    tint:   'rgba(100,116,139,0.22)',
+    border: 'rgba(100,116,139,0.46)',
     icon:   '#94A3B8',
   };
   // Overcast
   if (code === 3) return {
-    tint:   'rgba(100,116,139,0.12)',
-    border: 'rgba(148,163,184,0.28)',
+    tint:   'rgba(100,116,139,0.18)',
+    border: 'rgba(148,163,184,0.44)',
     icon:   '#94A3B8',
   };
   // Partly cloudy
   if (code === 1 || code === 2) return {
-    tint:   'rgba(155,200,255,0.13)',
-    border: 'rgba(155,200,255,0.30)',
+    tint:   'rgba(155,200,255,0.20)',
+    border: 'rgba(155,200,255,0.48)',
     icon:   colors.accentCyan,
   };
   // Clear sky — warm golden (pleasant conditions)
   return {
-    tint:   'rgba(251,191,36,0.12)',
-    border: 'rgba(251,191,36,0.30)',
+    tint:   'rgba(251,191,36,0.20)',
+    border: 'rgba(251,191,36,0.48)',
     icon:   '#FCD34D',
   };
 }
@@ -164,6 +164,7 @@ export default function LiveConditionsCard({
   return (
     <GlassCard
       strong
+      intensity={42}
       tintColor={theme.tint}
       borderColor={theme.border}
       contentStyle={styles.content}
