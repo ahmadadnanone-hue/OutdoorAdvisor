@@ -6,15 +6,18 @@ This file is the reusable paste-ready source for App Store Connect, TestFlight, 
 
 ## Current Release State
 
-- Latest checked iOS build: build version `16`
-- EAS build ID: `786cc27f-c545-4c37-a271-0b003957e5c8`
+- Latest checked iOS build: build version `18`
+- EAS build ID: `5c774f86-e9c7-4c99-a1f1-86dedd95379c`
 - Status: `FINISHED`
 - Distribution: `STORE`
+- Built from commit: `be00c29`
 - Privacy URL live: `https://outdooradvisor.app/privacy`
 - Support URL: `https://outdooradvisor.app`
 - Marketing URL: `https://outdooradvisor.app`
 - WeatherKit: server-side Vercel proxy is live, with Open-Meteo fallback
 - Premium: currently allowlist/tester based, not StoreKit
+- TestFlight submission note: build `18` is already uploaded and visible in App Store Connect. If the Apple UI says `Ready to Submit`, click build `18` and submit it for Beta App Review / external testing; do not keep rerunning EAS upload unless a new IPA is needed.
+- EAS CLI note: setting `What To Test` through `--what-to-test` is Expo Enterprise-only. Paste the `TestFlight What To Test` section below manually in App Store Connect if needed.
 
 ## App Store Connect Fields
 
@@ -109,6 +112,18 @@ Please test the core OutdoorAdvisor flow on iPhone:
 - Health permission flow and Health & Outdoor Score display if you are comfortable granting Health access
 
 Known testing note: premium and subscription behavior is currently allowlist-based during TestFlight.
+
+## TestFlight Build 18 Submission Steps
+
+Use this when build `18` is visible in App Store Connect but still says `Ready to Submit`:
+
+1. Open App Store Connect -> OutdoorAdvisor -> TestFlight -> iOS Builds.
+2. Click build `18`.
+3. Add it to the external testing group if needed (the prior submitted build showed group `BT`; internal groups `FF` and `TE` are not enough for Beta App Review).
+4. Paste the `TestFlight What To Test` text above.
+5. If export compliance appears, answer that the app uses standard encryption/HTTPS only and no non-exempt encryption.
+6. Click `Submit for Review` / `Submit to Beta App Review`.
+7. Expected result: build `18` should change from `Ready to Submit` to `Waiting for Review`, matching the previous build `14` state.
 
 ## Age Rating Answer Sheet
 

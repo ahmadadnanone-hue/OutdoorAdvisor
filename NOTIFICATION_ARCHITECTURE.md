@@ -32,7 +32,7 @@ The production path is:
 2. App obtains an Expo push token with `Notifications.getExpoPushTokenAsync`.
 3. App registers that token at `/api/push?action=register`.
 4. Vercel stores token, device metadata, location snapshot, timezone, and alert preferences in KV.
-5. GitHub Actions triggers `/api/push?action=cron` every 15 minutes.
+5. An authenticated external scheduler should trigger `/api/push?action=cron` every 15 minutes.
 6. Server sends pushes through Expo Push Service.
 7. Server stores Expo receipt IDs and later checks receipts to clean up delivery failures.
 
@@ -93,7 +93,7 @@ Default behavior: once per day unless user explicitly asks for more.
   - single Hobby-plan-friendly push API with `action=register`, `action=unregister`, `action=test`, and `action=cron`.
 
 - `.github/workflows/push-cron.yml`
-  - triggers the alert runner every 15 minutes through `/api/push?action=cron`.
+  - optional GitHub Actions scheduler path. It is not in the latest committed repo state because the current Git remote token cannot push workflow files without `workflow` scope.
 
 - `api/_lib/nativePush.js`
   - Expo Push API sender,
@@ -107,7 +107,7 @@ Default behavior: once per day unless user explicitly asks for more.
   - dedupe and daily non-critical cap state.
 
 - `vercel.json`
-  - keeps Vercel serving the web app and API routes. Vercel Hobby does not support sub-daily cron, so the timely scheduler lives in GitHub Actions unless the project upgrades to Vercel Pro.
+  - keeps Vercel serving the web app and API routes. Vercel Hobby does not support sub-daily cron, so the timely scheduler must live outside Vercel unless the project upgrades to Vercel Pro.
 
 ## Required Vercel Environment Variables
 
@@ -115,9 +115,9 @@ Default behavior: once per day unless user explicitly asks for more.
 - `KV_REST_API_TOKEN`
 - `CRON_SECRET`
 - optional: `PUSH_TEST_SECRET`
-- GitHub secret: `OA_CRON_SECRET` with the same value as Vercel `CRON_SECRET`
+- If GitHub Actions scheduling is restored later, GitHub secret `OA_CRON_SECRET` should match Vercel `CRON_SECRET`
 
-`CRON_SECRET` should be a random string of at least 16 characters. The GitHub scheduler sends it as a bearer token to `/api/push?action=cron`.
+`CRON_SECRET` should be a random string of at least 16 characters. Whatever external scheduler is used should send it as a bearer token to `/api/push?action=cron`.
 
 ## Immediate Test Flow
 
@@ -127,7 +127,7 @@ Default behavior: once per day unless user explicitly asks for more.
 4. Confirm `/api/push?action=register` receives the token in production logs.
 5. Send a protected test push through `/api/push?action=test`.
 6. Lock the phone and confirm the notification arrives while the app is closed.
-7. Confirm the GitHub Actions scheduler runs `/api/push?action=cron` and does not require the app to open.
+7. Confirm the chosen external scheduler runs `/api/push?action=cron` and does not require the app to open.
 
 ## Next Hardening Steps
 

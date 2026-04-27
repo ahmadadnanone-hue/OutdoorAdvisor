@@ -10,7 +10,7 @@ function sendJson(res, status, payload) {
 function getWeatherKitConfig() {
   const teamId = process.env.WEATHERKIT_TEAM_ID?.trim();
   const keyId = process.env.WEATHERKIT_KEY_ID?.trim();
-  const serviceId = (process.env.WEATHERKIT_SERVICE_ID || 'com.ahmadadnanone.weatherkit').trim();
+  const serviceId = (process.env.WEATHERKIT_SERVICE_ID || 'com.ahmadadnanone.outdooradvisor.weatherkit').trim();
   const privateKey = (process.env.WEATHERKIT_PRIVATE_KEY || process.env.WEATHERKIT_KEY_P8 || '')
     .replace(/\\n/g, '\n')
     .trim();
