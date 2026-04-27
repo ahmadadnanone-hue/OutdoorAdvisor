@@ -17,5 +17,6 @@ UI_OVERHAUL_BLUEPRINT.md
 AGENTS.md
 ios/Pods/
 ios/build/
+ios/Podfile.lock
 ios/.xcode.env.local
 android/
