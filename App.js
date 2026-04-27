@@ -168,9 +168,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    // Fills the sliver below the floating pill so the SafeAreaProvider's
-    // default white background never shows through on any device.
-    backgroundColor: dc.bgTop,
+    backgroundColor: 'transparent',
   },
 });
 
@@ -236,18 +234,22 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <LocationProvider>
-          <SettingsProvider>
-            <ThemeProvider>
-              <AppNavigator />
-              {launchVisible ? <LaunchAnimation onComplete={() => setLaunchVisible(false)} /> : null}
-              {Platform.OS === 'web' ? <Analytics /> : null}
-            </ThemeProvider>
-          </SettingsProvider>
-        </LocationProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    // Root fill: gradient's bottom stop so the home-indicator zone is seamless.
+    // The tab bar shell stays transparent — the gradient shows through cleanly.
+    <View style={{ flex: 1, backgroundColor: dc.bgBottom }}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <LocationProvider>
+            <SettingsProvider>
+              <ThemeProvider>
+                <AppNavigator />
+                {launchVisible ? <LaunchAnimation onComplete={() => setLaunchVisible(false)} /> : null}
+                {Platform.OS === 'web' ? <Analytics /> : null}
+              </ThemeProvider>
+            </SettingsProvider>
+          </LocationProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </View>
   );
 }
