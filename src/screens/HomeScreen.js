@@ -265,7 +265,7 @@ export default function HomeScreen({ navigation, route }) {
         <ScrollView
           ref={scrollRef}
           style={styles.scroll}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 90, 120) }]}
           showsVerticalScrollIndicator={false}
           refreshControl={Platform.OS !== 'web' ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} /> : undefined}
         >
@@ -483,7 +483,7 @@ const styles = StyleSheet.create({
   loading:     { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 },
   loadingText: { fontSize: 15, fontWeight: '500', color: dc.textSecondary },
   scroll:      { flex: 1 },
-  content:     { padding: 16, paddingBottom: 120, gap: 16 },
+  content:     { padding: 16, gap: 16 },
   refreshNote: { fontSize: 12, color: dc.textMuted, textAlign: 'center', paddingVertical: 6 },
   footer:      { fontSize: 11, color: dc.textMuted, textAlign: 'center', marginTop: 8 },
   notificationSafe: { flex: 1, gap: 14 },

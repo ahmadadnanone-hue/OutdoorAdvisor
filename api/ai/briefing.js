@@ -288,17 +288,22 @@ async function fetchSynthesisData(lat, lon, googleApiKey) {
 // ─── Synthesis: prompt + fallback ─────────────────────────────────────────────
 
 function buildSynthesisPrompt(signals, locationName, pollenLabel) {
-  const { temp, feelsLike, weatherLabel, windKph, uvIndex, aqi, pm25, rainNext3h,
-          capAlerts, tomorrowMax, tomorrowMin, tomorrowCode, tomorrowRain } = signals;
+  const { temp, feelsLike, humidity, weatherLabel, windKph, uvIndex, aqi, pm25,
+          rainNext3h, capAlerts, tomorrowMax, tomorrowMin, tomorrowCode, tomorrowRain } = signals;
 
   const now = new Date();
   const hour = now.getHours();
   const timeCtx = hour < 6 ? 'Before dawn' : hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : hour < 20 ? 'Evening' : 'Night';
   const day = now.toLocaleDateString('en-US', { weekday: 'long' });
 
+  // Heat index note — combination of heat + humidity is worse than either alone
+  const heatNote = feelsLike != null && humidity != null && feelsLike >= 35 && humidity >= 50
+    ? ` · HIGH HUMIDITY ${humidity}% amplifies heat`
+    : humidity != null ? ` · humidity ${humidity}%` : '';
+
   const weatherLine = [
     temp != null ? `${Math.round(temp)}°C` : null,
-    feelsLike != null ? `feels ${Math.round(feelsLike)}°C` : null,
+    feelsLike != null ? `feels ${Math.round(feelsLike)}°C${heatNote}` : null,
     weatherLabel,
     windKph != null ? `wind ${Math.round(windKph)} km/h` : null,
     uvIndex != null ? `UV ${Math.round(uvIndex)} (${uvLabel(uvIndex)})` : null,
@@ -309,6 +314,19 @@ function buildSynthesisPrompt(signals, locationName, pollenLabel) {
     ? `AQI ${aqi} (${aqiCat(aqi)})${pm25 != null ? ` · PM2.5 ${Math.round(pm25)}µg/m³` : ''}`
     : 'AQI unavailable';
 
+  // UV risk context
+  const uvNote = uvIndex != null
+    ? uvIndex >= 11 ? 'UV EXTREME — sunburn in <15 min, cover up fully'
+    : uvIndex >= 8  ? 'UV Very High — sunscreen + hat essential'
+    : uvIndex >= 6  ? 'UV High — reapply sunscreen mid-day'
+    : null
+    : null;
+
+  // Pollen context
+  const pollenNote = pollenLabel
+    ? `POLLEN: ${pollenLabel} — ${/high|very/i.test(pollenLabel) ? 'allergy sufferers stay indoors or mask up' : 'manageable for most people'}`
+    : null;
+
   const alertsLine = capAlerts.length
     ? capAlerts.map((c) => `[${c.severity}] ${c.title}`).join(' | ')
     : 'No active PMD alerts';
@@ -317,20 +335,26 @@ function buildSynthesisPrompt(signals, locationName, pollenLabel) {
     ? `${WMO_LABELS[tomorrowCode] ?? 'Variable'}, ${Math.round(tomorrowMin)}–${Math.round(tomorrowMax)}°C${tomorrowRain > 2 ? `, ${Math.round(tomorrowRain)}mm rain` : ''}`
     : 'Unavailable';
 
+  const extraLines = [uvNote, pollenNote].filter(Boolean).join('\n');
+
   return `
-You are OutdoorAdvisor Pakistan. Output ONLY the JSON object below — no prose, no markdown.
-KEEP ALL STRING VALUES SHORT (headline ≤60 chars, summary ≤120 chars, each action ≤40 chars).
+You are OutdoorAdvisor Pakistan. Output ONLY the JSON object — no prose, no markdown.
+KEEP VALUES SHORT: headline ≤60 chars, summary ≤120 chars, each action ≤40 chars.
 
 LOCATION: ${locationName || 'Pakistan'} · ${day}, ${timeCtx}
 WEATHER: ${weatherLine}
-AIR QUALITY: ${aqiLine}${pollenLabel ? `\nPOLLEN: ${pollenLabel}` : ''}
+AIR QUALITY: ${aqiLine}${extraLines ? '\n' + extraLines : ''}
 ALERTS: ${alertsLine}
 TOMORROW: ${tomorrowLine}
 
-JSON schema (fill every field, no extra keys):
-{"severity":"go|caution|danger","headline":"<10 words>","summary":"<2 short sentences>","actions":["<verb phrase>","<verb phrase>"],"window":"<time or null>"}
+JSON schema (all fields required, no extra keys):
+{"severity":"go|caution|danger","headline":"<≤10 words>","summary":"<2 sentences>","actions":["<verb phrase>","<verb phrase>"],"window":"<best time or null>"}
 
-severity: "danger" if AQI>200 or Extreme/Severe alert or thunder. "caution" if AQI 101-200 or rain or UV≥8. "go" otherwise.
+Severity rules (pick worst that applies):
+- "danger": AQI>170, UV≥11, Extreme/Severe alert, thunderstorm, feels≥42°C
+- "caution": AQI 81-170, UV 6-10, active rain, feels 35-41°C, High pollen, Moderate alert
+- "go": everything else
+Mention the 2 most impactful risks in summary. Tailor actions to the time of day.
 `.trim();
 }
 

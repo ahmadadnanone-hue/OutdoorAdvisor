@@ -12,36 +12,36 @@ function getConditionTheme(code, feelsLike, aqi) {
   const heat = feelsLike ?? null;
   const aqiNum = aqi ?? 0;
 
-  // ── AQI hazardous / very unhealthy (>200) ─────────────────────────────────
-  if (aqiNum > 200) return {
+  // ── AQI hazardous / very unhealthy (>170) ────────────────────────────────
+  if (aqiNum > 170) return {
     tint:   'rgba(185,28,28,0.34)',    // deep red haze
     border: 'rgba(239,68,68,0.65)',
     icon:   '#FCA5A5',
   };
 
-  // ── Extreme heat ≥45°C ────────────────────────────────────────────────────
-  if (heat != null && heat >= 45) return {
+  // ── Extreme heat ≥42°C feels-like ────────────────────────────────────────
+  if (heat != null && heat >= 42) return {
     tint:   'rgba(220,38,38,0.32)',    // danger red-orange
     border: 'rgba(239,68,68,0.62)',
     icon:   '#FCA5A5',
   };
 
-  // ── AQI unhealthy (151–200) ───────────────────────────────────────────────
-  if (aqiNum > 150) return {
+  // ── AQI unhealthy (121–170) ───────────────────────────────────────────────
+  if (aqiNum > 120) return {
     tint:   'rgba(194,65,12,0.30)',    // deep orange-red
     border: 'rgba(234,88,12,0.58)',
     icon:   '#FB923C',
   };
 
-  // ── High heat 38–44°C ─────────────────────────────────────────────────────
-  if (heat != null && heat >= 38) return {
+  // ── High heat 35–41°C feels-like ─────────────────────────────────────────
+  if (heat != null && heat >= 35) return {
     tint:   'rgba(234,88,12,0.26)',    // warm amber-orange
     border: 'rgba(251,146,60,0.56)',
     icon:   '#FD8C3A',
   };
 
-  // ── AQI moderate (101–150) ────────────────────────────────────────────────
-  if (aqiNum > 100) return {
+  // ── AQI moderate (80–120) ─────────────────────────────────────────────────
+  if (aqiNum > 80) return {
     tint:   'rgba(202,138,4,0.26)',    // amber-yellow
     border: 'rgba(234,179,8,0.54)',
     icon:   '#FDE047',
