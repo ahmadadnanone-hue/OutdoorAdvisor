@@ -35,7 +35,7 @@ function getScoreBand(score) {
 }
 
 function getSmartAdvisory(activity, aqi, weather) {
-  const indoorShelterActivities = new Set(['gym', 'yoga', 'badminton', 'squash', 'bowling', 'martial_arts']);
+  const indoorShelterActivities = new Set(['yoga', 'badminton', 'martial_arts']);
   const temp = weather?.temp;
   const humidity = weather?.humidity;
   const windSpeed = weather?.windSpeed;

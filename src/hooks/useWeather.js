@@ -1,5 +1,5 @@
 /**
- * useWeather — WeatherKit REST API (primary) with Open-Meteo fallback.
+ * useWeather — server-side WeatherKit proxy (primary) with Open-Meteo fallback.
  *
  * WeatherKit gives us wind gusts, sunrise/sunset, moon phase, alerts,
  * precipitationChance per day, and Apple's conditionCode.
@@ -8,8 +8,7 @@
  *   { current, hourly, daily, loading, error, isUsingCache, updatedAt, refresh }
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchWeatherKit, normalizeWeatherKit } from '../services/weatherKit';
-import { WK } from '../config/weatherkit';
+import { fetchApiJson } from '../config/api';
 import * as persistentCache from '../utils/persistentCache';
 
 const CACHE_NS  = 'weatherkit_v1';
@@ -17,7 +16,7 @@ const CACHE_TTL = 10 * 60 * 1000; // 10 min
 
 // ─── Open-Meteo fallback ──────────────────────────────────────────────────────
 const OM_BASE     = 'https://api.open-meteo.com/v1/forecast';
-const OM_CURRENT  = 'temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,wind_direction_10m,weather_code,uv_index,surface_pressure,wind_gusts_10m';
+const OM_CURRENT  = 'temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,wind_direction_10m,weather_code,uv_index,surface_pressure,wind_gusts_10m,is_day';
 const OM_HOURLY   = 'temperature_2m,relative_humidity_2m,weather_code,precipitation_probability';
 const OM_DAILY    = 'temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum,uv_index_max,wind_speed_10m_max,wind_direction_10m_dominant,sunrise,sunset,precipitation_probability_max,apparent_temperature_max,apparent_temperature_min,relative_humidity_2m_max,relative_humidity_2m_min,wind_gusts_10m_max';
 
@@ -40,6 +39,7 @@ function parseOpenMeteo(json) {
       weatherCode:   c.weather_code         ?? null,
       uvIndex:       c.uv_index             ?? null,
       pressure:      c.surface_pressure     ?? null,
+      daylight:      c.is_day != null ? c.is_day === 1 : null,
     },
     hourly: (h.time || []).slice(0, 24).map((time, i) => ({
       time,
@@ -71,11 +71,15 @@ function parseOpenMeteo(json) {
   };
 }
 
-// ─── Credentials check ────────────────────────────────────────────────────────
-const WK_CONFIGURED =
-  WK.TEAM_ID    !== 'XXXXXXXXXX' &&
-  WK.KEY_ID     !== 'XXXXXXXXXX' &&
-  !WK.KEY_P8.includes('REPLACE_THIS');
+async function fetchWeatherKitProxy(lat, lon) {
+  return fetchApiJson(`/api/weatherkit?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`);
+}
+
+async function fetchOpenMeteo(lat, lon) {
+  const res = await fetch(buildOmUrl(lat, lon));
+  if (!res.ok) throw new Error(`Open-Meteo ${res.status}`);
+  return parseOpenMeteo(await res.json());
+}
 
 /** Standalone fetch used by TravelScreen etc. */
 export async function fetchWeatherForLocation(lat, lon) {
@@ -84,13 +88,10 @@ export async function fetchWeatherForLocation(lat, lon) {
   if (cached) return cached;
 
   let data;
-  if (WK_CONFIGURED) {
-    const json = await fetchWeatherKit(lat, lon);
-    data = normalizeWeatherKit(json);
-  } else {
-    const res = await fetch(buildOmUrl(lat, lon));
-    if (!res.ok) throw new Error(`Open-Meteo ${res.status}`);
-    data = parseOpenMeteo(await res.json());
+  try {
+    data = await fetchWeatherKitProxy(lat, lon);
+  } catch {
+    data = await fetchOpenMeteo(lat, lon);
   }
   persistentCache.set(CACHE_NS, key, data);
   return data;
@@ -105,7 +106,7 @@ export default function useWeather(lat, lon) {
   const [error,        setError]        = useState(null);
   const [isUsingCache, setIsUsingCache] = useState(false);
   const [updatedAt,    setUpdatedAt]    = useState(null);
-  const [source,       setSource]       = useState(WK_CONFIGURED ? 'WeatherKit' : 'Open-Meteo');
+  const [source,       setSource]       = useState('WeatherKit proxy');
   const cancelRef = useRef(false);
 
   const load = useCallback(async (lt, ln, opts = {}) => {
@@ -131,17 +132,8 @@ export default function useWeather(lat, lon) {
 
     try {
       let data;
-      if (WK_CONFIGURED) {
-        const json = await fetchWeatherKit(lt, ln);
-        data = normalizeWeatherKit(json);
-        if (!cancelRef.current) setSource('WeatherKit');
-      } else {
-        // Fallback to Open-Meteo while credentials aren't set
-        const res = await fetch(buildOmUrl(lt, ln));
-        if (!res.ok) throw new Error(`Open-Meteo ${res.status}`);
-        data = parseOpenMeteo(await res.json());
-        if (!cancelRef.current) setSource('Open-Meteo');
-      }
+      data = await fetchWeatherKitProxy(lt, ln);
+      if (!cancelRef.current) setSource(data.source || 'WeatherKit proxy');
 
       persistentCache.set(CACHE_NS, key, data);
       if (!cancelRef.current) {
@@ -153,27 +145,20 @@ export default function useWeather(lat, lon) {
         setError(null);
       }
     } catch (e) {
-      // WeatherKit failed — try Open-Meteo as last resort
-      if (WK_CONFIGURED && !cancelRef.current) {
-        try {
-          const res = await fetch(buildOmUrl(lt, ln));
-          if (!res.ok) throw new Error(`Open-Meteo ${res.status}`);
-          const data = parseOpenMeteo(await res.json());
-          persistentCache.set(CACHE_NS, key, data);
-          if (!cancelRef.current) {
-            setCurrent(data.current);
-            setHourly(data.hourly  || []);
-            setDaily(data.daily   || []);
-            setIsUsingCache(false);
-            setUpdatedAt(Date.now());
-            setSource('Open-Meteo (fallback)');
-            setError(null);
-          }
-        } catch (e2) {
-          if (!cancelRef.current) setError(e2.message);
+      try {
+        const data = await fetchOpenMeteo(lt, ln);
+        persistentCache.set(CACHE_NS, key, data);
+        if (!cancelRef.current) {
+          setCurrent(data.current);
+          setHourly(data.hourly  || []);
+          setDaily(data.daily   || []);
+          setIsUsingCache(false);
+          setUpdatedAt(Date.now());
+          setSource('Open-Meteo (fallback)');
+          setError(null);
         }
-      } else {
-        if (!cancelRef.current) setError(e.message);
+      } catch (e2) {
+        if (!cancelRef.current) setError(e2.message);
       }
     } finally {
       if (!cancelRef.current) setLoading(false);

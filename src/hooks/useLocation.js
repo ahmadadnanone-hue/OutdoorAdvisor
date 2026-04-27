@@ -3,6 +3,7 @@ import * as Location from 'expo-location';
 import { CITIES } from '../data/cities';
 import { reverseGeocode } from '../config/googleApi';
 import * as persistentCache from '../utils/persistentCache';
+import { saveLocationSnapshot } from '../utils/locationSnapshot';
 
 const DEFAULT_CITY = CITIES.find((c) => c.name === 'Lahore');
 const LOCATION_CACHE_NS = 'device_location';
@@ -48,6 +49,7 @@ export default function useLocation() {
           setLocation({ lat: cached.lat, lon: cached.lon });
           setCity(cached.city || DEFAULT_CITY.name);
           setIsUsingDeviceLocation(cached.source !== 'manual');
+          saveLocationSnapshot(cached).catch(() => {});
           setLoading(false);
           return cached;
         }
@@ -61,6 +63,7 @@ export default function useLocation() {
         setCity(fallback.city);
         setIsUsingDeviceLocation(true);
         persistentCache.set(LOCATION_CACHE_NS, LOCATION_CACHE_KEY, fallback);
+        saveLocationSnapshot(fallback).catch(() => {});
         setError('Location permission denied. Defaulting to Lahore.');
         setLoading(false);
         return fallback;
@@ -84,6 +87,7 @@ export default function useLocation() {
       setIsUsingDeviceLocation(true);
       const resolved = { ...nextLocation, city: resolvedCity, source: 'device' };
       persistentCache.set(LOCATION_CACHE_NS, LOCATION_CACHE_KEY, resolved);
+      saveLocationSnapshot(resolved).catch(() => {});
       return resolved;
     } catch (err) {
       const fallback = { lat: DEFAULT_CITY.lat, lon: DEFAULT_CITY.lon, city: DEFAULT_CITY.name, source: 'device' };
@@ -91,6 +95,7 @@ export default function useLocation() {
       setCity(fallback.city);
       setIsUsingDeviceLocation(true);
       persistentCache.set(LOCATION_CACHE_NS, LOCATION_CACHE_KEY, fallback);
+      saveLocationSnapshot(fallback).catch(() => {});
       setError(err.message || 'Failed to get location. Defaulting to Lahore.');
       return fallback;
     } finally {
@@ -114,6 +119,11 @@ export default function useLocation() {
         city: found.name,
         source: 'manual',
       });
+      saveLocationSnapshot({
+        ...nextLocation,
+        city: found.name,
+        source: 'manual',
+      }).catch(() => {});
     }
   }, []);
 
@@ -129,6 +139,12 @@ export default function useLocation() {
       city: name || 'Selected',
       source: 'manual',
     });
+    saveLocationSnapshot({
+      lat,
+      lon,
+      city: name || 'Selected',
+      source: 'manual',
+    }).catch(() => {});
   }, []);
 
   return { location, city, isUsingDeviceLocation, loading, error, refresh: fetchLocation, selectCity, selectPlace };

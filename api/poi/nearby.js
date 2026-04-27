@@ -10,6 +10,7 @@ function sendJson(res, status, payload) {
  *   - lat, lon     (required, numeric)
  *   - radius       (meters, default 2500, clamped 500..8000)
  *   - types        (comma-separated Google Places v1 included types)
+ *   - query        (text query fallback, e.g. "cricket ground")
  *   - maxResults   (default 8, clamped 1..20)
  *
  * Example:
@@ -43,13 +44,40 @@ export default async function handler(req, res) {
     .split(',')
     .map((t) => t.trim())
     .filter(Boolean);
+  const query = typeof src.query === 'string' ? src.query.trim() : '';
 
-  if (includedTypes.length === 0) {
-    return sendJson(res, 400, { error: 'At least one Places type is required.' });
+  if (includedTypes.length === 0 && !query) {
+    return sendJson(res, 400, { error: 'At least one Places type or a query is required.' });
   }
 
   try {
-    const response = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
+    const url = query
+      ? 'https://places.googleapis.com/v1/places:searchText'
+      : 'https://places.googleapis.com/v1/places:searchNearby';
+    const body = query
+      ? {
+          textQuery: query,
+          pageSize: maxResults,
+          rankPreference: 'DISTANCE',
+          locationBias: {
+            circle: {
+              center: { latitude: lat, longitude: lon },
+              radius,
+            },
+          },
+        }
+      : {
+          includedTypes,
+          maxResultCount: maxResults,
+          locationRestriction: {
+            circle: {
+              center: { latitude: lat, longitude: lon },
+              radius,
+            },
+          },
+        };
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -57,16 +85,7 @@ export default async function handler(req, res) {
         'X-Goog-FieldMask':
           'places.id,places.displayName,places.types,places.rating,places.userRatingCount,places.location,places.shortFormattedAddress,places.formattedAddress',
       },
-      body: JSON.stringify({
-        includedTypes,
-        maxResultCount: maxResults,
-        locationRestriction: {
-          circle: {
-            center: { latitude: lat, longitude: lon },
-            radius,
-          },
-        },
-      }),
+      body: JSON.stringify(body),
     });
 
     const json = await response.json();

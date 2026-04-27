@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DEFAULT_ENABLED_ACTIVITY_IDS } from '../data/activities';
+import { ACTIVITY_IDS, DEFAULT_ENABLED_ACTIVITY_IDS } from '../data/activities';
 
 const STORAGE_KEY = 'outdooradvisor_settings';
 
@@ -31,23 +31,39 @@ const DEFAULT_HOME_SECTIONS = [
   'travel',
 ];
 
+const DEFAULT_TRAVEL_SECTIONS = [
+  'sources',
+  'nhmp',
+  'pmd',
+  'aiInsight',
+  'touristLinks',
+  'majorRoutes',
+];
+
+export const ALL_FAB_ACTION_IDS = ['refresh', 'ai-brief', 'location', 'activities', 'travel', 'share'];
+export const DEFAULT_FAB_ACTIONS = ['refresh', 'location', 'activities', 'travel', 'share'];
+
 const DEFAULT_SETTINGS = {
   units: 'metric', // 'metric' | 'imperial'
   windUnit: 'kmh', // 'kmh' | 'mph' | 'ms' | 'knots'
   homeSections: DEFAULT_HOME_SECTIONS,
+  travelSections: DEFAULT_TRAVEL_SECTIONS,
   enabledActivities: DEFAULT_ENABLED_ACTIVITY_IDS,
+  fabActions: DEFAULT_FAB_ACTIONS,
   poiLayers: [], // reserved
 };
 
 function normalizeEnabledActivities(enabledActivities) {
-  const incoming = Array.isArray(enabledActivities) ? enabledActivities.filter(Boolean) : [];
+  const validIds = new Set(ACTIVITY_IDS);
+  const incoming = Array.isArray(enabledActivities)
+    ? enabledActivities.filter((id) => Boolean(id) && validIds.has(id))
+    : [];
   if (!incoming.length) {
     return DEFAULT_ENABLED_ACTIVITY_IDS;
   }
-
-  const next = [...incoming];
-  if (!next.includes('gym')) {
-    next.push('gym');
+  const next = [...new Set(incoming)];
+  if (!next.includes('padel')) {
+    next.push('padel');
   }
   return next;
 }
@@ -72,6 +88,23 @@ function normalizeHomeSections(homeSections) {
   return [...cleaned, ...missingDefaults];
 }
 
+function normalizeFabActions(fabActions) {
+  const validIds = new Set(ALL_FAB_ACTION_IDS);
+  const incoming = Array.isArray(fabActions)
+    ? fabActions.filter((id) => Boolean(id) && validIds.has(id))
+    : null;
+  if (!incoming || incoming.length === 0) return DEFAULT_FAB_ACTIONS;
+  return [...new Set(incoming)];
+}
+
+function normalizeTravelSections(travelSections) {
+  const known = new Set(DEFAULT_TRAVEL_SECTIONS);
+  const incoming = Array.isArray(travelSections) ? travelSections : [];
+  const cleaned = incoming.filter((key) => known.has(key));
+  const missingDefaults = DEFAULT_TRAVEL_SECTIONS.filter((key) => !cleaned.includes(key));
+  return [...cleaned, ...missingDefaults];
+}
+
 const SettingsContext = createContext();
 
 export function SettingsProvider({ children }) {
@@ -88,7 +121,9 @@ export function SettingsProvider({ children }) {
             ...DEFAULT_SETTINGS,
             ...parsed,
             homeSections: normalizeHomeSections(parsed.homeSections),
+            travelSections: normalizeTravelSections(parsed.travelSections),
             enabledActivities: normalizeEnabledActivities(parsed.enabledActivities),
+            fabActions: normalizeFabActions(parsed.fabActions),
           });
         }
       } catch {}
@@ -122,6 +157,35 @@ export function SettingsProvider({ children }) {
     updateSettings({ homeSections: DEFAULT_HOME_SECTIONS });
   }, [updateSettings]);
 
+  const moveTravelSection = useCallback((from, to) => {
+    setSettings((prev) => {
+      const arr = [...prev.travelSections];
+      const [item] = arr.splice(from, 1);
+      arr.splice(to, 0, item);
+      const next = { ...prev, travelSections: arr };
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const toggleTravelSection = useCallback((key) => {
+    setSettings((prev) => {
+      let arr = [...prev.travelSections];
+      if (arr.includes(key)) {
+        arr = arr.filter((k) => k !== key);
+      } else {
+        arr.push(key);
+      }
+      const next = { ...prev, travelSections: normalizeTravelSections(arr) };
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const resetTravelSections = useCallback(() => {
+    updateSettings({ travelSections: DEFAULT_TRAVEL_SECTIONS });
+  }, [updateSettings]);
+
   const addActivity = useCallback((id) => {
     setSettings((prev) => {
       if (prev.enabledActivities.includes(id)) return prev;
@@ -136,6 +200,21 @@ export function SettingsProvider({ children }) {
       const next = { ...prev, enabledActivities: prev.enabledActivities.filter((x) => x !== id) };
       AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
       return next;
+    });
+  }, []);
+
+  const toggleFabAction = useCallback((id) => {
+    setSettings((prev) => {
+      const arr = [...(prev.fabActions || DEFAULT_FAB_ACTIONS)];
+      let next;
+      if (arr.includes(id)) {
+        next = arr.filter((k) => k !== id);
+      } else {
+        next = [...arr, id];
+      }
+      const updated = { ...prev, fabActions: next };
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)).catch(() => {});
+      return updated;
     });
   }, []);
 
@@ -210,6 +289,10 @@ export function SettingsProvider({ children }) {
       moveSection,
       toggleSection,
       resetHomeSections,
+      moveTravelSection,
+      toggleTravelSection,
+      resetTravelSections,
+      toggleFabAction,
       addActivity,
       removeActivity,
       convertTemp,

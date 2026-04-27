@@ -4,6 +4,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, SafeAreaView, RefreshControl, ActivityIndicator, Platform, Modal, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
@@ -54,12 +55,13 @@ import { loadNotificationInbox, markInboxSeen } from '../utils/notificationInbox
 const LIVE_REFRESH_WINDOW_MS   = 5 * 60 * 1000;
 const MAX_LIVE_REFRESHES       = 2;
 const PREMIUM_SECTIONS         = new Set(['pollen', 'wind', 'details', 'forecast']);
-const ACTIVITY_IDS             = ['running', 'cycling', 'walking', 'gym', 'cricket', 'dining'];
+const ACTIVITY_IDS             = ['running', 'cycling', 'walking', 'swimming', 'cricket', 'dining'];
 
-export default function HomeScreen({ navigation }) {
+export default function HomeScreen({ navigation, route }) {
   const { colors } = useTheme();
   const settings = useSettings();
   const { isPremium, user } = useAuth();
+  const insets = useSafeAreaInsets();
   const health = useHealthData({ prompt: false });
 
   // ── Location ──────────────────────────────────────────────────────────────
@@ -129,12 +131,28 @@ export default function HomeScreen({ navigation }) {
   const [notificationInbox, setNotificationInbox] = useState([]);
   const [smartSnapshot, setSmartSnapshot] = useState(null);
   const refreshWindowRef                      = useRef([]);
+  const scrollRef                             = useRef(null);
 
   useEffect(() => {
     if (!refreshNote) return;
     const t = setTimeout(() => setRefreshNote(''), 5000);
     return () => clearTimeout(t);
   }, [refreshNote]);
+
+  // ── FAB trigger (refresh / ai-brief / location) ────────────────────────────
+  const fabTrigger = route?.params?.fabTrigger;
+  useEffect(() => {
+    if (!fabTrigger) return;
+    if (fabTrigger.startsWith('refresh-')) {
+      onRefresh();
+    } else if (fabTrigger.startsWith('ai-brief-')) {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      refreshSynthesis(true);
+    } else if (fabTrigger.startsWith('location-')) {
+      setCityPickerVisible(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fabTrigger]);
 
   const unreadNotificationCount = useMemo(
     () => notificationInbox.filter((item) => !item.seen).length,
@@ -245,6 +263,7 @@ export default function HomeScreen({ navigation }) {
     <ScreenGradient>
       <SafeAreaView style={styles.safe}>
         <ScrollView
+          ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
@@ -406,7 +425,14 @@ export default function HomeScreen({ navigation }) {
           onRequestClose={() => setNotificationCenterVisible(false)}
         >
           <ScreenGradient>
-            <SafeAreaView style={styles.notificationSafe}>
+            {/* Use explicit insets instead of SafeAreaView so horizontal insets
+                are correctly applied inside a transparent Modal on all devices */}
+            <View style={[styles.notificationSafe, {
+              paddingTop: Math.max(insets.top, 16),
+              paddingBottom: Math.max(insets.bottom, 16),
+              paddingLeft: Math.max(insets.left + 16, 20),
+              paddingRight: Math.max(insets.right + 16, 20),
+            }]}>
               <View style={styles.notificationHeader}>
                 <Text style={styles.notificationTitle}>Notifications</Text>
                 <TouchableOpacity onPress={markAllNotificationsRead} activeOpacity={0.8}>
@@ -444,7 +470,7 @@ export default function HomeScreen({ navigation }) {
               >
                 <Text style={styles.notificationCloseText}>Close</Text>
               </TouchableOpacity>
-            </SafeAreaView>
+            </View>
           </ScreenGradient>
         </Modal>
       </SafeAreaView>
@@ -460,7 +486,7 @@ const styles = StyleSheet.create({
   content:     { padding: 16, paddingBottom: 120, gap: 16 },
   refreshNote: { fontSize: 12, color: dc.textMuted, textAlign: 'center', paddingVertical: 6 },
   footer:      { fontSize: 11, color: dc.textMuted, textAlign: 'center', marginTop: 8 },
-  notificationSafe: { flex: 1, padding: 16, gap: 14 },
+  notificationSafe: { flex: 1, gap: 14 },
   notificationHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8 },
   notificationTitle: { fontSize: 22, fontWeight: '700', color: dc.textPrimary, letterSpacing: -0.25 },
   notificationAction: { fontSize: 13, fontWeight: '700', color: dc.accentCyan },

@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as persistentCache from './persistentCache';
+import { appendInboxNotification } from './notificationInbox';
 
 const ALERT_CACHE_NS = 'local_alert_notice';
 const DEFAULT_COOLDOWN_MS = 3 * 60 * 60 * 1000;
@@ -97,6 +98,7 @@ export async function maybeSendLocalAlert(key, payload, cooldownMs = DEFAULT_COO
       });
     }
 
+    await appendInboxNotification(payload);
     persistentCache.set(ALERT_CACHE_NS, key, { sentAt: Date.now() });
     return true;
   } catch {

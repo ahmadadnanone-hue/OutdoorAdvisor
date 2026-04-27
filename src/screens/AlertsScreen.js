@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
-import { useSettings } from '../context/SettingsContext';
+import { useSettings, ALL_FAB_ACTION_IDS } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import { getPremiumFeatureCopy } from '../lib/premium';
 // Web push is not used on iOS — stubs keep Platform.OS === 'web' branches safe
@@ -50,6 +50,15 @@ const SECTION_META = {
   activities: { label: 'Activity Advisory',    icon: '🏃', desc: 'Outdoor activity recommendations' },
 };
 const ALL_SECTION_KEYS = Object.keys(SECTION_META);
+
+const FAB_ACTION_META = {
+  refresh:    { label: 'Refresh Data',     icon: '🔄', desc: 'Force-fetch latest weather and AQI data.', premium: true,  note: 'Up to 5 times per hour.' },
+  'ai-brief': { label: 'AI Brief',         icon: '✨', desc: 'Refresh your AI-generated outdoor briefing on demand.', premium: true },
+  location:   { label: 'Change City',      icon: '📍', desc: 'Open the city and location picker instantly.' },
+  activities: { label: 'Outdoors',         icon: '🏃', desc: 'Jump straight to outdoor activity scoring.' },
+  travel:     { label: 'Travel',           icon: '🗺️', desc: 'Open road and route condition checks.' },
+  share:      { label: 'Share App',        icon: '📤', desc: 'Share OutdoorAdvisor with friends and family.' },
+};
 
 /* ---------- Custom Slider ---------- */
 function CustomSlider({ value, min, max, step = 1, onValueChange, trackColor }) {
@@ -398,7 +407,7 @@ export default function AlertsScreen() {
 
   /* ---------- Customize Tab ---------- */
   const renderCustomize = () => {
-    const { units, windUnit, homeSections, setUnits, setWindUnit, moveSection, toggleSection, resetHomeSections } = settings;
+    const { units, windUnit, homeSections, fabActions, setUnits, setWindUnit, moveSection, toggleSection, resetHomeSections, toggleFabAction } = settings;
     const unitOptions = [{ key: 'metric', label: 'Metric', desc: '°C, mm' }, { key: 'imperial', label: 'Imperial', desc: '°F, in' }];
     const windOptions = [{ key: 'kmh', label: 'km/h' }, { key: 'mph', label: 'mph' }, { key: 'ms', label: 'm/s' }, { key: 'knots', label: 'knots' }];
     const enabledKeys = homeSections.filter((key) => isPremium || !PREMIUM_HOME_SECTION_KEYS.has(key));
@@ -527,6 +536,47 @@ export default function AlertsScreen() {
             })}
           </>
         )}
+
+        {/* ── FAB Quick Actions ── */}
+        <Text style={[styles.groupLabel, { marginTop: 28 }]}>Quick Action Button (FAB)</Text>
+        <Text style={styles.sectionDesc}>Choose which shortcuts appear in the floating action button. Premium actions require a premium account.</Text>
+        {!isPremium && (
+          <GlassCard tintColor={dc.infoGlass} borderColor={dc.infoStroke} style={styles.premiumBanner} contentStyle={styles.premiumBannerContent}>
+            <Text style={styles.premiumBannerTitle}>Refresh and AI Brief are premium shortcuts</Text>
+            <Text style={styles.premiumBannerBody}>Free users get Location, Outdoors, Travel, and Share shortcuts.</Text>
+          </GlassCard>
+        )}
+        {ALL_FAB_ACTION_IDS.map((id) => {
+          const meta     = FAB_ACTION_META[id];
+          const isLocked = meta.premium && !isPremium;
+          const isActive = !isLocked && (fabActions || []).includes(id);
+          return (
+            <GlassCard
+              key={id}
+              style={[styles.notifCard, isLocked && { opacity: 0.72 }]}
+              contentStyle={styles.notifCardContent}
+            >
+              <View style={styles.notifInfo}>
+                <View style={styles.notifLabelRow}>
+                  <Text style={styles.fabActionIcon}>{meta.icon}</Text>
+                  <Text style={styles.notifLabel}>{meta.label}</Text>
+                  {isLocked && <View style={styles.premiumChip}><Text style={styles.premiumChipText}>Premium</Text></View>}
+                </View>
+                <Text style={styles.notifDesc}>
+                  {meta.desc}{meta.note ? ` ${meta.note}` : ''}
+                  {isLocked ? ' Unlock with a premium account.' : ''}
+                </Text>
+              </View>
+              <Switch
+                value={isActive}
+                onValueChange={() => { if (!isLocked) toggleFabAction(id); }}
+                disabled={isLocked}
+                trackColor={{ false: dc.cardStrokeSoft, true: dc.accentCyan + '88' }}
+                thumbColor={isLocked ? dc.textMuted : isActive ? dc.accentCyan : dc.textMuted}
+              />
+            </GlassCard>
+          );
+        })}
       </ScrollView>
     );
   };
@@ -715,6 +765,7 @@ const styles = StyleSheet.create({
   notifInfo: { flex: 1, marginRight: 12 },
   notifLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' },
   notifLabel: { fontSize: 15, fontWeight: '600', color: dc.textPrimary },
+  fabActionIcon: { fontSize: 16 },
   notifDesc: { fontSize: 12, color: dc.textSecondary, lineHeight: 18 },
   premiumChip: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: dc.accentCyanBg },
   premiumChipText: { fontSize: 10, fontWeight: '700', color: dc.accentCyan, letterSpacing: 0.4, textTransform: 'uppercase' },

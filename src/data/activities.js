@@ -7,7 +7,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'running',
     name: 'Running',
-    emoji: '\u{1F3C3}',
+    icon: 'fitness-outline',
     timeWindows: [{ startHour: 5, endHour: 23 }],
     placesQuery: 'running track',
     healthImpact:
@@ -23,7 +23,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'cricket',
     name: 'Cricket',
-    emoji: '\u{1F3CF}',
+    icon: 'baseball-outline',
     timeWindows: [{ startHour: 7, endHour: 22 }],
     placesQuery: 'cricket ground',
     healthImpact:
@@ -38,7 +38,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'cycling',
     name: 'Cycling',
-    emoji: '\u{1F6B4}',
+    icon: 'bicycle-outline',
     timeWindows: [{ startHour: 5, endHour: 22 }],
     placesQuery: 'cycling track',
     healthImpact:
@@ -53,7 +53,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'walking',
     name: 'Walking',
-    emoji: '\u{1F6B6}',
+    icon: 'walk-outline',
     timeWindows: [{ startHour: 5, endHour: 23 }],
     placesType: 'park',
     placesQuery: 'park',
@@ -69,7 +69,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'swimming',
     name: 'Swimming',
-    emoji: '\u{1F3CA}',
+    icon: 'accessibility-outline',
     timeWindows: [{ startHour: 6, endHour: 22 }],
     placesQuery: 'swimming pool',
     healthImpact:
@@ -84,7 +84,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'gardening',
     name: 'Gardening',
-    emoji: '\u{1F331}',
+    icon: 'leaf-outline',
     timeWindows: [{ startHour: 6, endHour: 19 }],
     placesQuery: 'plant nursery',
     healthImpact:
@@ -99,7 +99,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'dining',
     name: 'Outdoor Dining',
-    emoji: '\u{1F37D}\u{FE0F}',
+    icon: 'restaurant-outline',
     timeWindows: [{ startHour: 12, endHour: 23 }],
     placesType: 'restaurant',
     placesQuery: 'restaurant outdoor seating',
@@ -115,7 +115,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'biking',
     name: 'Biking',
-    emoji: '\u{1F6B2}',
+    icon: 'speedometer-outline',
     timeWindows: [{ startHour: 6, endHour: 22 }],
     placesQuery: 'bike park',
     healthImpact:
@@ -130,7 +130,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'tennis',
     name: 'Tennis',
-    emoji: '\u{1F3BE}',
+    icon: 'tennisball-outline',
     timeWindows: [{ startHour: 6, endHour: 22 }],
     placesQuery: 'tennis court',
     healthImpact:
@@ -147,7 +147,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'padel',
     name: 'Padel Tennis',
-    emoji: '\u{1F3BE}',
+    icon: 'contract-outline',
     placesQuery: 'padel court',
     healthImpact:
       'Padel is a high-intensity racquet sport combining elements of tennis and squash, played in short bursts of explosive movement. Rallies last longer than tennis and heart rates stay elevated. In polluted air, the constant sprinting within an enclosed glass court can still expose players to trapped pollutants if the court is outdoor or semi-covered.',
@@ -161,7 +161,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'football',
     name: 'Football',
-    emoji: '\u{26BD}',
+    icon: 'football-outline',
     placesQuery: 'football ground',
     healthImpact:
       'Football demands continuous running, sprinting, and jumping for 90 minutes, pushing your lungs to their peak. This makes it one of the worst sports to play in polluted air — players can inhale hundreds of liters of contaminated air in a single match.',
@@ -175,7 +175,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'basketball',
     name: 'Basketball',
-    emoji: '\u{1F3C0}',
+    icon: 'basketball-outline',
     placesQuery: 'basketball court',
     healthImpact:
       'Basketball involves explosive jumps, constant sprints, and sustained high heart rates. Outdoor courts often sit near roads and urban surfaces where PM2.5 lingers. Deep breathing through the mouth during play bypasses the nose\'s natural filtration.',
@@ -189,7 +189,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'badminton',
     name: 'Badminton',
-    emoji: '\u{1F3F8}',
+    icon: 'send-outline',
     placesQuery: 'badminton court',
     healthImpact:
       'Badminton rallies require explosive bursts and quick recoveries, elevating heart rate sharply. Outdoor badminton is rare but where it happens, wind and pollutants both affect play. Indoor badminton is a good smog-season alternative.',
@@ -201,39 +201,9 @@ export const ACTIVITY_CATALOG = [
     indoorAlt: 'Almost all badminton clubs in Pakistan are indoor. See nearby courts below.',
   },
   {
-    id: 'squash',
-    name: 'Squash',
-    emoji: '\u{1F3BE}',
-    placesQuery: 'squash court',
-    healthImpact:
-      'Squash is one of the most cardio-intensive sports — players can burn 700-1000 calories per hour. Thankfully, squash courts are almost always indoor, shielding you from outdoor AQI, but ventilation of the court itself matters.',
-    tips: [
-      'Choose clubs with good HVAC — stale court air can still be unhealthy.',
-      'Warm up the shoulders, hips, and calves before going full speed.',
-      'Replace lost electrolytes, not just water, after a match.',
-    ],
-    indoorAlt: 'Squash is already indoor. On very hazardous days even stepping outside to reach the club is a concern — consider home bodyweight circuits instead.',
-  },
-  {
-    id: 'gym',
-    name: 'Gym Workout',
-    emoji: '\u{1F3CB}\u{FE0F}',
-    timeWindows: [{ startHour: 5, endHour: 23 }],
-    placesType: 'gym',
-    placesQuery: 'gym fitness center',
-    healthImpact:
-      'Weight training at the gym is mostly anaerobic, so the lung load is lower than running or football. However, gyms with poor ventilation can accumulate dust and CO2, and outdoor-adjacent gyms pull in polluted air through their AC intakes.',
-    tips: [
-      'Pick a gym with a visible HEPA/filtration system or good airflow.',
-      'Avoid gyms right next to major roads.',
-      'Rest periods indoors still count — you\'re breathing the ambient air.',
-    ],
-    indoorAlt: 'Bodyweight routines at home with windows shut and an air purifier running are a great alternative on hazardous days.',
-  },
-  {
     id: 'yoga',
     name: 'Yoga',
-    emoji: '\u{1F9D8}',
+    icon: 'body-outline',
     placesQuery: 'yoga studio',
     healthImpact:
       'Yoga emphasizes deep, controlled breathing (pranayama), so practicing outdoors in polluted air means pulling large volumes of PM2.5 straight into the lungs. Paradoxically, the better you breathe during yoga, the worse polluted air affects you.',
@@ -247,7 +217,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'golf',
     name: 'Golf',
-    emoji: '\u{26F3}',
+    icon: 'golf-outline',
     placesQuery: 'golf course',
     healthImpact:
       'A round of golf is 4-5 hours of moderate activity spent entirely outdoors. While walking speed is low, total exposure time is very high, so hazardous air adds up over a round. Golf courses are usually greener and slightly cleaner than city centers.',
@@ -261,7 +231,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'hiking',
     name: 'Hiking',
-    emoji: '\u{1F97E}',
+    icon: 'trail-sign-outline',
     placesQuery: 'hiking trail',
     healthImpact:
       'Hikes in Pakistan\'s hill stations (Margalla, Murree, Hunza) take you to higher elevation where air is usually much cleaner than the cities. But urban fringe trails (Margalla trails during smog season, Hub valley near Karachi) can be just as bad as the city itself.',
@@ -275,7 +245,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'skateboarding',
     name: 'Skateboarding',
-    emoji: '\u{1F6F9}',
+    icon: 'flash-outline',
     placesQuery: 'skate park',
     healthImpact:
       'Skateboarding is a mix of explosive effort and rest. Tricks demand short bursts of heavy breathing through the mouth. Skate parks are usually outdoor and often near roads, so exposure is meaningful on polluted days.',
@@ -289,7 +259,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'rock_climbing',
     name: 'Rock Climbing',
-    emoji: '\u{1F9D7}',
+    icon: 'triangle-outline',
     placesQuery: 'climbing gym',
     healthImpact:
       'Bouldering and sport climbing involve high-effort bursts and long rests. Outdoor climbing is increasingly popular in Pakistan\'s northern areas where air is clean. Indoor climbing gyms in cities are a smog-safe alternative.',
@@ -303,7 +273,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'martial_arts',
     name: 'Martial Arts',
-    emoji: '\u{1F94B}',
+    icon: 'hand-right-outline',
     placesQuery: 'martial arts school',
     healthImpact:
       'Karate, taekwondo, BJJ, MMA and boxing classes are usually indoor, so outdoor AQI has limited direct impact. However, sparring and pad work spike heart rate dramatically — good ventilation in the dojo matters.',
@@ -317,7 +287,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'horse_riding',
     name: 'Horse Riding',
-    emoji: '\u{1F434}',
+    icon: 'paw-outline',
     placesQuery: 'horse riding club',
     healthImpact:
       'Riding itself is moderate exertion but grooming, mucking, and handling horses involves dust exposure (hay, sand, manure) on top of outdoor AQI. Riders with asthma should be especially careful on hazy days.',
@@ -329,37 +299,9 @@ export const ACTIVITY_CATALOG = [
     indoorAlt: 'Some clubs have indoor arenas with watered ground. Stable visits (no riding) on the worst days.',
   },
   {
-    id: 'bowling',
-    name: 'Bowling',
-    emoji: '\u{1F3B3}',
-    placesQuery: 'bowling alley',
-    healthImpact:
-      'Bowling is indoor and low-intensity, so direct AQI impact is minimal. The main concern is the air quality inside the alley itself — old ventilation systems and smoking-adjacent areas can drop IAQ significantly.',
-    tips: [
-      'Choose modern bowling alleys with good HVAC.',
-      'Avoid eating food next to the lanes if the place has poor airflow.',
-      'Warm up the wrist and shoulder before heavy throws.',
-    ],
-    indoorAlt: 'Bowling is already indoor. Mini-bowling sets for home provide a casual alternative.',
-  },
-  {
-    id: 'ice_skating',
-    name: 'Ice Skating',
-    emoji: '\u{26F8}\u{FE0F}',
-    placesQuery: 'ice skating rink',
-    healthImpact:
-      'Ice rinks are indoor and usually well-ventilated due to refrigeration needs. Cold dry air can still irritate airways in people with asthma. Direct AQI impact is low.',
-    tips: [
-      'Dress in thin layers — you\'ll warm up fast once skating.',
-      'Skaters with asthma should carry an inhaler on-rink.',
-      'Hydrate — cold air feels dry and you lose water quickly.',
-    ],
-    indoorAlt: 'Roller skating at home or in a parking lot as a hot-weather substitute.',
-  },
-  {
     id: 'fishing',
     name: 'Fishing',
-    emoji: '\u{1F3A3}',
+    icon: 'fish-outline',
     placesQuery: 'fishing spot lake',
     healthImpact:
       'Fishing is low-intensity but long-duration — you might spend 4-8 hours outdoors. Lakeside and riverside air is often slightly cleaner than city air, but sitting still for hours in any polluted environment still adds up.',
@@ -373,7 +315,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'paragliding',
     name: 'Paragliding',
-    emoji: '\u{1FA82}',
+    icon: 'airplane-outline',
     placesQuery: 'paragliding',
     healthImpact:
       'Paragliding launches from high elevation (Khanpur, Pir Sohawa, etc.) where air is almost always cleaner than cities. Wind conditions matter more than AQI for safety. Moderate physical exertion during takeoff and landing.',
@@ -387,7 +329,7 @@ export const ACTIVITY_CATALOG = [
   {
     id: 'dance',
     name: 'Dance',
-    emoji: '\u{1F483}',
+    icon: 'musical-notes-outline',
     placesQuery: 'dance studio',
     healthImpact:
       'Dance classes range from gentle to cardio-intensive. Most are held indoors in studios with mirror walls, which vary wildly in ventilation quality. High-tempo styles (Zumba, hip-hop) push heart rate like running.',
@@ -403,8 +345,10 @@ export const ACTIVITY_CATALOG = [
 // IDs enabled by default (the original 10 activities)
 export const DEFAULT_ENABLED_ACTIVITY_IDS = [
   'running', 'cricket', 'cycling', 'walking', 'swimming',
-  'gardening', 'dining', 'biking', 'tennis', 'gym',
+  'gardening', 'dining', 'biking', 'tennis', 'hiking', 'padel',
 ];
+
+export const ACTIVITY_IDS = ACTIVITY_CATALOG.map((activity) => activity.id);
 
 export function getActivityById(id) {
   return ACTIVITY_CATALOG.find((a) => a.id === id) || null;

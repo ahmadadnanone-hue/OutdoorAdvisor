@@ -61,7 +61,7 @@ export default function GlassTabBar({
             item={item}
             active={item.key === activeKey}
             onPress={() => {
-              Haptics.selectionAsync();
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               onChange?.(item.key);
             }}
           />

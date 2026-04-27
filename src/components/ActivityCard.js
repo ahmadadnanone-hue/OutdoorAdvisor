@@ -2,6 +2,7 @@ import React from 'react';
 import { Text, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { getActivitySummary } from '../utils/activityScoring';
+import Icon from './Icon';
 
 export default function ActivityCard({
   activity,
@@ -45,45 +46,41 @@ export default function ActivityCard({
       activeOpacity={0.7}
     >
       {/* Left colored accent border */}
-      <View
-        style={[
-          styles.accentBorder,
-          { backgroundColor: summary.color },
-        ]}
-      />
+      <View style={[styles.accentBorder, { backgroundColor: summary.color }]} />
+
       <View style={styles.content}>
+        {/* Left: icon + name */}
         <View style={styles.leftSection}>
-          <View style={styles.identityRow}>
-            <Text style={styles.icon}>{activity.emoji}</Text>
-            <View style={styles.copyBlock}>
-              <View style={styles.nameRow}>
-                <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>
-                  {activity.name}
-                </Text>
-                {!!rankLabel && (
-                  <View style={[styles.rankBadge, { backgroundColor: summary.color + '18' }]}>
-                    <Text style={[styles.rankText, { color: summary.color }]}>{rankLabel}</Text>
-                  </View>
-                )}
-              </View>
-              {compact ? (
-                <Text style={[styles.metaLine, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {summary.bestTime}
-                </Text>
-              ) : null}
-            </View>
-          </View>
+          <Icon
+            name={activity.icon || 'fitness-outline'}
+            size={compact ? 20 : 22}
+            color={summary.color}
+            style={styles.activityIcon}
+          />
+          <Text
+            style={[styles.name, { color: colors.text }]}
+            numberOfLines={compact ? 2 : 1}
+          >
+            {activity.name}
+          </Text>
+          {compact && (
+            <Text style={[styles.metaLine, { color: colors.textSecondary }]} numberOfLines={1}>
+              {summary.bestTime}
+            </Text>
+          )}
         </View>
+
+        {/* Right: score + rank */}
         <View style={styles.rightSection}>
+          {!!rankLabel && (
+            <View style={[styles.rankBadge, { backgroundColor: summary.color + '20' }]}>
+              <Text style={[styles.rankText, { color: summary.color }]}>{rankLabel}</Text>
+            </View>
+          )}
           <Text style={[styles.scoreValue, { color: summary.color }]}>{summary.score}</Text>
           <Text style={[styles.scoreLabel, { color: colors.textSecondary }]}>/100</Text>
           {!compact && (
-            <View
-              style={[
-                styles.statusBadge,
-                { backgroundColor: summary.color + '26' },
-              ]}
-            >
+            <View style={[styles.statusBadge, { backgroundColor: summary.color + '26' }]}>
               <Text style={[styles.statusText, { color: summary.color }]}>
                 {summary.label}
               </Text>
@@ -104,7 +101,7 @@ const styles = StyleSheet.create({
     minHeight: 72,
   },
   cardCompact: {
-    minHeight: 82,
+    minHeight: 86,
   },
   accentBorder: {
     width: 3,
@@ -116,56 +113,61 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingLeft: 14,
-    paddingRight: 16,
-  },
-  leftSection: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  identityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  icon: {
-    fontSize: 22,
-  },
-  copyBlock: {
-    flex: 1,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingVertical: 12,
+    paddingLeft: 12,
+    paddingRight: 14,
     gap: 8,
   },
+
+  // Left: icon stacked above name
+  leftSection: {
+    flex: 1,
+    alignItems: 'flex-start',
+    gap: 4,
+  },
+  activityIcon: {
+    marginBottom: 2,
+  },
   name: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
-    flexShrink: 1,
+    lineHeight: 17,
   },
   metaLine: {
-    fontSize: 12,
-    marginTop: 4,
+    fontSize: 11,
+    marginTop: 1,
+  },
+
+  // Right: rank pill → score → /100
+  rightSection: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 2,
+    flexShrink: 0,
   },
   rankBadge: {
     borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    marginBottom: 2,
   },
   rankText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
-  rightSection: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
+  scoreValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    lineHeight: 22,
+  },
+  scoreLabel: {
+    fontSize: 10,
+    lineHeight: 12,
   },
   statusBadge: {
-    marginTop: 8,
+    marginTop: 6,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
@@ -173,14 +175,5 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     fontWeight: '600',
-  },
-  scoreValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    lineHeight: 24,
-  },
-  scoreLabel: {
-    fontSize: 12,
-    marginTop: 2,
   },
 });

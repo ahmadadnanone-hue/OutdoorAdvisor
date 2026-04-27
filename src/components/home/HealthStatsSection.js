@@ -31,8 +31,12 @@ export default function HealthStatsSection({
   return (
     <GlassCard style={styles.card} contentStyle={styles.content}>
       <View style={styles.headerRow}>
-        <View>
-          <Text style={styles.eyebrow}>Health & Outdoor Score</Text>
+        <View style={styles.headerLeft}>
+          <View style={styles.eyebrowRow}>
+            {/* Apple Health-style heart — signals HealthKit integration */}
+            <Icon name="heart" size={11} color="#FF2D55" />
+            <Text style={styles.eyebrow}>Health &amp; Outdoor Score</Text>
+          </View>
           <Text style={styles.note}>{note}</Text>
         </View>
         {!healthAuthorized && onRequestAccess ? (
@@ -69,7 +73,9 @@ const styles = StyleSheet.create({
   card: { marginTop: 2 },
   content: { padding: 16, gap: 14 },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-  eyebrow: { fontSize: 11, fontWeight: '800', color: dc.textMuted, letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6 },
+  headerLeft: { flex: 1 },
+  eyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 },
+  eyebrow: { fontSize: 11, fontWeight: '800', color: dc.textMuted, letterSpacing: 1.4, textTransform: 'uppercase' },
   note: { fontSize: 13, lineHeight: 18, color: dc.textSecondary, maxWidth: '86%' },
   accessButton: {
     borderRadius: 999,

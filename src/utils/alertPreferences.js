@@ -14,6 +14,7 @@ export const DEFAULT_THRESHOLDS = {
 export const DEFAULT_NOTIFICATIONS = {
   severeAqiWarnings: true,
   dailySummary: true,
+  smartWalkNudges: true,
   smogAlerts: true,
   rainAlerts: true,
   thunderstormAlerts: true,

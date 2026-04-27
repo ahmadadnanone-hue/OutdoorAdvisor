@@ -1,14 +1,11 @@
 /**
  * FABMenu — floating action button with quarter-circle spring fan.
  *
- * Fan arc: -180° (straight left) → -90° (straight up), 5 actions.
- * Each satellite springs out with 55ms stagger via react-native-reanimated.
- *
- * Usage in App.js (inside NavigationContainer):
- *   <FABMenuWrapper />
+ * Fan arc: -180° (straight left) → -90° (straight up), up to 6 actions.
+ * Supports premium-gated actions and rate-limited refresh (5×/hr for premium).
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -28,71 +25,89 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors as dc } from '../design';
 import Icon from './Icon';
+import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
 
-// ─── Layout constants ────────────────────────────────────────────────────────
-const BTN   = 60;   // main FAB diameter
-const ITEM  = 48;   // satellite item diameter
-const R     = 92;   // orbit radius
+// ─── Layout constants ─────────────────────────────────────────────────────────
+const BTN  = 60;   // main FAB diameter
+const ITEM = 48;   // satellite item diameter
+const R    = 118;  // orbit radius
 
-// Quarter-circle arc: -180° (left) → -90° (up), 5 steps
-const ANGLES_DEG = [-180, -157.5, -135, -112.5, -90];
+// ─── Rate limiting ────────────────────────────────────────────────────────────
+const REFRESH_RATE_KEY = 'outdooradvisor_fab_refresh_log';
+const MAX_REFRESHES    = 5;
+const RATE_WINDOW_MS   = 60 * 60 * 1000; // 1 hour
 
-// ─── Actions ─────────────────────────────────────────────────────────────────
-const ACTIONS = [
-  {
-    id: 'refresh',
+async function checkRefreshRate() {
+  try {
+    const raw    = await AsyncStorage.getItem(REFRESH_RATE_KEY);
+    const log    = raw ? JSON.parse(raw) : [];
+    const now    = Date.now();
+    const recent = log.filter((t) => now - t < RATE_WINDOW_MS);
+    if (recent.length >= MAX_REFRESHES) {
+      const minsLeft = Math.ceil((RATE_WINDOW_MS - (now - recent[0])) / 60000);
+      return { allowed: false, minsLeft };
+    }
+    await AsyncStorage.setItem(REFRESH_RATE_KEY, JSON.stringify([...recent, now]));
+    return { allowed: true };
+  } catch {
+    return { allowed: true }; // fail open
+  }
+}
+
+// ─── Action definitions ───────────────────────────────────────────────────────
+const ACTION_CONFIG = {
+  refresh: {
     icon: 'refresh-outline',
-    bg: 'rgba(143,240,183,0.22)',
-    stroke: 'rgba(143,240,183,0.40)',
-    fg: dc.accentGreen,
+    bg: 'rgba(143,240,183,0.22)', stroke: 'rgba(143,240,183,0.40)', fg: dc.accentGreen,
+    premium: true,
   },
-  {
-    id: 'location',
+  'ai-brief': {
+    icon: 'sparkles-outline',
+    bg: 'rgba(155,200,255,0.22)', stroke: 'rgba(155,200,255,0.40)', fg: dc.accentCyan,
+    premium: true,
+  },
+  location: {
     icon: 'location-outline',
-    bg: 'rgba(155,200,255,0.22)',
-    stroke: 'rgba(155,200,255,0.40)',
-    fg: dc.accentCyan,
+    bg: 'rgba(155,200,255,0.22)', stroke: 'rgba(155,200,255,0.40)', fg: dc.accentCyan,
   },
-  {
-    id: 'share',
-    icon: 'share-outline',
-    bg: 'rgba(127,178,255,0.22)',
-    stroke: 'rgba(127,178,255,0.40)',
-    fg: dc.accentBlue,
+  activities: {
+    icon: 'fitness-outline',
+    bg: 'rgba(143,240,183,0.22)', stroke: 'rgba(143,240,183,0.40)', fg: dc.accentGreen,
   },
-  {
-    id: 'travel',
+  travel: {
     icon: 'navigate-outline',
-    bg: 'rgba(255,175,102,0.22)',
-    stroke: 'rgba(255,175,102,0.40)',
-    fg: dc.accentOrange,
+    bg: 'rgba(255,175,102,0.22)', stroke: 'rgba(255,175,102,0.40)', fg: dc.accentOrange,
   },
-  {
-    id: 'alerts',
-    icon: 'notifications-outline',
-    bg: 'rgba(255,216,116,0.22)',
-    stroke: 'rgba(255,216,116,0.40)',
-    fg: dc.accentYellow,
+  share: {
+    icon: 'share-outline',
+    bg: 'rgba(127,178,255,0.22)', stroke: 'rgba(127,178,255,0.40)', fg: dc.accentBlue,
   },
-];
+};
+
+// ─── Dynamic arc angles ───────────────────────────────────────────────────────
+function buildAngles(count) {
+  if (count <= 0) return [];
+  if (count === 1) return [-135];
+  return Array.from({ length: count }, (_, i) => -180 + i * (90 / (count - 1)));
+}
 
 // ─── Satellite item ───────────────────────────────────────────────────────────
-function FABItem({ action, index, open, onPress }) {
-  const progress = useSharedValue(0);
-  const angleDeg = ANGLES_DEG[index];
-  const rad = angleDeg * (Math.PI / 180);
-
-  // item center offset from button center
-  // In screen coords y increases downward, so sin(-90°) = -1 → cy negative → item goes UP
-  const cx = Math.cos(rad) * R;
-  const cy = Math.sin(rad) * R;
+function FABItem({ action, index, totalCount, open, onPress }) {
+  const progress  = useSharedValue(0);
+  const angles    = buildAngles(totalCount);
+  const angleDeg  = angles[index] ?? -135;
+  const rad       = angleDeg * (Math.PI / 180);
+  const cx        = Math.cos(rad) * R;
+  const cy        = Math.sin(rad) * R;
 
   useEffect(() => {
     if (open) {
       progress.value = withDelay(
-        index * 55,
+        index * 50,
         withSpring(1, { damping: 10, stiffness: 140, mass: 0.7 }),
       );
     } else {
@@ -104,11 +119,9 @@ function FABItem({ action, index, open, onPress }) {
     const s = progress.value;
     return {
       opacity: interpolate(s, [0, 0.4, 1], [0, 0.8, 1]),
+      left:    BTN / 2 + cx - ITEM / 2,
+      top:     BTN / 2 + cy - ITEM / 2,
       transform: [{ scale: s }],
-      // Position relative to the fabZone's top-left corner
-      // fabZone origin = button top-left; button center = (BTN/2, BTN/2)
-      left: BTN / 2 + cx - ITEM / 2,
-      top:  BTN / 2 + cy - ITEM / 2,
     };
   });
 
@@ -135,42 +148,77 @@ function FABMain({ open, onPress }) {
   }, [open]);
 
   const rotStyle = useAnimatedStyle(() => ({
-    transform: [
-      { rotate: `${interpolate(rot.value, [0, 1], [0, 135])}deg` },
-    ],
+    transform: [{ rotate: `${interpolate(rot.value, [0, 1], [0, 135])}deg` }],
   }));
 
   return (
-    <Pressable
-      style={styles.mainBtn}
-      onPress={onPress}
-      hitSlop={6}
-    >
+    <Pressable style={styles.mainBtn} onPress={onPress} hitSlop={6}>
       <BlurView intensity={52} tint="dark" style={StyleSheet.absoluteFill} />
-      {/* glass overlay */}
-      <View style={styles.mainOverlay} pointerEvents="none" />
-      {/* top highlight */}
-      <View style={styles.mainHighlight} pointerEvents="none" />
-      {/* border */}
-      <View style={styles.mainBorder} pointerEvents="none" />
-      {/* + icon */}
+      <View style={styles.mainOverlay}    pointerEvents="none" />
+      <View style={styles.mainHighlight}  pointerEvents="none" />
+      <View style={styles.mainBorder}     pointerEvents="none" />
       <Animated.Text style={[styles.mainIcon, rotStyle]}>+</Animated.Text>
     </Pressable>
   );
 }
 
-// ─── Public component ─────────────────────────────────────────────────────────
-export default function FABMenu({ onRefresh }) {
-  const [open, setOpen] = useState(false);
-  const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
+// ─── Toast overlay ────────────────────────────────────────────────────────────
+// Always mounted so the fade-out animation can play before content disappears.
+function FABToast({ message }) {
+  const opacity = useSharedValue(0);
 
-  // Backdrop fade
+  useEffect(() => {
+    opacity.value = withTiming(message ? 1 : 0, { duration: message ? 160 : 220 });
+  }, [message]);
+
+  const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  return (
+    <Animated.View style={[styles.toast, animStyle]} pointerEvents="none">
+      <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+      <Text style={styles.toastText}>{message || ' '}</Text>
+    </Animated.View>
+  );
+}
+
+// ─── Public component ─────────────────────────────────────────────────────────
+export default function FABMenu({ currentRouteName = 'Home' }) {
+  const [open, setOpen]       = useState(false);
+  const [toast, setToast]     = useState('');
+  const toastTimerRef         = useRef(null);
+  const insets                = useSafeAreaInsets();
+  const navigation            = useNavigation();
+  const { isPremium }         = useAuth();
+  const { fabActions }        = useSettings();
+
+  const shouldShowFab = ['Home', 'Travel', 'Activities'].includes(currentRouteName);
+
+  // Build the active action list: filter by user's chosen actions, gate premium
+  const activeActions = (fabActions || [])
+    .filter((id) => {
+      const cfg = ACTION_CONFIG[id];
+      if (!cfg) return false;
+      if (cfg.premium && !isPremium) return false;
+      return true;
+    })
+    .map((id) => ({ id, ...ACTION_CONFIG[id] }));
+
+  // Backdrop
   const backdropOpacity = useSharedValue(0);
   useEffect(() => {
     backdropOpacity.value = withTiming(open ? 1 : 0, { duration: 220 });
   }, [open]);
   const backdropStyle = useAnimatedStyle(() => ({ opacity: backdropOpacity.value }));
+
+  useEffect(() => {
+    if (!shouldShowFab && open) setOpen(false);
+  }, [shouldShowFab, open]);
+
+  const showToast = (msg) => {
+    setToast(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(''), 4000);
+  };
 
   const toggle = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -179,34 +227,46 @@ export default function FABMenu({ onRefresh }) {
 
   const close = () => setOpen(false);
 
-  const handleAction = (id) => {
+  const handleAction = async (id) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     close();
+
     switch (id) {
-      case 'refresh':
-        onRefresh?.();
+      case 'refresh': {
+        const { allowed, minsLeft } = await checkRefreshRate();
+        if (!allowed) {
+          showToast(`Refresh limit reached. Try again in ~${minsLeft} min.`);
+          return;
+        }
+        navigation.navigate('Home', { fabTrigger: `refresh-${Date.now()}` });
         break;
-      case 'location':
-        navigation.navigate('Home'); // HomeScreen handles city picker
+      }
+      case 'ai-brief': {
+        navigation.navigate('Home', { fabTrigger: `ai-brief-${Date.now()}` });
         break;
-      case 'share':
-        Share.share({
-          message: '🌤️ Checked the weather on OutdoorAdvisor — looks good for outdoor activity!',
-          title: 'OutdoorAdvisor',
-        });
+      }
+      case 'location': {
+        navigation.navigate('Home', { fabTrigger: `location-${Date.now()}` });
+        break;
+      }
+      case 'activities':
+        navigation.navigate('Activities');
         break;
       case 'travel':
         navigation.navigate('Travel');
         break;
-      case 'alerts':
-        navigation.navigate('Settings');
+      case 'share':
+        Share.share({
+          message: '🌤️ I use OutdoorAdvisor to check the air, weather, and road conditions before heading out. Check it out!',
+          title: 'OutdoorAdvisor',
+        });
         break;
     }
   };
 
-  // FAB zone sits above the tab bar
-  // Tab bar: ~68px content + paddingBottom (insets.bottom) + marginBottom 16 ≈ 84+insets
-  const fabBottom = insets.bottom + 96;
+  const fabBottom = insets.bottom + 126;
+
+  if (!shouldShowFab) return null;
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -215,17 +275,18 @@ export default function FABMenu({ onRefresh }) {
         <Pressable style={StyleSheet.absoluteFill} onPress={close} />
       </Animated.View>
 
-      {/* FAB zone: 0-size anchor at button top-left, items overflow out */}
-      <View
-        style={[styles.fabZone, { bottom: fabBottom, right: 24 }]}
-        pointerEvents="box-none"
-      >
+      {/* FAB zone */}
+      <View style={[styles.fabZone, { bottom: fabBottom, right: 24 }]} pointerEvents="box-none">
+        {/* Toast */}
+        <FABToast message={toast} />
+
         {/* Satellite items */}
-        {ACTIONS.map((action, i) => (
+        {activeActions.map((action, i) => (
           <FABItem
             key={action.id}
             action={action}
             index={i}
+            totalCount={activeActions.length}
             open={open}
             onPress={handleAction}
           />
@@ -242,52 +303,71 @@ export default function FABMenu({ onRefresh }) {
 const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.42)',
+    backgroundColor: 'transparent',
   },
 
-  // 60×60 anchor positioned bottom-right; items use absolute coords relative to it
   fabZone: {
     position: 'absolute',
-    width: BTN,
+    width:  BTN,
     height: BTN,
+  },
+
+  // ── Toast ────────────────────────────────────────────────────────────────
+  toast: {
+    position: 'absolute',
+    right: BTN + 10,
+    top: BTN / 2 - 16,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(30,40,55,0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    maxWidth: 220,
+  },
+  toastText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: dc.textSecondary,
+    lineHeight: 17,
   },
 
   // ── Satellite items ──────────────────────────────────────────────────────
   itemWrap: {
     position: 'absolute',
-    width: ITEM,
+    width:  ITEM,
     height: ITEM,
   },
   item: {
-    width: ITEM,
+    width:  ITEM,
     height: ITEM,
     borderRadius: ITEM / 2,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    // shadow
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.32,
     shadowRadius: 10,
   },
+
   // ── Main button ──────────────────────────────────────────────────────────
   mainBtn: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    width: BTN,
+    top: 0, left: 0,
+    width:  BTN,
     height: BTN,
     borderRadius: BTN / 2,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    // shadow
-    shadowColor: dc.accentCyan,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.38,
-    shadowRadius: 14,
+    shadowColor: 'rgba(155,200,255,0.95)',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.42,
+    shadowRadius: 18,
+    elevation: 14,
   },
   mainOverlay: {
     ...StyleSheet.absoluteFillObject,

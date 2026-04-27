@@ -148,7 +148,13 @@ export default function GlassCard({
     );
   }
 
-  return <View style={outerStyle}>{body}</View>;
+  return (
+    <View style={outerStyle}>
+      <View style={[styles.pressable, { borderRadius: cornerRadius }]}>
+        {body}
+      </View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

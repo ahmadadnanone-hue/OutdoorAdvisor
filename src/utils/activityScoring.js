@@ -15,6 +15,11 @@ function withinRange(value, min, max) {
 }
 
 function getActivityProfile(activityId) {
+  const indoor = new Set([
+    'yoga',
+    'badminton',
+    'martial_arts',
+  ]);
   const intense = new Set([
     'running',
     'cycling',
@@ -32,14 +37,53 @@ function getActivityProfile(activityId) {
     'walking',
     'dining',
     'fishing',
-    'bowling',
-    'ice_skating',
     'golf',
     'yoga',
   ]);
 
+  if (activityId === 'swimming') {
+    return {
+      indoor: false,
+      air: 0.62,
+      heat: 0.28,
+      wind: 0.35,
+      rain: 0.55,
+      humidity: 0.48,
+      uv: 0.78,
+      idealTempMin: 24,
+      idealTempMax: 34,
+      comfortTempMax: 41,
+      idealHumidityMin: 25,
+      idealHumidityMax: 72,
+      idealUvMax: 6,
+      bestWeather: 'warm to hot weather with manageable air and a pool that is not fully exposed to harsh midday sun',
+      rationale: 'swimming benefits from warm weather more than most outdoor activities, though AQI, UV, and exposed outdoor pool conditions still matter',
+    };
+  }
+
+  if (indoor.has(activityId)) {
+    return {
+      indoor: true,
+      air: 0.38,
+      heat: 0.32,
+      wind: 0.08,
+      rain: 0.08,
+      humidity: 0.42,
+      uv: 0.04,
+      idealTempMin: 18,
+      idealTempMax: 26,
+      comfortTempMax: 31,
+      idealHumidityMin: 35,
+      idealHumidityMax: 62,
+      idealUvMax: 8,
+      bestWeather: 'stable indoor air, filtered ventilation, and a comfortable room temperature',
+      rationale: 'indoor sessions are buffered from outdoor heat, rain, wind, and UV, but ventilation quality still matters',
+    };
+  }
+
   if (intense.has(activityId)) {
     return {
+      indoor: false,
       air: 1.2,
       heat: 1.15,
       wind: 1.1,
@@ -59,6 +103,7 @@ function getActivityProfile(activityId) {
 
   if (light.has(activityId)) {
     return {
+      indoor: false,
       air: 0.85,
       heat: 0.85,
       wind: 0.75,
@@ -77,6 +122,7 @@ function getActivityProfile(activityId) {
   }
 
   return {
+    indoor: false,
     air: 1,
     heat: 1,
     wind: 0.9,
@@ -160,6 +206,7 @@ function evaluateActivity(activity, aqi, weather, hourly = []) {
 
   let score = 78;
   const reasons = [];
+  const isIndoorActivity = profile.indoor === true;
 
   if (context.aqi <= 50) {
     score += 12;
@@ -178,7 +225,12 @@ function evaluateActivity(activity, aqi, weather, hourly = []) {
   } else {
     const penalty = Math.round((context.aqi - 200) * 0.24 * profile.air + 44);
     score -= penalty;
-    reasons.push({ kind: 'bad', text: `AQI ${context.aqi} is severe for outdoor exertion right now.` });
+    reasons.push({ kind: 'bad', text: isIndoorActivity ? `AQI ${context.aqi} is severe outside, so indoor ventilation quality matters much more than usual.` : `AQI ${context.aqi} is severe for outdoor exertion right now.` });
+  }
+
+  if (isIndoorActivity && context.aqi > 100) {
+    score += context.aqi > 200 ? 18 : 12;
+    reasons.push({ kind: 'good', text: 'This activity gets useful protection from being indoors, especially if the venue has strong air filtration.' });
   }
 
   if (heatValue != null) {
@@ -197,6 +249,21 @@ function evaluateActivity(activity, aqi, weather, hourly = []) {
       score -= Math.round((profile.idealTempMin - heatValue) * 1.1);
       reasons.push({ kind: 'neutral', text: `${Math.round(heatValue)}° is cooler than ideal, so warm-up and comfort matter more.` });
     }
+  }
+
+  if (activity.id === 'swimming' && heatValue != null) {
+    if (heatValue >= 30 && heatValue <= 40) {
+      score += 12;
+      reasons.push({ kind: 'good', text: `Warm ${Math.round(heatValue)}° conditions can actually suit swimming better than many other outdoor activities.` });
+    } else if (heatValue > 40 && heatValue <= 45) {
+      score += 5;
+      reasons.push({ kind: 'neutral', text: `Swimming can still work in this heat, but shade, cooling breaks, and avoiding peak-sun exposure matter much more.` });
+    }
+  }
+
+  if (isIndoorActivity && heatValue != null && heatValue >= 38) {
+    score += heatValue >= 47 ? 18 : 10;
+    reasons.push({ kind: 'good', text: 'Because it is indoors, this option avoids the worst of the outdoor heat stress right now.' });
   }
 
   if (humidity != null) {
@@ -227,13 +294,13 @@ function evaluateActivity(activity, aqi, weather, hourly = []) {
 
   if (isStorm) {
     score -= 50;
-    reasons.push({ kind: 'bad', text: 'Thunderstorm risk is a hard stop for exposed outdoor activity.' });
+    reasons.push({ kind: 'bad', text: isIndoorActivity ? 'Stormy conditions still make travel to the venue less comfortable, but the session itself is sheltered.' : 'Thunderstorm risk is a hard stop for exposed outdoor activity.' });
   } else if (isHeavyRain) {
     score -= Math.round(26 * profile.rain + ((precipProbability ?? 0) > 70 ? 4 : 0));
-    reasons.push({ kind: 'bad', text: 'Heavy rain makes surfaces, visibility, and comfort much worse.' });
+    reasons.push({ kind: 'bad', text: isIndoorActivity ? 'Heavy rain mainly affects the trip to the venue rather than the activity itself.' : 'Heavy rain makes surfaces, visibility, and comfort much worse.' });
   } else if (isRain) {
     score -= Math.round(12 * profile.rain + ((precipProbability ?? 0) > 40 ? 3 : 0));
-    reasons.push({ kind: 'neutral', text: 'Rain is manageable, but it still chips away at comfort and traction.' });
+    reasons.push({ kind: 'neutral', text: isIndoorActivity ? 'Rain is less of a problem once you are inside, though the commute may still be messy.' : 'Rain is manageable, but it still chips away at comfort and traction.' });
   } else if (isCloudy && precipitation == null) {
     score += 4;
     reasons.push({ kind: 'good', text: 'Cloud cover helps keep the outdoor window more comfortable.' });
@@ -253,16 +320,16 @@ function evaluateActivity(activity, aqi, weather, hourly = []) {
   }
 
   if (context.aqi > 100) {
-    score = Math.min(score, profile.air > 1 ? 60 : 66);
+    score = Math.min(score, isIndoorActivity ? 82 : activity.id === 'swimming' ? 72 : profile.air > 1 ? 60 : 66);
   }
   if (context.aqi > 150) {
-    score = Math.min(score, profile.air > 1 ? 42 : 48);
+    score = Math.min(score, isIndoorActivity ? 72 : activity.id === 'swimming' ? 58 : profile.air > 1 ? 42 : 48);
   }
   if (context.aqi > 200) {
-    score = Math.min(score, 24);
+    score = Math.min(score, isIndoorActivity ? 62 : activity.id === 'swimming' ? 34 : 24);
   }
   if (isStorm) {
-    score = Math.min(score, 18);
+    score = Math.min(score, isIndoorActivity ? 58 : 18);
   }
 
   const normalized = Math.round(clamp(score, 0, 100));

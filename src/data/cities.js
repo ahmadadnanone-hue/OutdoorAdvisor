@@ -1,14 +1,61 @@
 export const CITIES = [
-  { name: 'Lahore', lat: 31.5204, lon: 74.3587 },
-  { name: 'Karachi', lat: 24.8607, lon: 67.0011 },
-  { name: 'Islamabad', lat: 33.6844, lon: 73.0479 },
-  { name: 'Rawalpindi', lat: 33.5651, lon: 73.0169 },
-  { name: 'Faisalabad', lat: 31.4504, lon: 73.1350 },
-  { name: 'Multan', lat: 30.1575, lon: 71.5249 },
-  { name: 'Peshawar', lat: 34.0151, lon: 71.5249 },
-  { name: 'Quetta', lat: 30.1798, lon: 66.9750 },
-  { name: 'Sialkot', lat: 32.4945, lon: 74.5229 },
-  { name: 'Gujranwala', lat: 32.1877, lon: 74.1945 },
+  // Major metros
+  { name: 'Lahore',        lat: 31.5204, lon: 74.3587 },
+  { name: 'Karachi',       lat: 24.8607, lon: 67.0011 },
+  { name: 'Islamabad',     lat: 33.6844, lon: 73.0479 },
+  { name: 'Rawalpindi',    lat: 33.5651, lon: 73.0169 },
+  { name: 'Faisalabad',    lat: 31.4504, lon: 73.1350 },
+  { name: 'Multan',        lat: 30.1575, lon: 71.5249 },
+  { name: 'Peshawar',      lat: 34.0151, lon: 71.5249 },
+  { name: 'Quetta',        lat: 30.1798, lon: 66.9750 },
+  { name: 'Sialkot',       lat: 32.4945, lon: 74.5229 },
+  { name: 'Gujranwala',    lat: 32.1877, lon: 74.1945 },
+  // Punjab
+  { name: 'Gujrat',        lat: 32.5740, lon: 74.0781 },
+  { name: 'Sargodha',      lat: 32.0836, lon: 72.6711 },
+  { name: 'Bahawalpur',    lat: 29.3956, lon: 71.6836 },
+  { name: 'Sahiwal',       lat: 30.6682, lon: 73.1066 },
+  { name: 'Sheikhupura',   lat: 31.7131, lon: 73.9850 },
+  { name: 'Rahim Yar Khan',lat: 28.4202, lon: 70.2952 },
+  { name: 'Jhang',         lat: 31.2681, lon: 72.3181 },
+  { name: 'Jhelum',        lat: 32.9333, lon: 73.7333 },
+  { name: 'Khanewal',      lat: 30.3000, lon: 71.9333 },
+  { name: 'Kasur',         lat: 31.1167, lon: 74.4500 },
+  { name: 'Okara',         lat: 30.8139, lon: 73.4583 },
+  { name: 'Chakwal',       lat: 32.9317, lon: 72.8561 },
+  { name: 'Hafizabad',     lat: 32.0714, lon: 73.6882 },
+  { name: 'Mandi Bahauddin',lat: 32.5864, lon: 73.4917 },
+  // KPK & Hazara
+  { name: 'Abbottabad',    lat: 34.1688, lon: 73.2215 },
+  { name: 'Mansehra',      lat: 34.3339, lon: 73.2004 },
+  { name: 'Mardan',        lat: 34.1989, lon: 72.0401 },
+  { name: 'Swabi',         lat: 34.1200, lon: 72.4700 },
+  { name: 'Nowshera',      lat: 34.0159, lon: 71.9747 },
+  { name: 'Kohat',         lat: 33.5886, lon: 71.4429 },
+  { name: 'Mingora',       lat: 34.7795, lon: 72.3629 },
+  { name: 'Dera Ismail Khan',lat: 31.8314, lon: 70.9019 },
+  { name: 'Haripur',       lat: 33.9946, lon: 72.9331 },
+  // Northern Areas
+  { name: 'Murree',        lat: 33.9070, lon: 73.3943 },
+  { name: 'Gilgit',        lat: 35.9208, lon: 74.3140 },
+  { name: 'Skardu',        lat: 35.2971, lon: 75.6333 },
+  { name: 'Chilas',        lat: 35.4215, lon: 74.0942 },
+  { name: 'Naran',         lat: 34.9070, lon: 73.6490 },
+  // Sindh
+  { name: 'Hyderabad',     lat: 25.3960, lon: 68.3578 },
+  { name: 'Sukkur',        lat: 27.7052, lon: 68.8574 },
+  { name: 'Larkana',       lat: 27.5600, lon: 68.2100 },
+  { name: 'Mirpur Khas',   lat: 25.5265, lon: 69.0139 },
+  { name: 'Nawabshah',     lat: 26.2442, lon: 68.4100 },
+  { name: 'Thatta',        lat: 24.7467, lon: 67.9192 },
+  // Balochistan
+  { name: 'Turbat',        lat: 26.0020, lon: 63.0621 },
+  { name: 'Khuzdar',       lat: 27.8000, lon: 66.6167 },
+  { name: 'Hub',           lat: 25.0650, lon: 66.8878 },
+  { name: 'Gwadar',        lat: 25.1216, lon: 62.3254 },
+  // AJK
+  { name: 'Muzaffarabad',  lat: 34.3700, lon: 73.4700 },
+  { name: 'Mirpur',        lat: 33.1489, lon: 73.7511 },
 ];
 
 // Neighborhood / sub-area AQI sampling points for major cities.
@@ -87,7 +134,7 @@ export const TRAVEL_ROUTES = [
   {
     id: 'M1',
     kind: 'motorway',
-    emoji: '🛣️',
+    icon: 'car-outline',
     name: 'M1 Peshawar-Islamabad',
     stops: [
       { name: 'Peshawar', lat: 34.0151, lon: 71.5249 },
@@ -161,7 +208,7 @@ export const TRAVEL_ROUTES = [
   {
     id: 'E35',
     kind: 'expressway',
-    emoji: '🚧',
+    icon: 'construct-outline',
     name: 'Hazara Expressway (Islamabad-Mansehra)',
     stops: [
       { name: 'Islamabad', lat: 33.6844, lon: 73.0479 },
@@ -174,7 +221,7 @@ export const TRAVEL_ROUTES = [
   {
     id: 'KKH',
     kind: 'highway',
-    emoji: '🏔️',
+    icon: 'triangle-outline',
     name: 'Karakoram Highway (Abbottabad-Gilgit)',
     stops: [
       { name: 'Abbottabad', lat: 34.1688, lon: 73.2215 },
@@ -187,7 +234,7 @@ export const TRAVEL_ROUTES = [
   {
     id: 'N15',
     kind: 'mountain',
-    emoji: '🏞️',
+    icon: 'compass-outline',
     name: 'N-15 Kaghan-Naran Corridor',
     stops: [
       { name: 'Mansehra', lat: 34.3339, lon: 73.2004 },
@@ -200,7 +247,7 @@ export const TRAVEL_ROUTES = [
   {
     id: 'MURREE',
     kind: 'mountain',
-    emoji: '🌲',
+    icon: 'leaf-outline',
     name: 'Islamabad-Murree-Kohala Route',
     stops: [
       { name: 'Islamabad', lat: 33.6844, lon: 73.0479 },
@@ -213,7 +260,7 @@ export const TRAVEL_ROUTES = [
   {
     id: 'SWAT',
     kind: 'mountain',
-    emoji: '⛰️',
+    icon: 'triangle-outline',
     name: 'Islamabad-Swat Corridor',
     stops: [
       { name: 'Islamabad', lat: 33.6844, lon: 73.0479 },
@@ -229,7 +276,7 @@ export const TRAVEL_ROUTES = [
   {
     id: 'N5',
     kind: 'highway',
-    emoji: '🛤️',
+    icon: 'map-outline',
     name: 'N-5 GT Road (Peshawar-Lahore)',
     stops: [
       { name: 'Peshawar', lat: 34.0151, lon: 71.5249 },

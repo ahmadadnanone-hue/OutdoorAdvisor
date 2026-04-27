@@ -94,12 +94,11 @@ export default function SynthesisCard({
       >
         <View style={styles.eyebrowRow}>
           <Text style={styles.eyebrow}>OUTDOOR BRIEF</Text>
-          {isAI && (
-            <View style={styles.aiBadge}>
-              <Icon name="sparkles" size={9} color={dc.accentCyan} />
-              <Text style={styles.aiBadgeText}>AI</Text>
-            </View>
-          )}
+          {/* AI badge — always visible: cyan for Gemini, muted for rule-based */}
+          <View style={[styles.aiBadge, !isAI && styles.aiBadgeMuted]}>
+            <Icon name="sparkles" size={9} color={isAI ? dc.accentCyan : dc.textMuted} />
+            <Text style={[styles.aiBadgeText, !isAI && styles.aiBadgeTextMuted]}>AI</Text>
+          </View>
           {!!age && <Text style={styles.ageText}>{age}</Text>}
         </View>
         <Icon
@@ -211,11 +210,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 2,
   },
+  aiBadgeMuted: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
   aiBadgeText: {
     fontSize: 9,
     fontWeight: '800',
     color: dc.accentCyan,
     letterSpacing: 0.5,
+  },
+  aiBadgeTextMuted: {
+    color: dc.textMuted,
   },
   ageText: {
     fontSize: 10,

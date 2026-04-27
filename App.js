@@ -4,6 +4,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Platform, StyleSheet, AppState } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Analytics } from '@vercel/analytics/react';
+import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { SettingsProvider } from './src/context/SettingsContext';
 import { AuthProvider } from './src/context/AuthContext';
@@ -45,6 +47,9 @@ import { ensureLocalNotificationPermission } from './src/utils/alertNotification
 import { getTodayHealthSnapshot, initializeHealthPermissions } from './src/hooks/useHealthData';
 import { registerOutdoorAdvisorBackgroundTask } from './src/services/backgroundTask';
 import { runSmartAdvisorCheck } from './src/services/smartAdvisor';
+import LaunchAnimation from './src/components/launch/LaunchAnimation';
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const Tab = createBottomTabNavigator();
 
@@ -163,11 +168,15 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'transparent',
+    // Fills the sliver below the floating pill so the SafeAreaProvider's
+    // default white background never shows through on any device.
+    backgroundColor: dc.bgTop,
   },
 });
 
 export default function App() {
+  const [launchVisible, setLaunchVisible] = useState(Platform.OS !== 'web');
+
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
 
@@ -216,6 +225,16 @@ export default function App() {
     applyFillAvailable();
   }, []);
 
+  useEffect(() => {
+    if (Platform.OS === 'web') return undefined;
+
+    const hideSplash = requestAnimationFrame(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    });
+
+    return () => cancelAnimationFrame(hideSplash);
+  }, []);
+
   return (
     <SafeAreaProvider>
       <AuthProvider>
@@ -223,6 +242,8 @@ export default function App() {
           <SettingsProvider>
             <ThemeProvider>
               <AppNavigator />
+              {launchVisible ? <LaunchAnimation onComplete={() => setLaunchVisible(false)} /> : null}
+              {Platform.OS === 'web' ? <Analytics /> : null}
             </ThemeProvider>
           </SettingsProvider>
         </LocationProvider>
