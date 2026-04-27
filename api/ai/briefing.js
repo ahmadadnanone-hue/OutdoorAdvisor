@@ -415,7 +415,7 @@ async function callGeminiSynthesis(model, apiKey, prompt) {
         generationConfig: {
           temperature: 0.4,
           topP: 0.85,
-          maxOutputTokens: 400,
+          maxOutputTokens: 700,
         },
       }),
     }
