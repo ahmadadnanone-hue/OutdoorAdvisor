@@ -318,8 +318,8 @@ function buildSynthesisPrompt(signals, locationName, pollenLabel) {
     : 'Unavailable';
 
   return `
-You are OutdoorAdvisor Pakistan — a calm, practical outdoor intelligence assistant.
-Write a unified brief from live conditions. Be specific and grounded. No filler phrases.
+You are OutdoorAdvisor Pakistan. Output ONLY the JSON object below — no prose, no markdown.
+KEEP ALL STRING VALUES SHORT (headline ≤60 chars, summary ≤120 chars, each action ≤40 chars).
 
 LOCATION: ${locationName || 'Pakistan'} · ${day}, ${timeCtx}
 WEATHER: ${weatherLine}
@@ -327,17 +327,10 @@ AIR QUALITY: ${aqiLine}${pollenLabel ? `\nPOLLEN: ${pollenLabel}` : ''}
 ALERTS: ${alertsLine}
 TOMORROW: ${tomorrowLine}
 
-Return ONLY strict JSON — no markdown, no extra text:
-{"severity":"go|caution|danger","headline":"","summary":"","actions":["",""],"window":""}
+JSON schema (fill every field, no extra keys):
+{"severity":"go|caution|danger","headline":"<10 words>","summary":"<2 short sentences>","actions":["<verb phrase>","<verb phrase>"],"window":"<time or null>"}
 
-Rules:
-- severity "danger" if: AQI > 200 OR Extreme/Severe alert OR thunderstorm imminent (code 95-99)
-- severity "caution" if: AQI 100-200 OR Moderate alert OR active rain OR UV ≥ 8
-- severity "go" otherwise
-- headline: 8-12 words. The single most important signal right now.
-- summary: exactly 2 sentences. First: what matters now (crossing weather+air). Second: outlook or key action.
-- actions: exactly 2-3 short imperative phrases, max 8 words each. Most urgent first.
-- window: best outdoor time in plain words ("Morning before 10 AM", "After 5 PM", "Wait for rain to clear", "All day fine") — or omit key entirely if genuinely unclear.
+severity: "danger" if AQI>200 or Extreme/Severe alert or thunder. "caution" if AQI 101-200 or rain or UV≥8. "go" otherwise.
 `.trim();
 }
 
