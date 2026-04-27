@@ -1,4 +1,5 @@
 export const PREMIUM_FEATURES = {
+  citySearch: 'Worldwide city search',
   aiBriefings: 'AI daily briefings',
   routeScans: 'Stop-by-stop route scans',
   nearbyPlaces: 'Nearby venue suggestions',
@@ -15,7 +16,7 @@ export const PREMIUM_FEATURES = {
 };
 
 const ACTIVE_STATUSES = new Set(['active', 'premium', 'pro', 'paid', 'trialing', 'trial']);
-const SEEDED_PREMIUM_EMAILS = ['ahmadadnanone@gmail.com', 'saqibmasoodcma@google.com'];
+const SEEDED_PREMIUM_EMAILS = ['ahmadadnanone@gmail.com', 'saqibmasoodcma@google.com', 'baburfaruq@gmail.com'];
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();

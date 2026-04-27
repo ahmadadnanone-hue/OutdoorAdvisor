@@ -220,18 +220,31 @@ Build in this order (easiest → hardest):
 - [ ] Add "Conditions may change. Recheck before departure." on route results
 - [ ] **Exit gate:** App Store review-safe language everywhere
 
-### Phase 11 — Device test & EAS build
-- [ ] `eas build --profile development --platform ios`
-- [ ] Install on physical iPhone, test all flows
+### Phase 11 — Device test & EAS build  ⚠️ Partial
+- [x] EAS production build #10 — `FINISHED`, `.ipa` artifact ready (built 2026-04-26)
+- [x] Apple signing assets confirmed: Distribution Cert + Provisioning Profile `7P8B63YYN9` both active until April 2027
+- [ ] Submit build to TestFlight: `npx eas-cli@latest submit --platform ios --latest`
+- [ ] Change `aps-environment` from `development` → `production` in `ios/OutdoorAdvisor/OutdoorAdvisor.entitlements` then trigger build #11 for real store binary
+- [ ] Install on physical iPhone via TestFlight, test all flows
 - [ ] Profile perf (focus: Home screen scroll, POI layer toggles, map render)
 - [ ] Dark mode only — confirm no light-theme remnants broken
 - [ ] Contrast check (WCAG AA on all text over glass)
-- [ ] **Exit gate:** ready for TestFlight
+- [ ] **Exit gate:** ready for App Store submission
 
-### Phase 12 — Deferred
+### Phase 12 — App Store submission prep
+- [ ] Fill in `src/config/weatherkit.js` with real credentials (`.p8` downloaded, Team ID + Key ID needed)
+- [ ] Host Privacy Policy at a public URL — quickest path: `outdooradvisor.app/privacy` (text already written in `AboutTab.js`)
+- [ ] Add Privacy Policy URL to App Store Connect
+- [ ] App Store Connect metadata: description, keywords, screenshots (6.7" + 5.5" required)
+- [ ] Set age rating: 4+
+- [ ] Set category: Weather (primary), Health & Fitness (secondary)
+- [ ] Submit for review via `npx eas-cli@latest submit --platform ios --latest`
+- [ ] **Exit gate:** app approved and live on App Store
+
+### Phase 13 — Deferred
 - [ ] TypeScript migration (separate project)
-- [ ] WeatherKit integration (separate project — see earlier WEATHERKIT notes)
-- [ ] StoreKit 2 subscriptions (separate project)
+- [ ] StoreKit 2 real in-app subscriptions (premium currently email-allowlist only)
+- [ ] Android parity (separate project)
 
 ---
 
@@ -299,6 +312,8 @@ Build in this order (easiest → hardest):
 | 2026-04-18 | 7     | ⚠️ Partial     | `RouteOptionCard` exists in `components/cards/`, but the planner still renders the older `RoutePlanCard` path instead of the final Fastest / Safest / Family-friendly result trio. Route-results architecture is therefore only partially migrated. |
 | 2026-04-18 | 8     | ✅ Complete    | `App.js` now uses `GlassTabBar` with Ionicons and safe-area-aware floating placement. The stock bottom tab bar has been replaced. |
 | 2026-04-18 | Audit | ✅ Synced      | Blueprint statuses updated to match the repo reality after Claude handoff review: phases 0–5 complete, 6–7 partial, 8 complete. |
+| 2026-04-27 | 11    | ⚠️ Partial     | EAS production build #10 FINISHED (`ed9a25dd`). Apple signing confirmed active. `aps-environment` still `development` in entitlements — must change to `production` before store binary. WeatherKit credentials still placeholder — app uses Open-Meteo fallback. TestFlight submission and real store build are the immediate next actions. |
+| 2026-04-27 | 12    | ❌ Not started | App Store Connect metadata, screenshots, privacy policy URL, WeatherKit credentials, and final submission not yet done. |
 
 ---
 

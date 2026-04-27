@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     borderColor: dc.accentCyan + '44',
   },
   accessButtonText: { fontSize: 12, fontWeight: '700', color: dc.accentCyan },
-  metricsRow: { flexDirection: 'row', alignItems: 'stretch' },
+  metricsRow: { flexDirection: 'row', alignItems: 'stretch', paddingRight: 70 },
   metric: { flex: 1, alignItems: 'center', gap: 6 },
   metricDivider: { width: 1, backgroundColor: dc.cardStrokeSoft, marginHorizontal: 10 },
   metricValue: { fontSize: 18, fontWeight: '700', color: dc.textPrimary },

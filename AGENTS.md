@@ -13,7 +13,8 @@ Production site:
 Brand domain:
 - `outdooradvisor.app` has been purchased through Vercel on April 22, 2026
 - treat it as the intended public-facing brand domain for About, contact, support, and feedback surfaces
-- do not assume it is already fully connected/live unless the domain setup has been explicitly verified
+- `outdooradvisor.app` is now live and hosted on Vercel as the web app domain
+- treat `https://outdooradvisor.app` as the current primary branded web surface alongside the older Vercel alias
 - branded contact addresses to use by default:
   - `support@outdooradvisor.app`
   - `feedback@outdooradvisor.app`
@@ -21,7 +22,7 @@ Brand domain:
 
 Domain / email ops notes:
 - current CLI project scope is `ahmadadnanone-6336s-projects`, but `vercel domains ls` there returns zero domains
-- `outdooradvisor.app` could not be inspected from this scope, so the domain likely lives under a different Vercel scope/account than the linked project
+- `outdooradvisor.app` is confirmed live on Vercel, but the current CLI scope still may not be the domain-owning scope
 - do not assume DNS or domain attachment can be managed from the current CLI scope until that ownership/scope mismatch is resolved
 - if the goal is free branded email:
   - forwarding-only route: ImprovMX free is a strong fit for sending `support@`, `feedback@`, and `privacy@` into an existing Gmail inbox
@@ -120,7 +121,8 @@ It is not meant to feel like a generic weather app.
 - GitHub remote is configured and working from this machine
 - Vercel project is configured and linked from this machine
 - the brand domain `outdooradvisor.app` has been purchased via Vercel
-- that domain is intended to strengthen brand trust and should be considered for About-page identity plus future contact / feedback / support email usage
+- `outdooradvisor.app` is live and serving the web app on Vercel
+- that domain is intended to strengthen brand trust and should be considered the main About-page identity plus contact / feedback / support website surface
 - EAS is now initialized and linked for this repo under the Expo account `ahmadadnanone`
 - production deploys have been triggered manually from this repo with `vercel deploy --prod --yes`
 - do not assume Vercel is only relying on auto-deploy from GitHub; manual prod deploy has been the current workflow
@@ -217,6 +219,58 @@ It is not meant to feel like a generic weather app.
 4. Preserve recent UI tone and product direction
 5. Update this file if the change materially affects future work
 
+## Cross-Agent Coordination Snapshot
+
+- As of 2026-04-27, Claude and Codex may both be working in this repo. Treat the current dirty worktree as shared active work, not disposable churn.
+- `AGENTS.md` is the current coordination source of truth. `CLAUDE.md` and `CLAUDE_CHEAT_SHEET.md` contain useful orientation notes but are stale in places, especially where they describe the project as iOS-only/no-web or say the web frontend was deleted.
+- Before editing broad files such as `App.js`, `app.json`, `src/screens/TravelScreen.js`, `src/data/activities.js`, `src/utils/activityScoring.js`, or `src/context/SettingsContext.js`, inspect the latest diff and coordinate intent in the handoff notes.
+- Latest checked EAS iOS build `ed9a25dd-7048-4eeb-93b1-70e0aea2fff0` is now `FINISHED`, not in progress. It produced a store-distribution IPA from commit `e664581` with app build version `10`.
+- The successful EAS build is from a committed launch-animation state. The local worktree has substantial later uncommitted changes on top, so do not assume the IPA includes the current local Travel, Activities, notification, or config edits.
+- Verification on 2026-04-27: `npx expo export -p web` succeeds on the current dirty tree. Dependency hygiene has been cleaned up after the audit: `expo-font` is installed, `npx expo install --check` reports dependencies are up to date, and `npx expo-doctor` passes 18/18 checks.
+- Build #10 signed entitlement was inspected from the downloaded IPA. The actual signed entitlement has `aps-environment = production`, even though the local entitlements file still says `development`, so no rebuild is needed solely for APNs entitlement.
+- `https://outdooradvisor.app/privacy` is live and returning the public privacy policy page. `https://outdooradvisor.app/api/weatherkit` is deployed and returning WeatherKit data from production.
+- Known audit items to resolve before the next clean native build / App Store review pass:
+  - `app.json` duplicate `expo-background-task` plugin entry has been removed; keep an eye on config-plugin churn after the next prebuild.
+  - `ios/OutdoorAdvisor/OutdoorAdvisor.entitlements` currently has `aps-environment` set to `development`, but build #10's actual signed entitlement is `production`; clean the local file before build #11 if touching native config.
+  - WeatherKit now has a server-side Vercel proxy route at `api/weatherkit.js`. Production Vercel env vars are configured and the endpoint is live. Clients still fall back to Open-Meteo if the proxy is unavailable.
+  - Google Maps/Places keys are still present in client/server source as fallbacks; make sure they are tightly restricted in Google Cloud, and plan to move more lookup traffic through Vercel routes.
+  - `TravelScreen` now uses static PMD tourist station links because PMD tourist pages block server-side/Vercel scraping. The older `useTouristWeather` hook and `/api/tourist` route were removed during the audit cleanup.
+  - Activities nearby-place lookup is premium UI-gated, but native fallback can call Google Places directly with the public key if the Vercel route fails; revisit this before hardening premium/server enforcement.
+  - `npm audit fix` removed the high-severity `@xmldom/xmldom` finding. Remaining `npm audit` output is moderate Expo-toolchain transitive findings (`postcss`, `uuid`) where npm recommends `--force` and a breaking Expo downgrade; do not force-fix without a deliberate Expo upgrade/downgrade decision.
+
+## Launch Readiness (audited 2026-04-27)
+
+Use this section as the cross-platform handoff checklist for both Claude and Codex. Keep it current after every meaningful change.
+
+### ✅ Done
+- EAS production build #10 `FINISHED` — `.ipa` artifact ready (`ed9a25dd-7048-4eeb-93b1-70e0aea2fff0`)
+- Apple Developer enrollment complete
+- Distribution Cert `453DC55A7F5C91BB39B8FF07974CC1FB` + Provisioning Profile `7P8B63YYN9` — both active until April 2027
+- Bundle ID `com.ahmadadnanone.OutdoorAdvisor` registered; HealthKit, WeatherKit, Push capabilities enabled on Apple portal
+- About tab: privacy policy text, terms, disclaimer, and branded emails all complete (`src/components/settings/AboutTab.js`)
+- `outdooradvisor.app` live on Vercel — treat as primary brand domain
+- Premium gating: email allowlist bridge in place (`src/lib/premium.js`)
+
+### ❌ Blockers — must fix before public App Store review
+1. **Privacy Policy not hosted publicly** — text exists in `AboutTab.js` but Apple requires a live URL in App Store Connect. Host at `outdooradvisor.app/privacy`.
+2. **App Store Connect metadata missing** — no screenshots (6.7" + 5.5"), description, keywords, age rating (4+), or category set yet.
+3. **Store subscription path not implemented** — premium is still email-allowlist based. If premium features are visible during full review, App Review may ask for real in-app purchases or clearer positioning.
+
+### ⚠️ Known gaps (won't block build #10 TestFlight, will matter for build #11 / full review)
+- No StoreKit 2 real subscriptions — premium is email-allowlist only; may be flagged in App Store review if premium features are visible
+- UI Blueprint phases 6, 7, 9, 10 not complete (Route Planner results card, motion polish, safety copy pass)
+- `expo-font` and SDK patch mismatches were fixed after the audit; `npx expo install --check` is clean and `npx expo-doctor` passes
+- `expo-background-task` duplicate plugin entry was removed from `app.json`
+- `npm audit --audit-level=high` now exits cleanly; moderate Expo-toolchain transitive warnings remain and should not be force-fixed blindly
+- Local `ios/OutdoorAdvisor/OutdoorAdvisor.entitlements` still says `aps-environment = development`; build #10 is signed with production APNs, but update local native config before build #11 if push behavior is part of that build.
+
+### Immediate next steps (in order)
+1. ✅ Submit build #10 to TestFlight — Done 2026-04-27. App Store Connect App ID `6763982833`. TestFlight URL: https://appstoreconnect.apple.com/apps/6763982833/testflight/ios. `ascAppId` saved in `eas.json` — future submissions are fully non-interactive.
+2. App Store Connect: screenshots, description, keywords, age rating, category, support URL, and privacy URL (`https://outdooradvisor.app/privacy`).
+3. Decide whether premium needs to be hidden, reframed, or backed by StoreKit before full public review.
+4. Before build #11, clean local native entitlements if needed, then run `npx expo-doctor` and `npx expo install --check`.
+5. Trigger EAS production build #11 only after deciding what local cleanup/features should actually be included.
+
 ## Suggested Next Internal Updates
 
 - keep this file current when premium rules change
@@ -224,7 +278,25 @@ It is not meant to feel like a generic weather app.
 - update it when a new major route, AI behavior, or notification rule is added
 
 ## Recent Changes
+- 2026-04-27 — Completed the next launch-support tasks while Claude handled TestFlight. Downloaded and inspected build #10 IPA entitlements with `codesign`; actual signed `aps-environment` is `production`, so no rebuild is needed solely for APNs entitlement. Added `public/privacy.html`, rewired Vercel `/privacy` to `/privacy.html`, deployed production, and verified `https://outdooradvisor.app/privacy` returns `200`. Added WeatherKit production env vars to Vercel without printing the private key, fixed the server route's signing/runtime compatibility, redeployed, and verified `https://outdooradvisor.app/api/weatherkit?lat=31.5204&lon=74.3587` returns WeatherKit data. Added `.vercelignore` to reduce future manual deploy upload size.
+- 2026-04-27 — Added `APP_STORE_METADATA.md` with paste-ready App Store Connect draft copy: name, subtitle, promo text, description, keywords, categories, support/privacy/marketing URLs, review notes, and screenshot checklist. Use it as a starting point, not final legal/marketing approval.
+- 2026-04-27 — Codex handled the audit cleanup lane while Claude continued TestFlight work. Dependency hygiene is now clean: installed `expo-font`, aligned Expo SDK 55 patch versions (`expo`, `expo-background-task`, `expo-dev-client`, `expo-notifications`, `expo-task-manager`, `react-native`, `react-native-worklets`), and verified `npx expo install --check` plus `npx expo-doctor` pass. Removed the duplicate `expo-background-task` config plugin entry from `app.json`. Added secure server-side WeatherKit route `api/weatherkit.js` using Vercel env vars (`WEATHERKIT_TEAM_ID`, `WEATHERKIT_KEY_ID`, `WEATHERKIT_SERVICE_ID`, `WEATHERKIT_PRIVATE_KEY`) and changed `useWeather` to try that proxy first, falling back to Open-Meteo when unconfigured/unavailable. Removed the old client-side WeatherKit signing module and deleted stale PMD tourist scraper files (`api/tourist.js`, `src/hooks/useTouristWeather.js`) because Travel now uses direct PMD tourist links. Ran non-force `npm audit fix`, which removed the high-severity `@xmldom/xmldom` finding; remaining moderate transitive audit warnings require a breaking `--force` path and were intentionally left alone.
+- 2026-04-27 — Folded Claude's audit feedback into the Launch Readiness handoff. Revised the order of operations so build #10 is submitted to TestFlight first, then `aps-environment` is verified from EAS build output before forcing a rebuild. Clarified that dependency cleanup (`expo-font`, SDK patch alignment, duplicate `expo-background-task`) is required before build #11, not before submitting already-finished build #10. Updated WeatherKit guidance to prefer a Vercel server-side proxy before enabling real credentials, rather than filling `.p8` credentials into client-side app code.
+- 2026-04-27 — Full launch readiness audit completed. Added `Launch Readiness` section above with confirmed done items, blockers, and ordered next steps. Updated `UI_OVERHAUL_BLUEPRINT.md` Phase 11 and added Phase 12 (App Store prep) and Phase 13 (deferred) to reflect current state. Build #10 is FINISHED; `aps-environment` is still `development`; WeatherKit credentials still placeholder; App Store Connect metadata not started.
+- 2026-04-27 — Codex audit pass updated cross-agent coordination notes. Current local tree is a broad shared dirty worktree; avoid overwriting Claude/Codex edits without checking diffs first. EAS build `ed9a25dd-7048-4eeb-93b1-70e0aea2fff0` was rechecked and is now `FINISHED` with a store IPA, but it was built from commit `e664581`, not necessarily the current uncommitted tree. `npx expo export -p web` passes; `npx expo-doctor` and `npx expo install --check` report dependency hygiene issues (`expo-font` missing plus SDK patch mismatches). Audit follow-ups recorded above: duplicate `expo-background-task` plugin entry, development APNs entitlement review, WeatherKit server-side proxy/security, Google key hardening, stale PMD tourist scraper path, stale `CLAUDE.md` web/iOS-only claims, and premium nearby-place enforcement.
+- 2026-04-26 — The `.easignore` tuning was corrected after an initial bad pass. EAS does not inherit all `.gitignore` behavior once `.easignore` exists, so the first version accidentally allowed huge local native artifacts into the cloud archive and ballooned the upload to `399 MB`. The corrected `.easignore` now explicitly excludes `ios/Pods/`, `ios/build/`, `ios/.xcode.env.local`, `android/`, `node_modules/`, `.expo/`, `dist/`, `.vercel/`, `.claude/`, local env files, and `node.pkg`. After that fix, the iOS EAS build archive dropped to `71.3 MB`, uploads started succeeding, and the build finally advanced past the network/upload blocker into the actual remote build queue.
+- 2026-04-26 — iOS cloud build `ed9a25dd-7048-4eeb-93b1-70e0aea2fff0` on Expo/EAS, build profile `production`, app build version `10`, distribution `STORE`, was originally recorded as `IN_PROGRESS`; it was later rechecked on 2026-04-27 and is now `FINISHED`.
+- 2026-04-26 — Added a dedicated `.easignore` to reduce the EAS iOS build upload size and avoid sending irrelevant local/generated files to Expo’s cloud builder. It now excludes `.expo/`, `dist/`, `.vercel/`, `.claude/`, local env files, and the tracked but apparently unused `node.pkg` file (~69 MB), along with agent-only docs. This was added after repeated `npx eas-cli@latest build --platform ios` attempts consistently failed during the archive upload step with `write EPIPE` to the Google Cloud Storage upload URL.
+- 2026-04-26 — EAS build behavior was clarified further. `eas.json` now has `cli.promptToConfigurePushNotifications: false`, so future iOS builds should no longer stop on the “Would you like to set up Push Notifications?” prompt. Current known blocker remains upload transport reliability to EAS Build, not Apple login, capability sync, or signing.
+- 2026-04-26 — Clarified current domain reality: `outdooradvisor.app` is no longer just purchased, it is live on Vercel and serving the web app. Future agents should treat it as the primary branded web domain, while still remembering that the current linked Vercel CLI scope may not fully expose domain-management operations.
+- 2026-04-26 — iOS testing-first signing setup was pushed substantially forward from the Apple Developer portal and EAS build flow. Confirmed the Apple Developer account is approved and usable for this bundle ID. On the Apple Developer site, the App ID `com.ahmadadnanone.OutdoorAdvisor` was reviewed and the required app capabilities were aligned for current iPhone work: `HealthKit`, `WeatherKit`, and `Push Notifications`. A new WeatherKit key was created in Apple Developer `Keys`, and the `.p8` was downloaded locally by the user; future agents must treat that key as sensitive and never place it in client-side code or commit it to the repo.
+- 2026-04-26 — Apple signing assets for iOS distribution were created for testing / TestFlight readiness. During the Apple portal flow, the user generated a CSR from Keychain Access, created an `Apple Distribution` certificate, and then let EAS generate/manage a fresh Apple Distribution certificate plus an Apple provisioning profile for `com.ahmadadnanone.OutdoorAdvisor`. EAS reported the resulting signing state as ready: Distribution Certificate serial `453DC55A7F5C91BB39B8FF07974CC1FB`, expiring April 26, 2027, and Provisioning Profile portal ID `7P8B63YYN9`, status `active`, also expiring April 26, 2027.
+- 2026-04-26 — Current EAS build status: `npx eas-cli@latest build --platform ios` now gets through Apple login, team/provider selection, bundle registration confirmation, capability sync, distribution certificate creation, and provisioning profile creation. The build reached the prompt `Would you like to set up Push Notifications for your project?` and the current guidance is to prefer `No` for now so testing can proceed first without blocking on APNs setup. Future agents should treat the next step as resuming the interactive `eas build --platform ios` flow rather than doing more Apple portal work first.
+- 2026-04-26 — Important iOS release/testing note: the current goal is testing-first, not immediate public App Store release. This means the near-term objective is a signed iPhone build / TestFlight-capable path, with public-release polish and full push/APNs hardening allowed to lag slightly until the app is stable on real devices.
+- 2026-04-22 — Made `Padel Tennis` enabled by default in Activities. `src/data/activities.js` now includes `padel` in `DEFAULT_ENABLED_ACTIVITY_IDS`, and `src/context/SettingsContext.js` now auto-adds `padel` during enabled-activity normalization so existing saved settings also pick it up. This reflects current popularity in Lahore and keeps it visible without requiring users to add it manually.
+- 2026-04-22 — Fixed a bad Activities ranking edge case for `swimming`. `src/utils/activityScoring.js` now gives swimming its own profile instead of treating it like a generic outdoor activity, with much lower heat penalty, a warm-weather suitability boost, and softer AQI score caps than running/walking-style activities. The goal is that “it is just hot outside” no longer incorrectly pushes swimming into an unnecessary `Avoid` state unless AQI, UV, or other conditions are genuinely much worse.
 - 2026-04-22 — Deployed new liquid glass icon to Vercel production. `LaunchAnimation.js` now uses `icon.png` (was `android-icon-foreground.png`) so the launch animation shows the new icon. Native iOS splash will update on next `expo prebuild` + build.
+- 2026-04-22 — Travel screen is now section-customizable. `src/context/SettingsContext.js` now persists `travelSections` with reset/move/toggle helpers, and `src/screens/TravelScreen.js` renders Travel blocks from that saved section order. A new bottom-of-scroll `Customize Travel` card lets users hide/show and reorder optional Travel sections while keeping the top travel snapshot fixed. Verified with `npx expo export -p web`.
 - 2026-04-22 — Created a new liquid glass app icon matching the app's Tide Guide-inspired palette. Source SVG lives at `assets/icon-source.svg` — edit this file and re-run the generation script (needs `NODE_PATH` pointing to global sharp) to regenerate `assets/icon.png`, `favicon.png`, `android-icon-foreground.png`, and `splash-icon.png`. Icon features: dark navy gradient background (#151F30 → #2E4260), atmospheric cyan/teal blobs, glass mountain with lit right face (#C8E6FF → #9BC8FF), shadow left face, bright ridge specular line, peak glow, horizon shimmer with inverted reflection, and liquid glass top sheen + squircle border.
 - 2026-04-22 — Reworked the startup animation to use the real app icon artwork as part of the launch composition. `src/components/launch/LaunchAnimation.js` now places a large low-opacity version of `assets/icon.png` in the background and morphs into a centered glassy icon plate with a slower wordmark reveal, keeping the motion aligned with the app’s wallpaper palette and a smoother liquid-glass feel. Verified with `npx expo export -p web`.
 - 2026-04-22 — Retuned the startup animation for smoother motion and less borrowed visual styling. `src/components/launch/LaunchAnimation.js` now uses a slower, softer sequence with simpler geometry, cleaner easing, and a less abrupt wordmark reveal so the intro feels calmer and more native to OutdoorAdvisor rather than like a direct design echo. Verified with `npx expo export -p web`.

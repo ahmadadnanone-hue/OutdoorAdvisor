@@ -308,7 +308,8 @@ export default function AlertsScreen() {
     ];
     const items = [
       { key: 'severeAqiWarnings',   label: 'Severe AQI Warnings',     desc: 'Important alerts when air quality becomes unhealthy enough to change outdoor plans.' },
-      { key: 'dailySummary',        label: 'Daily AQI Summary',        desc: 'Receive a morning summary of air quality in your city.' },
+      { key: 'dailySummary',        label: 'Daily Outdoor Summary',    desc: 'Receive a calm morning read on air, weather, and the outdoor mood in your city.' },
+      { key: 'smartWalkNudges',     label: 'Smart Movement Nudges',    desc: 'Use your steps, weather, and AQI to spot a good time for a walk or suggest a better alternative.' },
       { key: 'smogAlerts',          label: 'Smog Season Alerts',       desc: 'Get notified when smog season conditions are detected.' },
       { key: 'rainAlerts',          label: 'Rain Alerts',              desc: 'Get notified when active rain could affect outdoor plans or driving.' },
       { key: 'thunderstormAlerts',  label: 'Thunderstorm Alerts',      desc: 'Important warnings for lightning and severe storm risk.' },
@@ -348,6 +349,14 @@ export default function AlertsScreen() {
               );
             })}
           </View>
+        </GlassCard>
+
+        <Text style={[styles.groupLabel, { marginTop: 20 }]}>Health & Privacy</Text>
+        <GlassCard style={styles.healthPrivacyCard} contentStyle={styles.healthPrivacyContent}>
+          <Text style={styles.healthPrivacyTitle}>Smart walk nudges stay private on your device</Text>
+          <Text style={styles.healthPrivacyBody}>
+            OutdoorAdvisor reads today&apos;s steps, walking distance, and active calories from Apple Health only to time better local alerts. That data stays on your device, is not used for ads, and is not required to keep AQI, weather, or travel alerts working.
+          </Text>
         </GlassCard>
 
         {/* Notification rows */}
@@ -535,12 +544,7 @@ export default function AlertsScreen() {
 
         {/* Account card */}
         <GlassCard style={styles.accountCard} contentStyle={styles.accountCardContent}>
-          {!configured ? (
-            <View>
-              <Text style={styles.accountTitle}>Account sign-in</Text>
-              <Text style={styles.accountBody}>Add Supabase environment variables to enable real accounts.</Text>
-            </View>
-          ) : isSignedIn ? (
+          {isSignedIn ? (
             <View style={styles.accountSignedInRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.accountTitle}>Signed in</Text>
@@ -704,6 +708,10 @@ const styles = StyleSheet.create({
 
   notifCard: { marginBottom: 10 },
   notifCardContent: { flexDirection: 'row', alignItems: 'center', padding: 14 },
+  healthPrivacyCard: { marginBottom: 4 },
+  healthPrivacyContent: { padding: 16 },
+  healthPrivacyTitle: { fontSize: 15, fontWeight: '700', color: dc.textPrimary, marginBottom: 8 },
+  healthPrivacyBody: { fontSize: 13, lineHeight: 20, color: dc.textSecondary },
   notifInfo: { flex: 1, marginRight: 12 },
   notifLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' },
   notifLabel: { fontSize: 15, fontWeight: '600', color: dc.textPrimary },

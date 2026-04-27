@@ -40,7 +40,7 @@ OutdoorAdvisor is not directed at children under 13 and does not knowingly colle
 CHANGES
 If we materially change how we handle your data, we will update this text and bump the app version.
 
-Contact: ahmadadnanone@gmail.com`;
+Contact: privacy@outdooradvisor.app`;
 
 const TERMS_TEXT = `These Terms of Use govern your use of the OutdoorAdvisor iOS application.
 
@@ -65,7 +65,7 @@ We may update, modify, or discontinue the app or any feature at any time without
 These terms are governed by the laws of Pakistan, without regard to conflict-of-law provisions.
 
 7. CONTACT
-Questions about these terms: ahmadadnanone@gmail.com`;
+Questions about these terms: support@outdooradvisor.app`;
 
 const DISCLAIMER_TEXT = `Weather forecasts are probabilistic estimates, not guarantees. Conditions — especially in mountainous regions like Murree, Swat, and Gilgit-Baltistan — can change rapidly and unpredictably.
 
@@ -314,9 +314,23 @@ export default function AboutTab() {
         <GlassCard style={styles.card} contentStyle={styles.cardContent}>
           <SectionHeader icon="mail-outline" title="Contact" />
           <InfoRow
+            label="Website"
+            value="outdooradvisor.app"
+            onPress={() => Linking.openURL('https://outdooradvisor.app')}
+            iconName="open-outline"
+          />
+          <View style={styles.divider} />
+          <InfoRow
+            label="Support"
+            value="support@outdooradvisor.app"
+            onPress={() => Linking.openURL('mailto:support@outdooradvisor.app?subject=OutdoorAdvisor%20Support')}
+            iconName="open-outline"
+          />
+          <View style={styles.divider} />
+          <InfoRow
             label="Feedback & bugs"
-            value="ahmadadnanone@gmail.com"
-            onPress={() => Linking.openURL('mailto:ahmadadnanone@gmail.com?subject=OutdoorAdvisor%20Feedback')}
+            value="feedback@outdooradvisor.app"
+            onPress={() => Linking.openURL('mailto:feedback@outdooradvisor.app?subject=OutdoorAdvisor%20Feedback')}
             iconName="open-outline"
           />
           <View style={styles.divider} />

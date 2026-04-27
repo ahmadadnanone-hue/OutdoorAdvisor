@@ -7,14 +7,15 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#0F172A"
     },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "OutdoorAdvisor needs your location to show air quality and weather for your area."
+        "NSLocationWhenInUseUsageDescription": "OutdoorAdvisor needs your location to show air quality and weather for your area.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.ahmadadnanone.OutdoorAdvisor"
     },
@@ -43,13 +44,29 @@
     },
     "plugins": [
       "expo-notifications",
+      "expo-background-task",
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "OutdoorAdvisor reads your steps, walking distance, and activity energy to time smart outdoor walk suggestions.",
+          "NSHealthUpdateUsageDescription": "OutdoorAdvisor does not write health data, but iOS requires a Health access description for this integration.",
+          "background": true
+        }
+      ],
       [
         "expo-location",
         {
           "locationWhenInUsePermission": "OutdoorAdvisor needs your location to show air quality and weather for your area."
         }
       ],
-      "expo-web-browser"
-    ]
+      "expo-web-browser",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "0b8b92b0-0722-4ab1-b4c4-34df3ba8e956"
+      }
+    },
+    "owner": "ahmadadnanone"
   }
 }
