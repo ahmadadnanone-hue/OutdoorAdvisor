@@ -190,9 +190,23 @@ export default async function handler(req, res) {
     const token = await getWeatherKitToken(config);
     const url = `${WK_BASE}/weather/${encodeURIComponent(lang)}/${lat}/${lon}?dataSets=currentWeather,forecastDaily,forecastHourly,weatherAlerts&timezone=auto`;
     const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
     });
-    const json = await response.json();
+    const text = await response.text();
+    let json = null;
+    try {
+      json = text ? JSON.parse(text) : {};
+    } catch {
+      return sendJson(res, response.ok ? 502 : response.status, {
+        error: 'WeatherKit returned a non-JSON response.',
+        upstreamStatus: response.status,
+        contentType: response.headers.get('content-type') || null,
+        bodyPreview: text.slice(0, 120),
+      });
+    }
 
     if (!response.ok || json.reason) {
       return sendJson(res, response.ok ? 502 : response.status, {
