@@ -54,6 +54,3 @@ yarn-error.*
 # WeatherKit credentials — never commit
 src/config/weatherkit.js
 *.p8
-
-# GitHub Actions workflows (require 'workflow' PAT scope to push)
-.github/workflows/

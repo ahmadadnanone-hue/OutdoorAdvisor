@@ -67,12 +67,15 @@ export function derivePremiumState(user) {
     userMeta.premium,
   ];
 
-  const isPremium = entitlementList.some((value) => {
-    if (Array.isArray(value)) {
-      return value.some(isTruthyPremium);
-    }
-    return isTruthyPremium(value);
-  }) || (email && allowlistedEmails.includes(email));
+  const isTestFlightBuild = process.env.EXPO_PUBLIC_TESTFLIGHT_PREMIUM === 'true';
+
+  const isPremium = (isTestFlightBuild && Boolean(user)) ||
+    entitlementList.some((value) => {
+      if (Array.isArray(value)) {
+        return value.some(isTruthyPremium);
+      }
+      return isTruthyPremium(value);
+    }) || (email && allowlistedEmails.includes(email));
 
   const plan =
     (typeof appMeta.plan === 'string' && appMeta.plan) ||
