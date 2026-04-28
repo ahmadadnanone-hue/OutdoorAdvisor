@@ -10,7 +10,10 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_TESTFLIGHT_PREMIUM": "true"
+      }
     },
     "production": {
       "autoIncrement": true
