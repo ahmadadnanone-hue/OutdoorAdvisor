@@ -544,46 +544,7 @@ export default function AlertsScreen() {
           </>
         )}
 
-        {/* ── FAB Quick Actions ── */}
-        <Text style={[styles.groupLabel, { marginTop: 28 }]}>Quick Action Button (FAB)</Text>
-        <Text style={styles.sectionDesc}>Choose which shortcuts appear in the floating action button. Premium actions require a premium account.</Text>
-        {!isPremium && (
-          <GlassCard tintColor={dc.infoGlass} borderColor={dc.infoStroke} style={styles.premiumBanner} contentStyle={styles.premiumBannerContent}>
-            <Text style={styles.premiumBannerTitle}>Refresh and AI Brief are premium shortcuts</Text>
-            <Text style={styles.premiumBannerBody}>Free users get Location, Outdoors, Travel, and Share shortcuts.</Text>
-          </GlassCard>
-        )}
-        {ALL_FAB_ACTION_IDS.map((id) => {
-          const meta     = FAB_ACTION_META[id];
-          const isLocked = meta.premium && !isPremium;
-          const isActive = !isLocked && (fabActions || []).includes(id);
-          return (
-            <GlassCard
-              key={id}
-              style={[styles.notifCard, isLocked && { opacity: 0.72 }]}
-              contentStyle={styles.notifCardContent}
-            >
-              <View style={styles.notifInfo}>
-                <View style={styles.notifLabelRow}>
-                  <Text style={styles.fabActionIcon}>{meta.icon}</Text>
-                  <Text style={styles.notifLabel}>{meta.label}</Text>
-                  {isLocked && <View style={styles.premiumChip}><Text style={styles.premiumChipText}>Premium</Text></View>}
-                </View>
-                <Text style={styles.notifDesc}>
-                  {meta.desc}{meta.note ? ` ${meta.note}` : ''}
-                  {isLocked ? ' Unlock with a premium account.' : ''}
-                </Text>
-              </View>
-              <Switch
-                value={isActive}
-                onValueChange={() => { if (!isLocked) toggleFabAction(id); }}
-                disabled={isLocked}
-                trackColor={{ false: dc.cardStrokeSoft, true: dc.accentCyan + '88' }}
-                thumbColor={isLocked ? dc.textMuted : isActive ? dc.accentCyan : dc.textMuted}
-              />
-            </GlassCard>
-          );
-        })}
+        {/* FAB Quick Actions section hidden — FAB is currently disabled */}
       </ScrollView>
     );
   };

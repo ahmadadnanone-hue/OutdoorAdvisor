@@ -158,8 +158,8 @@ function AppNavigator() {
           <Tab.Screen name="Settings"   component={AlertsScreen} />
         </Tab.Navigator>
 
-        {/* Global FAB — rendered inside NavigationContainer for useNavigation access */}
-        <FABMenu currentRouteName={activeRouteName} />
+        {/* FAB hidden — kept for later, uncomment to restore */}
+        {/* <FABMenu currentRouteName={activeRouteName} /> */}
       </NavigationContainer>
     </>
   );

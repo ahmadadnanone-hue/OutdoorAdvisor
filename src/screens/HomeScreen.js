@@ -271,7 +271,6 @@ export default function HomeScreen({ navigation, route }) {
         >
           <HomeHeader
             greeting={getGreeting()}
-            greetingName={greetingName}
             isPremium={isPremium}
             locationLabel={locationDisplay.primary}
             onLocationPress={() => setCityPickerVisible(true)}
