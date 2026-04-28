@@ -65,14 +65,14 @@ async function sendWindAlerts(devices, state) {
   state.sentWindAlerts = state.sentWindAlerts || {};
 
   for (const device of candidates) {
-    const wx = await fetchOpenMeteo(device.location.lat, device.location.lon);
+    const wx = await fetchWeatherForAlerts(device.location.lat, device.location.lon);
     if (!wx) continue;
 
-    const gusts = wx.current.wind_gusts_10m ?? 0;
-    const speed = wx.current.wind_speed_10m ?? 0;
+    const gusts = wx.windGusts;
+    const speed = wx.windSpeed;
     const threshold = Number(device.thresholds?.windAlert || 60); // km/h
 
-    if (gusts < threshold && speed < threshold) continue;
+    if (!isWindy(wx, threshold)) continue;
 
     const key = `${device.expoPushToken}:wind:${pakistanDateKey(new Date())}`;
     if (Date.now() - (state.sentWindAlerts[key] || 0) < 3 * 60 * 60 * 1000) continue;
@@ -110,11 +110,10 @@ async function sendThunderstormAlerts(devices, state) {
   state.sentStormAlerts = state.sentStormAlerts || {};
 
   for (const device of candidates) {
-    const wx = await fetchOpenMeteo(device.location.lat, device.location.lon);
+    const wx = await fetchWeatherForAlerts(device.location.lat, device.location.lon);
     if (!wx) continue;
 
-    const code = wx.current.weather_code;
-    if (!THUNDERSTORM_CODES.has(code)) continue;
+    if (!isThunderstorm(wx)) continue;
 
     const key = `${device.expoPushToken}:storm:${pakistanDateKey(new Date())}`;
     if (Date.now() - (state.sentStormAlerts[key] || 0) < 4 * 60 * 60 * 1000) continue;
@@ -150,20 +149,19 @@ async function sendRainAlerts(devices, state) {
   state.sentRainAlerts = state.sentRainAlerts || {};
 
   for (const device of candidates) {
-    const wx = await fetchOpenMeteo(device.location.lat, device.location.lon);
+    const wx = await fetchWeatherForAlerts(device.location.lat, device.location.lon);
     if (!wx) continue;
 
-    const code = wx.current.weather_code;
-    if (!RAIN_CODES.has(code)) continue;
+    if (!isRaining(wx)) continue;
 
     const key = `${device.expoPushToken}:rain:${pakistanDateKey(new Date())}`;
     if (Date.now() - (state.sentRainAlerts[key] || 0) < 4 * 60 * 60 * 1000) continue;
 
     if (!canSendNonCriticalToday(state, device.expoPushToken, pakistanDateKey(new Date()))) continue;
 
-    const isHeavy = HEAVY_RAIN_CODES.has(code);
+    const isHeavy = isHeavyRain(wx);
     const city = device.location?.city || 'your area';
-    const precip = wx.current.precipitation ?? null;
+    const precip = wx.precipitation ?? null;
     const { title, body } = buildRainCopy(city, isHeavy, precip);
     const response = await sendNativePush([device], {
       title,
@@ -227,17 +225,86 @@ function buildRainCopy(city, isHeavy, precip) {
   };
 }
 
-// ─── Open-Meteo fetch (free, no key) ─────────────────────────────────────────
-async function fetchOpenMeteo(lat, lon) {
+// ─── Weather fetch: WeatherKit first, Open-Meteo fallback ────────────────────
+// Returns a normalised shape:
+// { windSpeed, windGusts, weatherCode, conditionCode, precipitation, nativeAlerts }
+async function fetchWeatherForAlerts(lat, lon) {
+  const wk = await fetchWeatherKit(lat, lon);
+  if (wk) return wk;
+  return fetchOpenMeteoNormalised(lat, lon);
+}
+
+async function fetchWeatherKit(lat, lon) {
+  try {
+    const base = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'https://outdooradvisor.app';
+    const url = `${base}/api/weatherkit?lat=${lat}&lon=${lon}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) return null;
+    const json = await response.json();
+    if (!json?.current) return null;
+    const c = json.current;
+    return {
+      windSpeed:     c.windSpeed   ?? 0,
+      windGusts:     c.windGusts   ?? 0,
+      weatherCode:   c.weatherCode ?? 0,
+      conditionCode: c.conditionCode ?? null,
+      precipitation: null,
+      nativeAlerts:  json.alerts   ?? [],
+      source:        'WeatherKit',
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchOpenMeteoNormalised(lat, lon) {
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=weather_code,wind_speed_10m,wind_gusts_10m,precipitation&wind_speed_unit=kmh&forecast_days=1`;
     const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!response.ok) return null;
     const json = await response.json();
-    return json?.current ? json : null;
+    if (!json?.current) return null;
+    const c = json.current;
+    return {
+      windSpeed:     c.wind_speed_10m  ?? 0,
+      windGusts:     c.wind_gusts_10m  ?? 0,
+      weatherCode:   c.weather_code    ?? 0,
+      conditionCode: null,
+      precipitation: c.precipitation   ?? null,
+      nativeAlerts:  [],
+      source:        'OpenMeteo',
+    };
   } catch {
     return null;
   }
+}
+
+// WeatherKit native condition codes for each alert type
+const WK_WIND_CONDITIONS        = new Set(['Windy', 'Squalls', 'BlowingDust', 'FreezingDrizzle']);
+const WK_THUNDERSTORM_CONDITIONS = new Set(['IsolatedThunderstorms', 'ScatteredThunderstorms', 'Thunderstorms', 'SevereThunderstorm']);
+const WK_RAIN_CONDITIONS        = new Set(['Drizzle', 'LightDrizzle', 'HeavyDrizzle', 'LightRain', 'Rain', 'HeavyRain', 'SunShowers', 'ScatteredShowers', 'HeavyShowers']);
+const WK_HEAVY_RAIN_CONDITIONS  = new Set(['HeavyDrizzle', 'HeavyRain', 'HeavyShowers']);
+
+function isWindy(wx, threshold) {
+  if (WK_WIND_CONDITIONS.has(wx.conditionCode)) return true;
+  return wx.windGusts >= threshold || wx.windSpeed >= threshold;
+}
+
+function isThunderstorm(wx) {
+  if (WK_THUNDERSTORM_CONDITIONS.has(wx.conditionCode)) return true;
+  return THUNDERSTORM_CODES.has(wx.weatherCode);
+}
+
+function isRaining(wx) {
+  if (WK_RAIN_CONDITIONS.has(wx.conditionCode)) return true;
+  return RAIN_CODES.has(wx.weatherCode);
+}
+
+function isHeavyRain(wx) {
+  if (WK_HEAVY_RAIN_CONDITIONS.has(wx.conditionCode)) return true;
+  return HEAVY_RAIN_CODES.has(wx.weatherCode);
 }
 
 async function sendSevereAqiAlerts(devices, state) {
