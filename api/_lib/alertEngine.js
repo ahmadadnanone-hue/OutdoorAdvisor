@@ -126,7 +126,7 @@ async function sendThunderstormAlerts(devices, state) {
       category: 'Weather',
       source: 'weather-storm',
       url: 'https://outdooradvisor.app',
-      data: { weatherCode: code },
+      data: { weatherCode: wx.weatherCode },
       priority: 'high',
     });
 
@@ -169,7 +169,7 @@ async function sendRainAlerts(devices, state) {
       category: 'Weather',
       source: 'weather-rain',
       url: 'https://outdooradvisor.app',
-      data: { weatherCode: code, precipitation: precip },
+      data: { weatherCode: wx.weatherCode, precipitation: precip },
       priority: isHeavy ? 'high' : 'normal',
     });
 
