@@ -79,9 +79,10 @@ async function sendWindAlerts(devices, state) {
 
     const isSevere = gusts >= 80 || speed >= 70;
     const city = device.location?.city || 'your area';
+    const { title, body } = buildWindCopy(city, Math.round(speed), Math.round(gusts), isSevere);
     const response = await sendNativePush([device], {
-      title: isSevere ? `Severe Wind Warning — ${city}` : `Strong Wind Alert — ${city}`,
-      body: `Wind speed ${Math.round(speed)} km/h, gusts up to ${Math.round(gusts)} km/h. Avoid outdoor activity and stay away from trees and structures.`,
+      title,
+      body,
       category: 'Wind',
       source: 'weather-wind',
       url: 'https://outdooradvisor.app',
@@ -119,9 +120,10 @@ async function sendThunderstormAlerts(devices, state) {
     if (Date.now() - (state.sentStormAlerts[key] || 0) < 4 * 60 * 60 * 1000) continue;
 
     const city = device.location?.city || 'your area';
+    const { title, body } = buildStormCopy(city);
     const response = await sendNativePush([device], {
-      title: `Thunderstorm Alert — ${city}`,
-      body: 'Thunderstorm detected in your area. Stay indoors, avoid open fields, tall trees, and metal structures.',
+      title,
+      body,
       category: 'Weather',
       source: 'weather-storm',
       url: 'https://outdooradvisor.app',
@@ -162,12 +164,9 @@ async function sendRainAlerts(devices, state) {
     const isHeavy = HEAVY_RAIN_CODES.has(code);
     const city = device.location?.city || 'your area';
     const precip = wx.current.precipitation ?? null;
-    const body = isHeavy
-      ? `Heavy rain is falling in ${city}${precip != null ? ` (${precip} mm/hr)` : ''}. Drive carefully and watch for flooding.`
-      : `Rain has started in ${city}. Plan outdoor activities accordingly and take an umbrella.`;
-
+    const { title, body } = buildRainCopy(city, isHeavy, precip);
     const response = await sendNativePush([device], {
-      title: isHeavy ? `Heavy Rain Alert — ${city}` : `Rain Alert — ${city}`,
+      title,
       body,
       category: 'Weather',
       source: 'weather-rain',
@@ -182,6 +181,50 @@ async function sendRainAlerts(devices, state) {
   }
 
   return sent ? { type: 'rain', sent } : null;
+}
+
+// ─── Personalised copy builders ───────────────────────────────────────────────
+function buildWindCopy(city, speed, gusts, isSevere) {
+  if (isSevere) {
+    return {
+      title: `Windstorm in ${city} — stay cautious`,
+      body: `Dangerous winds of ${speed} km/h with gusts up to ${gusts} km/h. Avoid going outside if you can — and if you must, watch out for falling branches and loose objects.`,
+    };
+  }
+  return {
+    title: `Strong winds expected in ${city}`,
+    body: `Winds are picking up to ${speed} km/h (gusts ${gusts} km/h). Go out with caution — secure loose items and hold on to umbrellas.`,
+  };
+}
+
+function buildStormCopy(city) {
+  const lines = [
+    `Thunderstorm rolling in over ${city} — best to stay in for now.`,
+    `A thunderstorm is passing through ${city}. Hold off on going out until it clears.`,
+    `Storm activity detected in ${city}. Stay indoors and away from open areas until it passes.`,
+  ];
+  return {
+    title: `Thunderstorm in ${city}`,
+    body: lines[Math.floor(Math.random() * lines.length)],
+  };
+}
+
+function buildRainCopy(city, isHeavy, precip) {
+  if (isHeavy) {
+    return {
+      title: `Heavy rain in ${city}`,
+      body: `Heavy rain is falling right now${precip != null ? ` (${precip} mm)` : ''}. Drive carefully, watch for puddles and reduced visibility, and delay non-essential trips if you can.`,
+    };
+  }
+  const lines = [
+    `It's raining in ${city}. Grab an umbrella before you head out.`,
+    `Rain has started in ${city} — a good day to keep outdoor plans light.`,
+    `Light rain in ${city}. Nothing serious, but worth taking an umbrella.`,
+  ];
+  return {
+    title: `Rain in ${city}`,
+    body: lines[Math.floor(Math.random() * lines.length)],
+  };
 }
 
 // ─── Open-Meteo fetch (free, no key) ─────────────────────────────────────────
@@ -327,8 +370,14 @@ function getAqiBand(aqi) {
 }
 
 function buildAqiBody(aqi, city) {
-  const pm25 = aqi.pm25 != null ? ` PM2.5 is ${aqi.pm25}.` : '';
-  return `AQI is ${aqi.aqi} in ${city}. Keep outdoor exposure short, avoid hard exertion, and consider an N95 if you must go out.${pm25}`;
+  const pm25 = aqi.pm25 != null ? ` PM2.5 is at ${aqi.pm25} µg/m³.` : '';
+  if (aqi.aqi >= 300) {
+    return `Air in ${city} is hazardous right now (AQI ${aqi.aqi}).${pm25} Stay indoors, keep windows shut, and wear an N95 if you really must go out.`;
+  }
+  if (aqi.aqi >= 200) {
+    return `Very unhealthy air in ${city} (AQI ${aqi.aqi}).${pm25} Limit outdoor time and avoid any physical activity outside.`;
+  }
+  return `Air quality is unhealthy in ${city} (AQI ${aqi.aqi}).${pm25} Keep your time outside short and skip the morning jog today.`;
 }
 
 async function sendMorningSummaries(devices, state) {
@@ -351,9 +400,11 @@ async function sendMorningSummaries(devices, state) {
 
   for (const device of candidates) {
     const city = device.location?.city || 'your area';
+    const hour = hourInPakistan(new Date());
+    const timeGreeting = hour < 8 ? 'Early morning check' : 'Good morning';
     const response = await sendNativePush([device], {
-      title: `${city} morning outdoor summary`,
-      body: "Check today's AQI, heat, rain, and travel signals before you head out.",
+      title: `${timeGreeting} — ${city} outdoor summary`,
+      body: "Here's your daily read on air quality, heat, rain, and road conditions before you step outside.",
       category: 'Summary',
       source: 'daily-summary',
       url: 'https://outdooradvisor.app',
