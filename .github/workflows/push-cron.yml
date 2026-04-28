@@ -1,0 +1,19 @@
+name: Notification Cron
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # every 15 minutes
+  workflow_dispatch:          # allow manual trigger from GitHub Actions tab
+
+jobs:
+  ping-cron:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Trigger OutdoorAdvisor alert engine
+        run: |
+          curl -sf -X GET \
+            "https://outdooradvisor.app/api/push?action=cron" \
+            -H "Authorization: Bearer ${{ secrets.OA_CRON_SECRET }}" \
+            --retry 2 \
+            --retry-delay 3
