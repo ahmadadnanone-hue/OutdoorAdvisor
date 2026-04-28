@@ -15,6 +15,13 @@
         "EXPO_PUBLIC_TESTFLIGHT_PREMIUM": "true"
       }
     },
+    "testflight-preview": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_TESTFLIGHT_PREMIUM": "true"
+      }
+    },
     "production": {
       "autoIncrement": true
     }
