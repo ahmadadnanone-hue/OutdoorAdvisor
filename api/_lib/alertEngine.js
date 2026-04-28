@@ -7,6 +7,11 @@ const DAILY_SUMMARY_START_HOUR = 6;
 const DAILY_SUMMARY_END_HOUR = 10;
 const NON_CRITICAL_DAILY_LIMIT = 2;
 
+// WMO codes for weather-based alerts
+const THUNDERSTORM_CODES = new Set([95, 96, 99]);
+const RAIN_CODES         = new Set([51, 53, 55, 61, 63, 65, 66, 67, 80, 81, 82]);
+const HEAVY_RAIN_CODES   = new Set([63, 65, 67, 81, 82]);
+
 export async function runAlertEngine({ mode = 'scheduled' } = {}) {
   const [devices, state] = await Promise.all([
     listNativeDevices(),
@@ -19,14 +24,23 @@ export async function runAlertEngine({ mode = 'scheduled' } = {}) {
   }
 
   const results = [];
-  const pmdResult = await sendPmdCriticalAlerts(activeDevices, state);
-  if (pmdResult) results.push(pmdResult);
+  const pmdResult       = await sendPmdCriticalAlerts(activeDevices, state);
+  if (pmdResult)       results.push(pmdResult);
 
-  const aqiResult = await sendSevereAqiAlerts(activeDevices, state);
-  if (aqiResult) results.push(aqiResult);
+  const aqiResult       = await sendSevereAqiAlerts(activeDevices, state);
+  if (aqiResult)       results.push(aqiResult);
 
-  const summaryResult = await sendMorningSummaries(activeDevices, state);
-  if (summaryResult) results.push(summaryResult);
+  const windResult      = await sendWindAlerts(activeDevices, state);
+  if (windResult)      results.push(windResult);
+
+  const stormResult     = await sendThunderstormAlerts(activeDevices, state);
+  if (stormResult)     results.push(stormResult);
+
+  const rainResult      = await sendRainAlerts(activeDevices, state);
+  if (rainResult)      results.push(rainResult);
+
+  const summaryResult   = await sendMorningSummaries(activeDevices, state);
+  if (summaryResult)   results.push(summaryResult);
 
   state.lastRunAt = Date.now();
   await saveState(state);
@@ -37,6 +51,150 @@ export async function runAlertEngine({ mode = 'scheduled' } = {}) {
     sent: results.reduce((sum, result) => sum + (result.sent || 0), 0),
     results,
   };
+}
+
+// ─── Wind alerts ──────────────────────────────────────────────────────────────
+async function sendWindAlerts(devices, state) {
+  const candidates = devices.filter((d) => {
+    const prefs = d.preferences || {};
+    return prefs.windAlerts !== false && d.location?.lat != null;
+  });
+  if (!candidates.length) return null;
+
+  let sent = 0;
+  state.sentWindAlerts = state.sentWindAlerts || {};
+
+  for (const device of candidates) {
+    const wx = await fetchOpenMeteo(device.location.lat, device.location.lon);
+    if (!wx) continue;
+
+    const gusts = wx.current.wind_gusts_10m ?? 0;
+    const speed = wx.current.wind_speed_10m ?? 0;
+    const threshold = Number(device.thresholds?.windAlert || 60); // km/h
+
+    if (gusts < threshold && speed < threshold) continue;
+
+    const key = `${device.expoPushToken}:wind:${pakistanDateKey(new Date())}`;
+    if (Date.now() - (state.sentWindAlerts[key] || 0) < 3 * 60 * 60 * 1000) continue;
+
+    const isSevere = gusts >= 80 || speed >= 70;
+    const city = device.location?.city || 'your area';
+    const response = await sendNativePush([device], {
+      title: isSevere ? `Severe Wind Warning — ${city}` : `Strong Wind Alert — ${city}`,
+      body: `Wind speed ${Math.round(speed)} km/h, gusts up to ${Math.round(gusts)} km/h. Avoid outdoor activity and stay away from trees and structures.`,
+      category: 'Wind',
+      source: 'weather-wind',
+      url: 'https://outdooradvisor.app',
+      data: { windSpeed: speed, windGusts: gusts },
+      priority: isSevere ? 'high' : 'normal',
+    });
+
+    sent += response.attempted;
+    state.sentWindAlerts[key] = Date.now();
+    if (!isSevere) incrementNonCritical(state, device.expoPushToken, pakistanDateKey(new Date()));
+  }
+
+  return sent ? { type: 'wind', sent } : null;
+}
+
+// ─── Thunderstorm alerts ──────────────────────────────────────────────────────
+async function sendThunderstormAlerts(devices, state) {
+  const candidates = devices.filter((d) => {
+    const prefs = d.preferences || {};
+    return prefs.thunderstormAlerts !== false && d.location?.lat != null;
+  });
+  if (!candidates.length) return null;
+
+  let sent = 0;
+  state.sentStormAlerts = state.sentStormAlerts || {};
+
+  for (const device of candidates) {
+    const wx = await fetchOpenMeteo(device.location.lat, device.location.lon);
+    if (!wx) continue;
+
+    const code = wx.current.weather_code;
+    if (!THUNDERSTORM_CODES.has(code)) continue;
+
+    const key = `${device.expoPushToken}:storm:${pakistanDateKey(new Date())}`;
+    if (Date.now() - (state.sentStormAlerts[key] || 0) < 4 * 60 * 60 * 1000) continue;
+
+    const city = device.location?.city || 'your area';
+    const response = await sendNativePush([device], {
+      title: `Thunderstorm Alert — ${city}`,
+      body: 'Thunderstorm detected in your area. Stay indoors, avoid open fields, tall trees, and metal structures.',
+      category: 'Weather',
+      source: 'weather-storm',
+      url: 'https://outdooradvisor.app',
+      data: { weatherCode: code },
+      priority: 'high',
+    });
+
+    sent += response.attempted;
+    state.sentStormAlerts[key] = Date.now();
+  }
+
+  return sent ? { type: 'thunderstorm', sent } : null;
+}
+
+// ─── Rain alerts ──────────────────────────────────────────────────────────────
+async function sendRainAlerts(devices, state) {
+  const candidates = devices.filter((d) => {
+    const prefs = d.preferences || {};
+    return prefs.rainAlerts !== false && d.location?.lat != null;
+  });
+  if (!candidates.length) return null;
+
+  let sent = 0;
+  state.sentRainAlerts = state.sentRainAlerts || {};
+
+  for (const device of candidates) {
+    const wx = await fetchOpenMeteo(device.location.lat, device.location.lon);
+    if (!wx) continue;
+
+    const code = wx.current.weather_code;
+    if (!RAIN_CODES.has(code)) continue;
+
+    const key = `${device.expoPushToken}:rain:${pakistanDateKey(new Date())}`;
+    if (Date.now() - (state.sentRainAlerts[key] || 0) < 4 * 60 * 60 * 1000) continue;
+
+    if (!canSendNonCriticalToday(state, device.expoPushToken, pakistanDateKey(new Date()))) continue;
+
+    const isHeavy = HEAVY_RAIN_CODES.has(code);
+    const city = device.location?.city || 'your area';
+    const precip = wx.current.precipitation ?? null;
+    const body = isHeavy
+      ? `Heavy rain is falling in ${city}${precip != null ? ` (${precip} mm/hr)` : ''}. Drive carefully and watch for flooding.`
+      : `Rain has started in ${city}. Plan outdoor activities accordingly and take an umbrella.`;
+
+    const response = await sendNativePush([device], {
+      title: isHeavy ? `Heavy Rain Alert — ${city}` : `Rain Alert — ${city}`,
+      body,
+      category: 'Weather',
+      source: 'weather-rain',
+      url: 'https://outdooradvisor.app',
+      data: { weatherCode: code, precipitation: precip },
+      priority: isHeavy ? 'high' : 'normal',
+    });
+
+    sent += response.attempted;
+    state.sentRainAlerts[key] = Date.now();
+    incrementNonCritical(state, device.expoPushToken, pakistanDateKey(new Date()));
+  }
+
+  return sent ? { type: 'rain', sent } : null;
+}
+
+// ─── Open-Meteo fetch (free, no key) ─────────────────────────────────────────
+async function fetchOpenMeteo(lat, lon) {
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=weather_code,wind_speed_10m,wind_gusts_10m,precipitation&wind_speed_unit=kmh&forecast_days=1`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!response.ok) return null;
+    const json = await response.json();
+    return json?.current ? json : null;
+  } catch {
+    return null;
+  }
 }
 
 async function sendSevereAqiAlerts(devices, state) {
@@ -319,7 +477,7 @@ function cleanXml(value) {
 function inferSeverity(title, description) {
   const text = `${title} ${description}`.toLowerCase();
   if (/extreme|cyclone|flash flood|torrential|emergency/.test(text)) return 'Extreme';
-  if (/severe|warning|heavy rain|thunderstorm|lightning|flood|hail|heatwave/.test(text)) return 'Severe';
+  if (/severe|warning|heavy rain|thunderstorm|lightning|flood|hail|heatwave|windstorm|dust storm|squall|gust/.test(text)) return 'Severe';
   return null;
 }
 
