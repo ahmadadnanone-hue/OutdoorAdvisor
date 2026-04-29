@@ -48,6 +48,7 @@ import { getTodayHealthSnapshot, initializeHealthPermissions } from './src/hooks
 import { registerOutdoorAdvisorBackgroundTask } from './src/services/backgroundTask';
 import { runSmartAdvisorCheck } from './src/services/smartAdvisor';
 import { registerNativePushToken, syncNativePushRegistration } from './src/services/pushRegistration';
+import { startNativeNotificationInboxSync, syncLastNotificationResponseToInbox } from './src/services/nativeNotificationInbox';
 import LaunchAnimation from './src/components/launch/LaunchAnimation';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -107,6 +108,7 @@ function AppNavigator() {
 
     const boot = async () => {
       await ensureLocalNotificationPermission({ prompt: true }).catch(() => {});
+      await syncLastNotificationResponseToInbox().catch(() => {});
       await registerNativePushToken({ prompt: false }).catch(() => {});
       await initializeHealthPermissions({ prompt: Platform.OS === 'ios' }).catch(() => {});
       await getTodayHealthSnapshot({ force: true, prompt: false }).catch(() => {});
@@ -115,15 +117,18 @@ function AppNavigator() {
     };
 
     boot();
+    const stopNotificationInboxSync = startNativeNotificationInboxSync();
 
     const subscription = AppState.addEventListener('change', (state) => {
       if (!mounted || state !== 'active') return;
+      syncLastNotificationResponseToInbox().catch(() => {});
       syncNativePushRegistration().catch(() => {});
       runSmartAdvisorCheck({ reason: 'foreground', promptForHealth: false }).catch(() => {});
     });
 
     return () => {
       mounted = false;
+      stopNotificationInboxSync?.();
       subscription.remove();
     };
   }, []);

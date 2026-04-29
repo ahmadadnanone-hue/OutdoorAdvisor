@@ -1,6 +1,6 @@
 # OutdoorAdvisor Notification Architecture
 
-Last updated: 2026-04-27
+Last updated: 2026-04-29
 
 ## Goal
 
@@ -8,7 +8,7 @@ OutdoorAdvisor must deliver high-value outdoor, weather, AQI, and travel alerts 
 
 ## Current Notification Types
 
-- Daily Outdoor Summary: calm morning summary of weather, AQI, and outdoor suitability.
+- Daily Outdoor Advisory: calm morning guidance on AQI, heat, rain, and road signals before the user leaves.
 - Smart Movement Nudges: Apple Health steps plus AQI/weather to suggest a walk or safer indoor alternative.
 - PMD Severe/Extreme Alerts: official CAP/RSS weather warnings.
 - Severe AQI Warnings: unhealthy air-quality threshold alerts.
@@ -20,7 +20,7 @@ OutdoorAdvisor must deliver high-value outdoor, weather, AQI, and travel alerts 
 - Extreme Heat Alerts: unsafe feels-like heat.
 - Motorway Fog Warnings: corridor visibility risk.
 - Major Route Closures: NHMP/motorway closures and serious route advisories.
-- Notification Inbox: in-app history of alerts already generated.
+- Notification Inbox: in-app history of local alerts and remote Expo pushes received/tapped on this device.
 
 ## Delivery Model
 
@@ -32,11 +32,14 @@ The production path is:
 2. App obtains an Expo push token with `Notifications.getExpoPushTokenAsync`.
 3. App registers that token at `/api/push?action=register`.
 4. Vercel stores token, device metadata, location snapshot, timezone, and alert preferences in KV.
-5. An authenticated external scheduler should trigger `/api/push?action=cron` every 15 minutes.
+5. GitHub Actions triggers `/api/push?action=cron` every 15 minutes using the `OA_CRON_SECRET` repo secret.
 6. Server sends pushes through Expo Push Service.
 7. Server stores Expo receipt IDs and later checks receipts to clean up delivery failures.
+8. Build 20 client code saves received/tapped remote pushes into the local in-app Notification Center.
 
 This is the only path that can reliably notify users when the app is closed.
+
+Important iOS caveat: server pushes can be delivered while the app is closed because APNs/Expo handle delivery. App code cannot run arbitrary WeatherKit or Apple Health checks while fully closed; health-aware nudges remain best-effort app-open/background behavior unless the product later chooses to sync a privacy-reviewed health summary to the server.
 
 ### Secondary: Local Notifications
 
@@ -76,7 +79,7 @@ Default cap: 2 non-critical alerts per device per day.
 
 ### Helpful, low frequency
 
-- Morning summary.
+- Morning advisory.
 - Good outdoor window.
 - Smart walk nudge.
 
@@ -93,7 +96,7 @@ Default behavior: once per day unless user explicitly asks for more.
   - single Hobby-plan-friendly push API with `action=register`, `action=unregister`, `action=test`, and `action=cron`.
 
 - `.github/workflows/push-cron.yml`
-  - optional GitHub Actions scheduler path. It is not in the latest committed repo state because the current Git remote token cannot push workflow files without `workflow` scope.
+  - active GitHub Actions scheduler path. It runs every 15 minutes and calls the authenticated production cron route.
 
 - `api/_lib/nativePush.js`
   - Expo Push API sender,
@@ -103,8 +106,14 @@ Default behavior: once per day unless user explicitly asks for more.
 - `api/_lib/alertEngine.js`
   - initial PMD critical alert sender,
   - severe AQI threshold sender,
-  - initial morning summary sender,
+  - WeatherKit-first wind, thunderstorm, and rain checks with Open-Meteo fallback,
+  - morning advisory sender,
   - dedupe and daily non-critical cap state.
+
+- `src/services/nativeNotificationInbox.js`
+  - listens for native Expo pushes received while the app is foregrounded,
+  - captures the last tapped notification when the app opens from a push,
+  - stores remote push entries in `src/utils/notificationInbox.js` so the in-app Notification Center reflects what the user tapped.
 
 - `vercel.json`
   - keeps Vercel serving the web app and API routes. Vercel Hobby does not support sub-daily cron, so the timely scheduler must live outside Vercel unless the project upgrades to Vercel Pro.
@@ -115,7 +124,7 @@ Default behavior: once per day unless user explicitly asks for more.
 - `KV_REST_API_TOKEN`
 - `CRON_SECRET`
 - optional: `PUSH_TEST_SECRET`
-- If GitHub Actions scheduling is restored later, GitHub secret `OA_CRON_SECRET` should match Vercel `CRON_SECRET`
+- GitHub secret `OA_CRON_SECRET` should match Vercel `CRON_SECRET`
 
 `CRON_SECRET` should be a random string of at least 16 characters. Whatever external scheduler is used should send it as a bearer token to `/api/push?action=cron`.
 
@@ -127,12 +136,13 @@ Default behavior: once per day unless user explicitly asks for more.
 4. Confirm `/api/push?action=register` receives the token in production logs.
 5. Send a protected test push through `/api/push?action=test`.
 6. Lock the phone and confirm the notification arrives while the app is closed.
-7. Confirm the chosen external scheduler runs `/api/push?action=cron` and does not require the app to open.
+7. Confirm the GitHub Actions scheduler runs `/api/push?action=cron` and does not require the app to open.
+8. Tap a remote push and confirm it appears in the Home Notification Center after the app opens.
 
 ## Next Hardening Steps
 
 1. Add NHMP route-closure and motorway-fog checks to the server alert engine.
-2. Add heat, rain, wind, thunderstorm, and pollen threshold checks to the server alert engine.
+2. Add heat, pollen, smog season, NHMP closure, and motorway-fog checks to the server alert engine.
 3. Add per-user route/corridor preferences for travel alerts.
 4. Store notification inbox events server-side for cross-device history.
 5. Add receipt-based automatic token cleanup for permanent Expo/APNs failures.

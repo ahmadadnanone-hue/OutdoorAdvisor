@@ -16,6 +16,7 @@ import { colors, radius as radiusTokens, shadows } from '../../design';
  */
 export default function GlassPill({
   label,
+  subLabel,
   leadingIcon,
   trailingIcon,
   onPress,
@@ -123,19 +124,26 @@ export default function GlassPill({
         <View style={[styles.content, pad, contentStyle]}>
           {leadingIcon ? <View style={styles.icon}>{leadingIcon}</View> : null}
           {label ? (
-            <Text
-              style={[
-                styles.label,
-                {
-                  color: labelColor,
-                  fontWeight: active ? '800' : '700',
-                },
-                textStyle,
-              ]}
-              numberOfLines={1}
-            >
-              {label}
-            </Text>
+            <View style={styles.labelStack}>
+              <Text
+                style={[
+                  styles.label,
+                  {
+                    color: labelColor,
+                    fontWeight: active ? '800' : '700',
+                  },
+                  textStyle,
+                ]}
+                numberOfLines={1}
+              >
+                {label}
+              </Text>
+              {subLabel ? (
+                <Text style={styles.subLabel} numberOfLines={1}>
+                  {subLabel}
+                </Text>
+              ) : null}
+            </View>
           ) : null}
           {trailingIcon ? <View style={styles.icon}>{trailingIcon}</View> : null}
         </View>
@@ -160,8 +168,19 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   icon: {},
+  labelStack: {
+    flex: 1,
+    minWidth: 0,
+  },
   label: {
     fontSize: 13,
     letterSpacing: 0.3,
+  },
+  subLabel: {
+    marginTop: 1,
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.textMuted,
+    letterSpacing: 0.1,
   },
 });

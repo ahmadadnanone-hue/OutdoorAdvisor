@@ -62,6 +62,10 @@ export async function listNativeDevices() {
 }
 
 export async function sendNativePush(records, payload) {
+  const notificationId =
+    payload.id ||
+    payload.notificationId ||
+    `${payload.source || 'outdooradvisor'}:${Date.now()}`;
   const messages = records
     .filter((record) => isExpoPushToken(record.expoPushToken))
     .map((record) => ({
@@ -71,6 +75,7 @@ export async function sendNativePush(records, payload) {
       title: payload.title,
       body: payload.body,
       data: {
+        notificationId,
         category: payload.category || 'Alert',
         url: payload.url || null,
         source: payload.source || 'outdooradvisor',
@@ -163,6 +168,7 @@ function normalizeLocation(location) {
     lat,
     lon,
     city: location.city || 'Selected',
+    region: location.region || location.address || '',
     source: location.source || 'unknown',
     updatedAt: location.updatedAt || Date.now(),
   };

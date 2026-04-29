@@ -121,30 +121,30 @@ function summarizeConditions({ aqi, weather }) {
   const feelsLike = weather?.current?.feelsLike ?? temp;
 
   if (aqi == null || temp == null) {
-    return 'Conditions look fairly steady outside right now.';
+    return 'Use the live cards before leaving; if anything is elevated, keep the first trip short.';
   }
 
   if (isRainRightNow(weather)) {
-    return `Rain is around right now, with temperatures near ${Math.round(temp)}°C.`;
+    return `Rain is active with temperatures near ${Math.round(temp)}°C. Carry rain gear and leave extra road margin.`;
   }
 
   if (aqi <= 50 && isGoodWalkWeather(weather)) {
-    return `Weather looks beautiful outside right now. Air is clean and it feels like ${Math.round(feelsLike)}°C.`;
+    return `This is a good outdoor window: clean air and feels-like ${Math.round(feelsLike)}°C. Still take water if you will be out long.`;
   }
 
   if (aqi <= 100 && isGoodWalkWeather(weather)) {
-    return `Outdoor conditions look fairly friendly right now, with AQI ${aqi} and a feels-like temperature of ${Math.round(feelsLike)}°C.`;
+    return `Outdoor plans are workable with AQI ${aqi} and feels-like ${Math.round(feelsLike)}°C. Keep effort moderate near traffic.`;
   }
 
   if (isSwimmingWeather(weather)) {
-    return `It is running hot outside right now, with a feels-like temperature near ${Math.round(feelsLike)}°C.`;
+    return `Heat is the main factor, with feels-like near ${Math.round(feelsLike)}°C. Prefer shade, water, or an indoor/cooler plan.`;
   }
 
   if (aqi > 100) {
-    return `Air quality is more mixed right now at AQI ${aqi}.`;
+    return `AQI is ${aqi}. Keep outdoor exposure lighter and use a mask if you will be outside for long.`;
   }
 
-  return `It feels like ${Math.round(feelsLike)}°C outside right now.`;
+  return `It feels like ${Math.round(feelsLike)}°C outside. Check heat, rain, and AQI before choosing timing.`;
 }
 
 function computeOutdoorScore({ steps, aqi, weather }) {
@@ -178,21 +178,21 @@ function buildWalkNudgeMessage(steps, weather, aqi) {
 
   if (steps < 1000) {
     return {
-      title: 'Weather is beautiful outside',
-      body: `How about a few steps outside? Air quality is clean at AQI ${aqi}, and it feels like ${feelsLike}°C right now.`,
+      title: 'Good window for easy movement',
+      body: `Air is clean at AQI ${aqi} and it feels like ${feelsLike}°C. A short, easy walk is a good choice if you want to get moving.`,
     };
   }
 
   if (steps < 3000) {
     return {
-      title: 'Nice window for a short walk',
-      body: `You have ${steps.toLocaleString()} steps so far. Conditions still look good outside, so this could be a nice moment for a quick walk.`,
+      title: 'Short walk window',
+      body: `You have ${steps.toLocaleString()} steps so far. Conditions still look usable, so keep it light and choose a cleaner, shaded route.`,
     };
   }
 
   return {
-    title: 'You are close to today’s goal',
-    body: `Just ${remaining.toLocaleString()} more steps to reach ${DAILY_STEP_GOAL.toLocaleString()}. Conditions look good outside right now if you want to finish strong.`,
+    title: 'Easy finish if you want it',
+    body: `${remaining.toLocaleString()} steps remain for today’s goal. Conditions look usable, so a short loop is enough; no need to push hard.`,
   };
 }
 
@@ -202,22 +202,22 @@ function buildAlternativeNudgeMessage(weather, aqi) {
 
   if (aqi != null && aqi >= 100) {
     return {
-      title: 'Air is not ideal for a walk',
-      body: `AQI is ${aqi} right now, so this may be better as an indoor movement day. A treadmill, gym session, or light indoor stretch could be the smarter call.`,
+      title: 'Shift movement indoors',
+      body: `AQI is ${aqi}, so keep outdoor movement brief. A treadmill, gym session, or indoor stretch is the better call right now.`,
     };
   }
 
   if (isSwimmingWeather(weather)) {
     return {
-      title: 'Too hot for a walk right now',
-      body: `It feels like ${feelsLike}°C outside. How about swimming instead, or saving your walk for a cooler window later on?`,
+      title: 'Avoid the hot window',
+      body: `It feels like ${feelsLike}°C outside. Prefer swimming, indoor movement, or save the walk for a cooler hour.`,
     };
   }
 
   if (isRainRightNow(weather)) {
     return {
-      title: 'Not the best walking window',
-      body: 'Rain is active right now. If you still want some movement, an indoor workout may feel better until the weather settles.',
+      title: 'Rainy movement advisory',
+      body: 'Rain is active right now. Keep outdoor errands short, or use an indoor workout until the weather settles.',
     };
   }
 

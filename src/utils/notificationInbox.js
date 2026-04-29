@@ -26,14 +26,22 @@ export async function saveNotificationInbox(items) {
 }
 
 export async function appendInboxNotification(payload) {
+  if (!payload?.title && !payload?.body) return loadNotificationInbox();
   const current = await loadNotificationInbox();
+  const id = payload.id || payload.remoteId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const dedupeKey = payload.dedupeKey || payload.remoteId || id;
+  if (current.some((item) => item.dedupeKey === dedupeKey || item.id === id)) {
+    return current;
+  }
   const next = [
     {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id,
+      dedupeKey,
       title: payload.title,
       body: payload.body,
       url: payload.url || null,
       category: payload.category || inferCategory(payload),
+      source: payload.source || null,
       createdAt: Date.now(),
       seen: false,
     },

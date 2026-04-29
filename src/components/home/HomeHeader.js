@@ -9,6 +9,7 @@ export default function HomeHeader({
   greetingName,
   isPremium,
   locationLabel,
+  locationSubLabel,
   onLocationPress,
   onRefresh,
   onNotificationsPress,
@@ -47,6 +48,7 @@ export default function HomeHeader({
       <View style={styles.pillsRow}>
         <GlassPill
           label={locationLabel}
+          subLabel={locationSubLabel}
           compact
           onPress={onLocationPress}
           leadingIcon={<Icon name={ICON.locationPin} size={11} color={dc.accentCyan} />}

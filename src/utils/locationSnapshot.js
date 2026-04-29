@@ -9,6 +9,8 @@ export async function saveLocationSnapshot(snapshot) {
     lat: snapshot.lat,
     lon: snapshot.lon,
     city: snapshot.city || 'Selected',
+    region: snapshot.region || '',
+    address: snapshot.address || snapshot.region || '',
     source: snapshot.source || 'manual',
     updatedAt: Date.now(),
   };

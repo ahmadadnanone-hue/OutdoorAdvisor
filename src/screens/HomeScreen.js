@@ -3,7 +3,7 @@
  * All UI sections live in src/components/home/.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, SafeAreaView, RefreshControl, ActivityIndicator, Platform, Modal, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, SafeAreaView, RefreshControl, ActivityIndicator, Platform, Modal, TouchableOpacity, AppState } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
@@ -169,6 +169,13 @@ export default function HomeScreen({ navigation, route }) {
   }, [refreshNotificationInbox]);
 
   useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshNotificationInbox();
+    });
+    return () => subscription.remove();
+  }, [refreshNotificationInbox]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const loadSmartSnapshot = async () => {
@@ -231,8 +238,9 @@ export default function HomeScreen({ navigation, route }) {
   }, [aqi, city, displayWindGusts, location.lat, location.lon, locationDisplay.primary, pm25, pollenDisplayName, pollenValue, weatherCurrent?.feelsLike, weatherCurrent?.weatherCode, weatherCurrent?.windSpeed, isPremium, refreshNotificationInbox]);
 
   const openNotificationCenter = useCallback(() => {
+    refreshNotificationInbox();
     setNotificationCenterVisible(true);
-  }, []);
+  }, [refreshNotificationInbox]);
 
   const markAllNotificationsRead = useCallback(async () => {
     const next = await markInboxSeen();
@@ -273,6 +281,7 @@ export default function HomeScreen({ navigation, route }) {
             greeting={getGreeting()}
             isPremium={isPremium}
             locationLabel={locationDisplay.primary}
+            locationSubLabel={locationDisplay.secondary}
             onLocationPress={() => setCityPickerVisible(true)}
             onRefresh={onRefresh}
             onNotificationsPress={openNotificationCenter}
