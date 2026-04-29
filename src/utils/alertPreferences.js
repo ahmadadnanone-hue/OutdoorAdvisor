@@ -3,6 +3,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const THRESHOLDS_KEY = 'outdooradvisor_thresholds';
 export const NOTIFICATIONS_KEY = 'outdooradvisor_notifications';
 export const MOCK_ACCOUNT_KEY = 'outdooradvisor_mock_account';
+export const MOTORWAY_SUBSCRIPTIONS_KEY = 'outdooradvisor_motorway_subscriptions_v1';
+
+export const MOTORWAY_ROUTES = [
+  { id: 'M1',  label: 'M-1',  desc: 'Islamabad – Peshawar' },
+  { id: 'M2',  label: 'M-2',  desc: 'Lahore – Islamabad' },
+  { id: 'M3',  label: 'M-3',  desc: 'Lahore – Abdul Hakam' },
+  { id: 'M4',  label: 'M-4',  desc: 'Gojra – Multan' },
+  { id: 'M5',  label: 'M-5',  desc: 'Multan – Sukkur' },
+  { id: 'M8',  label: 'M-8',  desc: 'Ratodero – Gwadar' },
+  { id: 'M9',  label: 'M-9',  desc: 'Karachi – Hyderabad' },
+  { id: 'E35', label: 'E-35', desc: 'Hazara Expressway' },
+];
 
 export const DEFAULT_THRESHOLDS = {
   aqiAlert: 150,
@@ -23,6 +35,7 @@ export const DEFAULT_NOTIFICATIONS = {
   heatAlerts: true,
   fogWarnings: true,
   routeClosureAlerts: true,
+  motorwayAlerts: false,
 };
 
 export async function loadStoredThresholds() {
@@ -58,6 +71,19 @@ export async function loadMockAccount() {
   } catch {
     return null;
   }
+}
+
+export async function loadStoredMotorwaySubscriptions() {
+  try {
+    const raw = await AsyncStorage.getItem(MOTORWAY_SUBSCRIPTIONS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function saveStoredMotorwaySubscriptions(subscriptions) {
+  await AsyncStorage.setItem(MOTORWAY_SUBSCRIPTIONS_KEY, JSON.stringify(subscriptions));
 }
 
 export async function saveMockAccount(account) {

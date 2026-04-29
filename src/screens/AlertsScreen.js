@@ -24,8 +24,11 @@ const syncWebPushPreferences = () => Promise.resolve();
 import {
   DEFAULT_NOTIFICATIONS,
   DEFAULT_THRESHOLDS,
+  MOTORWAY_ROUTES,
+  loadStoredMotorwaySubscriptions,
   loadStoredNotifications,
   loadStoredThresholds,
+  saveStoredMotorwaySubscriptions,
   saveStoredNotifications,
   saveStoredThresholds,
 } from '../utils/alertPreferences';
@@ -38,7 +41,7 @@ import { colors as dc } from '../design';
 
 const TABS = ['Thresholds', 'Notifications', 'Customize', 'About'];
 const PREMIUM_HOME_SECTION_KEYS = new Set(['pollen', 'wind', 'details', 'forecast']);
-const PREMIUM_NOTIFICATION_KEYS = new Set(['smogAlerts', 'pollenAlerts', 'fogWarnings', 'routeClosureAlerts']);
+const PREMIUM_NOTIFICATION_KEYS = new Set(['smogAlerts', 'pollenAlerts', 'fogWarnings', 'routeClosureAlerts', 'motorwayAlerts']);
 
 const SECTION_META = {
   decision:   { label: 'Outdoor Decision',     icon: '🧭', desc: 'Plain-language go / go with care / limit exposure answer' },
@@ -127,6 +130,7 @@ export default function AlertsScreen() {
 
   const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
   const [notifications, setNotifications] = useState(DEFAULT_NOTIFICATIONS);
+  const [motorwaySubs, setMotorwaySubs] = useState({});
   const [pushSupported, setPushSupported] = useState(false);
   const [notificationState, setNotificationState] = useState({
     tone: 'neutral',
@@ -142,8 +146,14 @@ export default function AlertsScreen() {
 
   useEffect(() => {
     (async () => {
-      setThresholds(await loadStoredThresholds());
-      setNotifications(await loadStoredNotifications());
+      const [t, n, mw] = await Promise.all([
+        loadStoredThresholds(),
+        loadStoredNotifications(),
+        loadStoredMotorwaySubscriptions(),
+      ]);
+      setThresholds(t);
+      setNotifications(n);
+      setMotorwaySubs(mw);
     })();
   }, []);
 
@@ -269,6 +279,13 @@ export default function AlertsScreen() {
     }
   }, [isPremium, notifications]);
 
+  const updateMotorwaySub = useCallback((routeId, value) => {
+    const updated = { ...motorwaySubs, [routeId]: value };
+    setMotorwaySubs(updated);
+    saveStoredMotorwaySubscriptions(updated).catch(() => {});
+    registerNativePushToken({ prompt: false, motorwaySubscriptionsOverride: updated }).catch(() => {});
+  }, [motorwaySubs]);
+
   /* ---------- Tab Bar ---------- */
   const renderTabBar = () => (
     <View style={styles.tabBar}>
@@ -334,6 +351,7 @@ export default function AlertsScreen() {
       { key: 'heatAlerts',          label: 'Extreme Heat Alerts',      desc: 'Warnings when feels-like heat becomes unsafe for longer exposure.' },
       { key: 'fogWarnings',         label: 'Motorway Fog Warnings',    desc: 'Warnings for dangerous fog conditions on motorways.' },
       { key: 'routeClosureAlerts',  label: 'Major Route Closures',     desc: 'Important alerts for serious motorway and corridor closures.' },
+      { key: 'motorwayAlerts',      label: 'Motorway Route Alerts',    desc: 'Server-monitored NHMP alerts for specific motorways you choose. Select routes below.' },
     ];
 
     return (
@@ -408,6 +426,52 @@ export default function AlertsScreen() {
             </GlassCard>
           );
         })}
+
+        {/* ── Motorway Route Subscriptions (premium) ── */}
+        <Text style={[styles.groupLabel, { marginTop: 20 }]}>
+          Motorway Route Alerts
+          {!isPremium && (
+            <Text style={styles.groupLabelPremium}> · Premium</Text>
+          )}
+        </Text>
+        <GlassCard
+          style={[styles.motorwayCard, !isPremium && { opacity: 0.65 }]}
+          contentStyle={styles.motorwayCardContent}
+        >
+          {!isPremium ? (
+            <>
+              <Text style={styles.motorwayLockedTitle}>Subscribe to specific motorways</Text>
+              <Text style={styles.motorwayLockedDesc}>
+                Get notified the moment a motorway you care about closes or reopens. Choose individual routes — M-1 through M-9 and the Hazara Expressway — and the server will watch NHMP advisories every 30 minutes and alert you instantly on any change. Premium only.
+              </Text>
+            </>
+          ) : !notifications.motorwayAlerts ? (
+            <>
+              <Text style={styles.motorwayLockedTitle}>Enable Motorway Route Alerts first</Text>
+              <Text style={styles.motorwayLockedDesc}>
+                Turn on &ldquo;Motorway Route Alerts&rdquo; above, then select the routes you want to watch below.
+              </Text>
+            </>
+          ) : (
+            MOTORWAY_ROUTES.map((route, idx) => (
+              <View
+                key={route.id}
+                style={[styles.motorwayRow, idx < MOTORWAY_ROUTES.length - 1 && styles.motorwayRowBorder]}
+              >
+                <View style={styles.motorwayInfo}>
+                  <Text style={styles.motorwayLabel}>{route.label}</Text>
+                  <Text style={styles.motorwayDesc}>{route.desc}</Text>
+                </View>
+                <Switch
+                  value={!!motorwaySubs[route.id]}
+                  onValueChange={(v) => updateMotorwaySub(route.id, v)}
+                  trackColor={{ false: dc.cardStrokeSoft, true: dc.accentCyan + '88' }}
+                  thumbColor={motorwaySubs[route.id] ? dc.accentCyan : dc.textMuted}
+                />
+              </View>
+            ))
+          )}
+        </GlassCard>
       </ScrollView>
     );
   };
@@ -737,6 +801,16 @@ const styles = StyleSheet.create({
   notifDesc: { fontSize: 12, color: dc.textSecondary, lineHeight: 18 },
   premiumChip: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: dc.accentCyanBg },
   premiumChipText: { fontSize: 10, fontWeight: '700', color: dc.accentCyan, letterSpacing: 0.4, textTransform: 'uppercase' },
+  groupLabelPremium: { color: dc.accentCyan, fontWeight: '700', textTransform: 'none', letterSpacing: 0 },
+  motorwayCard: { marginBottom: 10 },
+  motorwayCardContent: { padding: 14 },
+  motorwayLockedTitle: { fontSize: 14, fontWeight: '700', color: dc.textPrimary, marginBottom: 6 },
+  motorwayLockedDesc: { fontSize: 12, color: dc.textSecondary, lineHeight: 18 },
+  motorwayRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
+  motorwayRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: dc.cardStroke },
+  motorwayInfo: { flex: 1, marginRight: 12 },
+  motorwayLabel: { fontSize: 15, fontWeight: '700', color: dc.textPrimary },
+  motorwayDesc: { fontSize: 12, color: dc.textSecondary, marginTop: 1 },
 
   sectionItemCard: { marginBottom: 10 },
   sectionItemContent: { flexDirection: 'row', alignItems: 'center', padding: 12 },

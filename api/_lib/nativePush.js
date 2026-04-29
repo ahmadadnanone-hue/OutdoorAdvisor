@@ -39,6 +39,7 @@ export async function saveNativeDevice(payload) {
     location: normalizeLocation(payload.location || existing?.location),
     preferences: payload.preferences || existing?.preferences || {},
     thresholds: payload.thresholds || existing?.thresholds || {},
+    motorwaySubscriptions: payload.motorwaySubscriptions || existing?.motorwaySubscriptions || {},
     premium: !!payload.premium,
     createdAt: existing?.createdAt || Date.now(),
     updatedAt: Date.now(),

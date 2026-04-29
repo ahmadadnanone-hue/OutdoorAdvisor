@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { fetchApiJson } from '../config/api';
-import { loadStoredNotifications, loadStoredThresholds } from '../utils/alertPreferences';
+import { loadStoredMotorwaySubscriptions, loadStoredNotifications, loadStoredThresholds } from '../utils/alertPreferences';
 import { loadLocationSnapshot } from '../utils/locationSnapshot';
 import { ensureLocalNotificationPermission } from '../utils/alertNotifications';
 
@@ -28,6 +28,7 @@ export async function registerNativePushToken({
   preferencesOverride = null,
   thresholdsOverride = null,
   locationOverride = null,
+  motorwaySubscriptionsOverride = null,
 } = {}) {
   if (Platform.OS === 'web' || !Device.isDevice) {
     return { registered: false, reason: 'unsupported-platform' };
@@ -44,11 +45,12 @@ export async function registerNativePushToken({
   const expoPushToken = tokenResponse?.data;
   if (!expoPushToken) return { registered: false, reason: 'missing-token' };
 
-  const [deviceId, preferences, thresholds, location] = await Promise.all([
+  const [deviceId, preferences, thresholds, location, motorwaySubscriptions] = await Promise.all([
     getDeviceId(),
     preferencesOverride ? Promise.resolve(preferencesOverride) : loadStoredNotifications(),
     thresholdsOverride ? Promise.resolve(thresholdsOverride) : loadStoredThresholds(),
     locationOverride ? Promise.resolve(locationOverride) : loadLocationSnapshot(),
+    motorwaySubscriptionsOverride ? Promise.resolve(motorwaySubscriptionsOverride) : loadStoredMotorwaySubscriptions(),
   ]);
 
   await fetchApiJson('/api/push?action=register', {
@@ -63,6 +65,7 @@ export async function registerNativePushToken({
       preferences,
       thresholds,
       location,
+      motorwaySubscriptions,
     }),
   });
 

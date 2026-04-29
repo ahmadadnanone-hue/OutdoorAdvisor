@@ -39,6 +39,9 @@ export async function runAlertEngine({ mode = 'scheduled' } = {}) {
   const rainResult      = await sendRainAlerts(activeDevices, state);
   if (rainResult)      results.push(rainResult);
 
+  const motorwayResult  = await sendMotorwayClosureAlerts(activeDevices, state);
+  if (motorwayResult)  results.push(motorwayResult);
+
   const summaryResult   = await sendMorningSummaries(activeDevices, state);
   if (summaryResult)   results.push(summaryResult);
 
@@ -324,6 +327,160 @@ function isRaining(wx) {
 function isHeavyRain(wx) {
   if (WK_HEAVY_RAIN_CONDITIONS.has(wx.conditionCode)) return true;
   return HEAVY_RAIN_CODES.has(wx.weatherCode);
+}
+
+// ─── Motorway closure alerts (premium, per-route subscription) ────────────────
+const NHMP_CHECK_INTERVAL_MS = 28 * 60 * 1000; // ~30 min; cron fires every 15 min
+
+// Map NHMP advisory route strings to canonical IDs like "M2", "M3", "E35"
+function normaliseRouteId(routeStr) {
+  const m = (routeStr || '').match(/\bM-?\s*(\d+)\b/i);
+  if (m) return `M${m[1]}`;
+  const e = (routeStr || '').match(/\bE-?\s*(\d+)\b/i);
+  if (e) return `E${e[1]}`;
+  return null;
+}
+
+// Rank severity so we keep the worst status when multiple rows cover the same route
+function motorwaySeverityRank(s) {
+  return ({ closed: 4, rain: 3, fog: 3, warning: 2, cloudy: 1, clear: 0 })[s] ?? 0;
+}
+
+// Collapse a flat advisory list into one record per route ID
+function buildNhmpRouteState(advisories) {
+  const state = {};
+  for (const adv of advisories) {
+    const routeId = normaliseRouteId(adv.route || '');
+    if (!routeId) continue;
+    const existing = state[routeId];
+    if (!existing || motorwaySeverityRank(adv.severity) > motorwaySeverityRank(existing.severity)) {
+      state[routeId] = { severity: adv.severity, status: adv.status };
+    }
+  }
+  return state;
+}
+
+// Return only the route changes worth notifying about
+function detectNhmpChanges(prev, curr) {
+  const changes = [];
+  const allRoutes = new Set([...Object.keys(prev), ...Object.keys(curr)]);
+  for (const routeId of allRoutes) {
+    const prevSev = prev[routeId]?.severity;
+    const currSev = curr[routeId]?.severity;
+    if (prevSev === currSev) continue;
+    if (currSev === 'closed' && prevSev !== 'closed') {
+      changes.push({ routeId, type: 'closed', status: curr[routeId]?.status });
+    } else if (prevSev === 'closed' && currSev !== 'closed') {
+      changes.push({ routeId, type: 'reopened', status: curr[routeId]?.status || 'Normal flow resumed' });
+    } else if ((currSev === 'fog' || currSev === 'rain') && !prevSev) {
+      changes.push({ routeId, type: currSev, status: curr[routeId]?.status });
+    }
+  }
+  return changes;
+}
+
+function buildMotorwayCopy(change) {
+  const label = change.routeId.startsWith('E') ? change.routeId : change.routeId.replace(/^M(\d)$/, 'M-$1');
+  const statusText = change.status ? ` — ${change.status}` : '';
+  if (change.type === 'closed') {
+    return {
+      title: `${label} closed`,
+      body: `${label} is currently closed${statusText}. Plan an alternate route or check NHMP before you travel.`,
+    };
+  }
+  if (change.type === 'reopened') {
+    return {
+      title: `${label} has reopened`,
+      body: `${label} is back open${statusText}. Confirm conditions before heading out.`,
+    };
+  }
+  if (change.type === 'fog') {
+    return {
+      title: `Fog warning on ${label}`,
+      body: `Fog is affecting ${label}${statusText}. Reduce speed and use fog lights.`,
+    };
+  }
+  if (change.type === 'rain') {
+    return {
+      title: `Rain on ${label}`,
+      body: `Wet conditions reported on ${label}${statusText}. Drive carefully.`,
+    };
+  }
+  return { title: `${label} update`, body: change.status || 'Conditions have changed on this route.' };
+}
+
+async function fetchNhmpAdvisories() {
+  try {
+    const base = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'https://outdooradvisor.app';
+    const response = await fetch(`${base}/api/nhmp`, { signal: AbortSignal.timeout(12000) });
+    if (!response.ok) return null;
+    const json = await response.json();
+    return Array.isArray(json?.advisories) ? json.advisories : null;
+  } catch {
+    return null;
+  }
+}
+
+async function sendMotorwayClosureAlerts(devices, state) {
+  // Throttle: only check NHMP every ~30 min regardless of cron cadence
+  state.nhmpLastCheckedAt = state.nhmpLastCheckedAt || 0;
+  if (Date.now() - state.nhmpLastCheckedAt < NHMP_CHECK_INTERVAL_MS) return null;
+  state.nhmpLastCheckedAt = Date.now();
+
+  // Only premium devices that opted into motorway alerts and have at least one route subscribed
+  const candidates = devices.filter((d) =>
+    d.premium === true &&
+    d.preferences?.motorwayAlerts !== false &&
+    d.motorwaySubscriptions &&
+    Object.values(d.motorwaySubscriptions).some(Boolean),
+  );
+  if (!candidates.length) return null;
+
+  const advisories = await fetchNhmpAdvisories();
+  if (!advisories?.length) return null;
+
+  const currentRouteState = buildNhmpRouteState(advisories);
+  const previousRouteState = state.nhmpRouteState || {};
+  const changes = detectNhmpChanges(previousRouteState, currentRouteState);
+
+  // Always persist latest state even if no changes
+  state.nhmpRouteState = currentRouteState;
+
+  if (!changes.length) return null;
+
+  let sent = 0;
+  state.sentMotorwayAlerts = state.sentMotorwayAlerts || {};
+
+  for (const device of candidates) {
+    const subs = device.motorwaySubscriptions || {};
+    for (const change of changes) {
+      if (!subs[change.routeId]) continue;
+
+      // 6h cooldown per device+route+type to avoid repeat floods
+      const cooldownKey = `${device.expoPushToken}:mw:${change.routeId}:${change.type}`;
+      if (Date.now() - (state.sentMotorwayAlerts[cooldownKey] || 0) < 6 * 60 * 60 * 1000) continue;
+
+      const { title, body } = buildMotorwayCopy(change);
+      const notifId = `motorway:${change.routeId}:${change.type}:${pakistanDateKey(new Date())}`;
+      const response = await sendNativePush([device], {
+        id: notifId,
+        title,
+        body,
+        category: 'Travel',
+        source: 'motorway-closure',
+        url: 'https://outdooradvisor.app',
+        data: { routeId: change.routeId, changeType: change.type },
+        priority: change.type === 'closed' ? 'high' : 'normal',
+      });
+
+      sent += response.attempted;
+      state.sentMotorwayAlerts[cooldownKey] = Date.now();
+    }
+  }
+
+  return sent ? { type: 'motorway', sent } : null;
 }
 
 async function sendSevereAqiAlerts(devices, state) {
