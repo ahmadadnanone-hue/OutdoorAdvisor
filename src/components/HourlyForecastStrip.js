@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
-import { getWeatherDescription } from '../utils/weatherCodes';
 import AnimatedWeatherIcon from './AnimatedWeatherIcon';
 
 function formatHourLabel(time) {
@@ -33,7 +32,6 @@ export default function HourlyForecastStrip({ hourly = [] }) {
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.listContent}>
         {hourly.slice(0, 12).map((hour) => {
-          const weather = getWeatherDescription(hour.weatherCode);
           return (
             <View
               key={hour.time}
@@ -48,7 +46,7 @@ export default function HourlyForecastStrip({ hourly = [] }) {
               <Text style={[styles.hourLabel, { color: colors.textSecondary }]}>
                 {hour.hourLabel != null ? formatHourLabel(`2000-01-01T${String(hour.hourLabel).padStart(2, '0')}:00:00`) : formatHourLabel(hour.time)}
               </Text>
-              <AnimatedWeatherIcon weatherCode={hour.weatherCode} emoji={weather.icon} size={24} />
+              <AnimatedWeatherIcon weatherCode={hour.weatherCode} size={34} />
               <Text style={[styles.temp, { color: colors.text }]}>
                 {formatTempShort(hour.temp)}
               </Text>

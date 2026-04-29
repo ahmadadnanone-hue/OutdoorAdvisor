@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import AnimatedWeatherIcon from '../AnimatedWeatherIcon';
+import Icon from '../Icon';
 import { getWeatherDescription } from '../../utils/weatherCodes';
 import { getWindDirectionLabel, getUvLabel } from './homeUtils';
 import { colors as dc } from '../../design';
@@ -23,7 +24,7 @@ export default function ForecastDetailModal({ forecastDetail, onClose, settings 
             {new Date(forecastDetail.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </Text>
           <View style={styles.iconWrap}>
-            <AnimatedWeatherIcon weatherCode={forecastDetail.weatherCode} emoji={weather.icon} size={56} />
+            <AnimatedWeatherIcon weatherCode={forecastDetail.weatherCode} size={64} />
           </View>
           <Text style={styles.desc}>{weather.description}</Text>
 
@@ -34,14 +35,14 @@ export default function ForecastDetailModal({ forecastDetail, onClose, settings 
           </View>
 
           <View style={styles.grid}>
-            <FdCell icon="🌡️" label="Feels Like" value={`${settings.formatTempShort(forecastDetail.feelsLikeMax)} / ${settings.formatTempShort(forecastDetail.feelsLikeMin)}`} />
-            <FdCell icon="💧" label="Rain Chance" value={forecastDetail.precipProbability != null ? `${forecastDetail.precipProbability}%` : '--'} />
-            <FdCell icon="🌧️" label="Precipitation" value={settings.formatPrecip(forecastDetail.precipitation)} />
-            <FdCell icon="💨" label="Humidity" value={forecastDetail.humidityMax != null ? `${forecastDetail.humidityMin}–${forecastDetail.humidityMax}%` : '--'} />
-            <FdCell icon="🌬️" label="Wind" value={forecastDetail.windSpeed != null ? `${settings.formatWind(forecastDetail.windSpeed)} ${windDir}` : '--'} />
-            <FdCell icon="💥" label="Gusts" value={settings.formatWind(forecastDetail.windGusts)} />
-            <FdCell icon="☀️" label="UV Index" value={forecastDetail.uvIndex != null ? `${forecastDetail.uvIndex} ${getUvLabel(forecastDetail.uvIndex)}` : '--'} />
-            <FdCell icon="🌅" label="Sun" value={`${formatTime(forecastDetail.sunrise)} – ${formatTime(forecastDetail.sunset)}`} />
+            <FdCell icon="thermometer-outline" label="Feels Like" value={`${settings.formatTempShort(forecastDetail.feelsLikeMax)} / ${settings.formatTempShort(forecastDetail.feelsLikeMin)}`} />
+            <FdCell icon="water-outline" label="Rain Chance" value={forecastDetail.precipProbability != null ? `${forecastDetail.precipProbability}%` : '--'} />
+            <FdCell icon="rainy-outline" label="Precipitation" value={settings.formatPrecip(forecastDetail.precipitation)} />
+            <FdCell icon="water" label="Humidity" value={forecastDetail.humidityMax != null ? `${forecastDetail.humidityMin}-${forecastDetail.humidityMax}%` : '--'} />
+            <FdCell icon="cloud-outline" label="Wind" value={forecastDetail.windSpeed != null ? `${settings.formatWind(forecastDetail.windSpeed)} ${windDir}` : '--'} />
+            <FdCell icon="speedometer-outline" label="Gusts" value={settings.formatWind(forecastDetail.windGusts)} />
+            <FdCell icon="sunny-outline" label="UV Index" value={forecastDetail.uvIndex != null ? `${forecastDetail.uvIndex} ${getUvLabel(forecastDetail.uvIndex)}` : '--'} />
+            <FdCell icon="partly-sunny-outline" label="Sun" value={`${formatTime(forecastDetail.sunrise)} - ${formatTime(forecastDetail.sunset)}`} />
           </View>
 
           <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
@@ -65,7 +66,9 @@ function TempCol({ label, value, primary }) {
 function FdCell({ icon, label, value }) {
   return (
     <View style={styles.fdCell}>
-      <Text style={styles.fdIcon}>{icon}</Text>
+      <View style={styles.fdIcon}>
+        <Icon name={icon} size={18} color={dc.accentCyan} />
+      </View>
       <Text style={styles.fdLabel}>{label}</Text>
       <Text style={styles.fdValue}>{value}</Text>
     </View>
@@ -86,7 +89,7 @@ const styles = StyleSheet.create({
   tempDivider: { width: 1, height: 48, backgroundColor: dc.cardStrokeSoft },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   fdCell: { width: '47%', backgroundColor: dc.cardGlass, borderRadius: 14, padding: 14, gap: 4 },
-  fdIcon: { fontSize: 18 },
+  fdIcon: { width: 22, height: 22, justifyContent: 'center' },
   fdLabel: { fontSize: 11, fontWeight: '600', color: dc.textMuted },
   fdValue: { fontSize: 14, fontWeight: '700', color: dc.textPrimary },
   closeBtn: { backgroundColor: dc.accentCyan, borderRadius: 14, paddingVertical: 13, alignItems: 'center' },

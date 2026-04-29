@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
-import { getWeatherDescription } from '../utils/weatherCodes';
 import AnimatedWeatherIcon from './AnimatedWeatherIcon';
+import Icon from './Icon';
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -14,7 +14,6 @@ function getDayName(dateString, index) {
 }
 
 function ForecastItem({ item, index, colors, isDark, isLast, onPress, formatTempShort }) {
-  const weather = getWeatherDescription(item.weatherCode);
   const isToday = index === 0;
 
   return (
@@ -37,7 +36,7 @@ function ForecastItem({ item, index, colors, isDark, isLast, onPress, formatTemp
         {getDayName(item.date, index)}
       </Text>
       <View style={styles.iconWrap}>
-        <AnimatedWeatherIcon weatherCode={item.weatherCode} emoji={weather.icon} size={26} />
+        <AnimatedWeatherIcon weatherCode={item.weatherCode} size={36} />
       </View>
       <Text style={[styles.highTemp, { color: colors.text }]}>
         {formatTempShort(item.maxTemp)}
@@ -46,9 +45,10 @@ function ForecastItem({ item, index, colors, isDark, isLast, onPress, formatTemp
         {formatTempShort(item.minTemp)}
       </Text>
       {item.precipProbability != null && item.precipProbability > 0 && (
-        <Text style={styles.rainChance}>
-          💧{item.precipProbability}%
-        </Text>
+        <View style={styles.rainChanceRow}>
+          <Icon name="water-outline" size={11} color="#38BDF8" />
+          <Text style={styles.rainChance}>{item.precipProbability}%</Text>
+        </View>
       )}
     </TouchableOpacity>
   );
@@ -168,7 +168,12 @@ const styles = StyleSheet.create({
   rainChance: {
     fontSize: 10,
     color: '#38BDF8',
-    marginTop: 4,
     fontWeight: '600',
+  },
+  rainChanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 4,
   },
 });
