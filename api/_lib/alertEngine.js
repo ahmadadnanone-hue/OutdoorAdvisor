@@ -249,13 +249,14 @@ async function fetchWeatherKit(lat, lon) {
     if (!json?.current) return null;
     const c = json.current;
     return {
-      windSpeed:     c.windSpeed   ?? 0,
-      windGusts:     c.windGusts   ?? 0,
-      weatherCode:   c.weatherCode ?? 0,
-      conditionCode: c.conditionCode ?? null,
-      precipitation: null,
-      nativeAlerts:  json.alerts   ?? [],
-      source:        'WeatherKit',
+      windSpeed:              c.windSpeed              ?? 0,
+      windGusts:              c.windGusts              ?? 0,
+      weatherCode:            c.weatherCode            ?? 0,
+      conditionCode:          c.conditionCode          ?? null,
+      precipitation:          null,
+      precipitationIntensity: c.precipitationIntensity ?? null,
+      nativeAlerts:           json.alerts              ?? [],
+      source:                 'WeatherKit',
     };
   } catch {
     return null;
@@ -285,10 +286,23 @@ async function fetchOpenMeteoNormalised(lat, lon) {
 }
 
 // WeatherKit native condition codes for each alert type
-const WK_WIND_CONDITIONS        = new Set(['Windy', 'Squalls', 'BlowingDust', 'FreezingDrizzle']);
-const WK_THUNDERSTORM_CONDITIONS = new Set(['IsolatedThunderstorms', 'ScatteredThunderstorms', 'Thunderstorms', 'SevereThunderstorm']);
-const WK_RAIN_CONDITIONS        = new Set(['Drizzle', 'LightDrizzle', 'HeavyDrizzle', 'LightRain', 'Rain', 'HeavyRain', 'SunShowers', 'ScatteredShowers', 'HeavyShowers']);
-const WK_HEAVY_RAIN_CONDITIONS  = new Set(['HeavyDrizzle', 'HeavyRain', 'HeavyShowers']);
+const WK_WIND_CONDITIONS = new Set(['Windy', 'Squalls', 'BlowingDust', 'FreezingDrizzle']);
+
+// Overhead thunderstorm: confirmed directly above
+const WK_STORM_DEFINITE  = new Set(['Thunderstorms', 'SevereThunderstorm']);
+// Area-wide scattered: only alert if precipitationIntensity confirms it at the pin
+const WK_STORM_SCATTERED = new Set(['IsolatedThunderstorms', 'ScatteredThunderstorms']);
+
+// Definite rain AT the pin — these condition codes mean precipitation is overhead
+const WK_RAIN_DEFINITE   = new Set(['Drizzle', 'LightDrizzle', 'HeavyDrizzle', 'LightRain', 'Rain', 'HeavyRain', 'HeavyShowers']);
+// Area-wide / passing — only alert if precipitationIntensity > 0 confirms actual rain at pin
+const WK_RAIN_AREA       = new Set(['SunShowers', 'ScatteredShowers']);
+const WK_HEAVY_RAIN_CONDITIONS = new Set(['HeavyDrizzle', 'HeavyRain', 'HeavyShowers']);
+
+// precipitationIntensity > 0 means rain is measurably falling at the exact coordinates
+function pinIsRaining(wx) {
+  return wx.precipitationIntensity != null && wx.precipitationIntensity > 0;
+}
 
 function isWindy(wx, threshold) {
   if (WK_WIND_CONDITIONS.has(wx.conditionCode)) return true;
@@ -296,12 +310,14 @@ function isWindy(wx, threshold) {
 }
 
 function isThunderstorm(wx) {
-  if (WK_THUNDERSTORM_CONDITIONS.has(wx.conditionCode)) return true;
+  if (WK_STORM_DEFINITE.has(wx.conditionCode)) return true;
+  if (WK_STORM_SCATTERED.has(wx.conditionCode)) return pinIsRaining(wx);
   return THUNDERSTORM_CODES.has(wx.weatherCode);
 }
 
 function isRaining(wx) {
-  if (WK_RAIN_CONDITIONS.has(wx.conditionCode)) return true;
+  if (WK_RAIN_DEFINITE.has(wx.conditionCode)) return true;
+  if (WK_RAIN_AREA.has(wx.conditionCode)) return pinIsRaining(wx);
   return RAIN_CODES.has(wx.weatherCode);
 }
 

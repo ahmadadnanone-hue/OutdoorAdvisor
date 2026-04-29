@@ -130,6 +130,7 @@ function normalizeWeatherKit(json) {
       visibility: c.visibility ?? null,
       conditionCode: c.conditionCode ?? null,
       daylight: c.daylight ?? null,
+      precipitationIntensity: c.precipitationIntensity ?? null,
     },
     hourly: fh.slice(0, 24).map((h) => ({
       time: h.forecastStart ?? null,
