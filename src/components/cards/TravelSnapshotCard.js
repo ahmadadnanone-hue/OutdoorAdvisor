@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GlassCard, GlassPill } from '../glass';
 import Icon, { ICON } from '../Icon';
 import { colors, typography, statusColor } from '../../design';
@@ -9,16 +9,18 @@ import { colors, typography, statusColor } from '../../design';
  * Takes on a warning tint when things are not calm.
  *
  * Props:
- *   - level:  'calm' | 'elevated' | 'high'
- *   - title:  headline ("High travel caution")
- *   - body:   rationale paragraph
- *   - stats:  array of { label, value } shown as stat pills
+ *   - level:      'calm' | 'elevated' | 'high'
+ *   - title:      headline ("High travel caution")
+ *   - body:       rationale paragraph
+ *   - stats:      array of { label, value } shown as stat pills
+ *   - onStatPress(stat) — optional tap handler per pill
  */
 export default function TravelSnapshotCard({
   level = 'calm',
   title,
   body,
   stats = [],
+  onStatPress,
 }) {
   const statusKey =
     level === 'high' ? 'danger' : level === 'elevated' ? 'caution' : 'go';
@@ -40,13 +42,25 @@ export default function TravelSnapshotCard({
       {body ? <Text style={styles.body}>{body}</Text> : null}
       {stats.length ? (
         <View style={styles.pills}>
-          {stats.map((st) => (
-            <GlassPill
-              key={st.label}
-              label={`${st.value} ${st.label}`}
-              compact
-            />
-          ))}
+          {stats.map((st) => {
+            const pill = (
+              <GlassPill
+                key={st.label}
+                label={`${st.value} ${st.label}`}
+                compact
+              />
+            );
+            if (!onStatPress) return pill;
+            return (
+              <TouchableOpacity
+                key={st.label}
+                onPress={() => onStatPress(st)}
+                activeOpacity={0.72}
+              >
+                {pill}
+              </TouchableOpacity>
+            );
+          })}
         </View>
       ) : null}
     </GlassCard>

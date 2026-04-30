@@ -6,6 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Animated,
+  Modal,
   LayoutAnimation,
   UIManager,
   Platform,
@@ -191,6 +193,77 @@ function getRouteRiskScore(route, advisory, matchedAlerts, stops) {
   score += getStopRiskScore(stops);
   if (route.kind === 'northern') score += 4;
   return score;
+}
+
+/* ===== Closure Detail Sheet ===== */
+function ClosureDetailSheet({ visible, closures, onClose }) {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(anim, {
+      toValue: visible ? 1 : 0,
+      useNativeDriver: true,
+      tension: 58,
+      friction: 11,
+    }).start();
+  }, [visible, anim]);
+
+  const backdropOpacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+  const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [280, 0] });
+
+  return (
+    <Modal transparent visible={visible} animationType="none" onRequestClose={onClose} statusBarTranslucent>
+      <Animated.View style={[styles.sheetBackdrop, { opacity: backdropOpacity }]}>
+        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
+        <Animated.View style={[styles.sheetContainer, { transform: [{ translateY }] }]}>
+          <TouchableOpacity activeOpacity={1}>
+            <View style={styles.sheetHandle} />
+
+            {/* Header */}
+            <View style={styles.sheetHeader}>
+              <View style={styles.sheetAlertIcon}>
+                <Icon name="alert-circle" size={26} color={dc.accentRed} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetEyebrow}>ACTIVE CLOSURES</Text>
+                <Text style={styles.sheetTitle}>
+                  {closures.length} route{closures.length !== 1 ? 's' : ''} affected
+                </Text>
+              </View>
+              <TouchableOpacity onPress={onClose} style={styles.sheetCloseBtn} activeOpacity={0.7}>
+                <Icon name="close" size={18} color={dc.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Closure list */}
+            {closures.map((c, i) => (
+              <View key={i} style={[styles.sheetClosureRow, i > 0 && styles.sheetClosureDivider]}>
+                <View style={styles.sheetClosureDot} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sheetClosureRoute}>{c.route || 'Route advisory'}</Text>
+                  {c.sector ? <Text style={styles.sheetClosureSector}>{c.sector}</Text> : null}
+                  <Text style={styles.sheetClosureStatus}>{c.status}</Text>
+                </View>
+              </View>
+            ))}
+
+            {/* CTA */}
+            <TouchableOpacity
+              style={styles.sheetCta}
+              onPress={() => {
+                onClose();
+                openInApp('https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx');
+              }}
+              activeOpacity={0.78}
+            >
+              <Icon name="open-outline" size={14} color={dc.bgTop} />
+              <Text style={styles.sheetCtaText}>View full advisories on NHMP</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Animated.View>
+      </Animated.View>
+    </Modal>
+  );
 }
 
 /* ===== NHMP Advisory Card ===== */
@@ -457,6 +530,7 @@ export default function TravelScreen({ route }) {
   const [pmdBlocked, setPmdBlocked] = useState(false);
   const [pmdAlertsExpanded, setPmdAlertsExpanded] = useState(false);
   const [travelCustomizeExpanded, setTravelCustomizeExpanded] = useState(false);
+  const [closureModalVisible, setClosureModalVisible] = useState(false);
 
   const loadNhmp = useCallback(async ({ silent = false } = {}) => {
     if (!silent && nhmpData.length > 0) setNhmpRefreshing(true);
@@ -769,7 +843,7 @@ export default function TravelScreen({ route }) {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.officialLinkBtn}
-              onPress={() => openInApp('https://nwfc.pmd.gov.pk/new/motorway-fog-update')}
+              onPress={() => openInApp('https://nwfc.pmd.gov.pk/new/motorway-fog-update.php')}
               activeOpacity={0.75}
             >
               <Icon name="eye-off-outline" size={13} color={dc.accentCyan} />
@@ -1060,12 +1134,22 @@ export default function TravelScreen({ route }) {
             <Text style={styles.screenSubtitle}>Based on latest available advisories</Text>
           </View>
 
+          {/* Closure detail sheet */}
+          <ClosureDetailSheet
+            visible={closureModalVisible}
+            closures={nhmpData.filter((a) => a.severity === 'closed')}
+            onClose={() => setClosureModalVisible(false)}
+          />
+
           {/* Travel snapshot */}
           <TravelSnapshotCard
             level={travelSummary.level}
             title={travelSummary.label}
             body={travelSummary.body}
             stats={travelSummary.stats}
+            onStatPress={(st) => {
+              if (st.label === 'Closures') setClosureModalVisible(true);
+            }}
           />
 
           {travelSections.map((key) => (
@@ -1181,7 +1265,7 @@ export default function TravelScreen({ route }) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   scroll: { flex: 1 },
-  contentContainer: { padding: 20, paddingBottom: 40, gap: 14 },
+  contentContainer: { padding: 20, paddingBottom: 120, gap: 14 },
 
   screenHeader: { marginBottom: 4 },
   screenTitle: {
@@ -1450,6 +1534,172 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     color: dc.bgTop,
+  },
+
+  // Closure detail sheet
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.62)',
+    justifyContent: 'flex-end',
+  },
+  sheetContainer: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    backgroundColor: 'rgba(32,44,62,0.98)',
+    borderWidth: 1,
+    borderColor: dc.cardStroke,
+    padding: 22,
+    paddingBottom: 40,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: dc.cardStroke,
+    alignSelf: 'center',
+    marginBottom: 22,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 20,
+  },
+  sheetAlertIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: dc.dangerGlass,
+    borderWidth: 1,
+    borderColor: dc.dangerStroke,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetEyebrow: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: dc.accentRed,
+    letterSpacing: 1.5,
+    marginBottom: 3,
+  },
+  sheetTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: dc.textPrimary,
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: dc.cardGlassStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetClosureRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingVertical: 13,
+  },
+  sheetClosureDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: dc.cardStrokeSoft,
+  },
+  sheetClosureDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: dc.accentRed,
+    marginTop: 5,
+  },
+  sheetClosureRoute: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: dc.textPrimary,
+    marginBottom: 2,
+  },
+  sheetClosureSector: {
+    fontSize: 12,
+    color: dc.textSecondary,
+    marginBottom: 3,
+  },
+  sheetClosureStatus: {
+    fontSize: 12,
+    color: dc.accentRed,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  sheetCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 22,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: dc.accentCyan,
+  },
+  sheetCtaText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: dc.bgTop,
+  },
+
+  // Tourist stations header
+  touristHeaderLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  touristLiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 20,
+    backgroundColor: 'rgba(155,200,255,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(155,200,255,0.28)',
+  },
+  touristLiveBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: dc.accentCyan,
+    letterSpacing: 0.8,
+  },
+  touristNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 7,
+    backgroundColor: 'rgba(155,200,255,0.07)',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+  },
+  touristNoticeText: {
+    fontSize: 11,
+    color: dc.textSecondary,
+    lineHeight: 16,
+    flex: 1,
+  },
+  touristViewAll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: dc.cardGlassStrong,
+    borderWidth: 1,
+    borderColor: dc.cardStrokeSoft,
+  },
+  touristViewAllText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: dc.accentCyan,
   },
 
   // Tourist stations
