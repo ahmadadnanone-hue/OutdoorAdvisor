@@ -13,6 +13,7 @@ export default function AqiSection({ aqi, pm25, weather, weatherCurrent, locatio
         country={isUsingDeviceLocation ? '' : locationDisplay.secondary}
         condition={weather.description}
         tempLabel={settings.formatTempShort(weatherCurrent?.temp)}
+        temp={weatherCurrent?.temp ?? null}
         feelsLike={weatherCurrent?.feelsLike ?? weatherCurrent?.temp ?? null}
         feelsLikeLabel={weatherCurrent?.feelsLike != null ? `Feels like ${settings.formatTemp(weatherCurrent.feelsLike)}` : null}
         weatherCode={weatherCurrent?.weatherCode}

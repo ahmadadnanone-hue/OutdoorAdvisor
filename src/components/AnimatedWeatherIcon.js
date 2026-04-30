@@ -45,19 +45,8 @@ function useLoop(toValue, duration, delay = 0) {
 }
 
 function GlassPlate({ size, children }) {
-  const pad = Math.max(4, size * 0.08);
   return (
-    <View
-      style={[
-        styles.plate,
-        {
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          padding: pad,
-        },
-      ]}
-    >
+    <View style={[styles.plate, { width: size, height: size }]}>
       {children}
     </View>
   );
@@ -246,9 +235,6 @@ const styles = StyleSheet.create({
   plate: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
     overflow: 'hidden',
   },
   center: {

@@ -5,117 +5,147 @@ import Icon, { ICON } from '../Icon';
 import { colors, typography, spacing, radius } from '../../design';
 
 // ─── Condition theme ──────────────────────────────────────────────────────────
-// Returns card tint, border, and icon colour factoring in WMO code, heat, AQI.
+// Returns card tint, border, icon colour, and tempColor factoring in WMO code, heat, AQI.
 // Priority: AQI danger > extreme heat > AQI unhealthy > high heat > AQI moderate
 //           > weather code (rain/snow/clear/etc.)
-function getConditionTheme(code, feelsLike, aqi) {
+function getTempColor(temp, code) {
+  if (temp == null) return colors.textPrimary;
+  const isSunny = code === 0 || code === 1;
+  if (temp >= 38 && isSunny) return '#FF3B30';   // blazing red
+  if (temp >= 38) return '#FF6B35';              // deep orange-red
+  if (temp >= 34) return '#FF9500';              // amber orange
+  if (temp >= 30) return '#FFD60A';              // warm yellow
+  if (temp >= 20) return colors.textPrimary;     // neutral white
+  if (temp >= 15) return '#BAE6FD';              // light cool blue
+  if (temp >= 5)  return '#60A5FA';              // blue (cold)
+  return '#BAE6FD';                              // ice blue (freezing)
+}
+
+function getConditionTheme(code, feelsLike, aqi, temp) {
   const heat = feelsLike ?? null;
   const aqiNum = aqi ?? 0;
+  const tempColor = getTempColor(temp ?? feelsLike, code);
 
   // ── AQI hazardous / very unhealthy (>170) ────────────────────────────────
   if (aqiNum > 170) return {
-    tint:   'rgba(185,28,28,0.34)',    // deep red haze
+    tint:   'rgba(185,28,28,0.34)',
     border: 'rgba(239,68,68,0.65)',
     icon:   '#FCA5A5',
+    tempColor,
   };
 
   // ── Extreme heat ≥42°C feels-like ────────────────────────────────────────
   if (heat != null && heat >= 42) return {
-    tint:   'rgba(220,38,38,0.32)',    // danger red-orange
+    tint:   'rgba(220,38,38,0.32)',
     border: 'rgba(239,68,68,0.62)',
     icon:   '#FCA5A5',
+    tempColor,
   };
 
   // ── AQI unhealthy (121–170) ───────────────────────────────────────────────
   if (aqiNum > 120) return {
-    tint:   'rgba(194,65,12,0.30)',    // deep orange-red
+    tint:   'rgba(194,65,12,0.30)',
     border: 'rgba(234,88,12,0.58)',
     icon:   '#FB923C',
+    tempColor,
   };
 
   // ── High heat 35–41°C feels-like ─────────────────────────────────────────
   if (heat != null && heat >= 35) return {
-    tint:   'rgba(234,88,12,0.26)',    // warm amber-orange
+    tint:   'rgba(234,88,12,0.26)',
     border: 'rgba(251,146,60,0.56)',
     icon:   '#FD8C3A',
+    tempColor,
   };
 
   // ── AQI moderate (80–120) ─────────────────────────────────────────────────
   if (aqiNum > 80) return {
-    tint:   'rgba(202,138,4,0.26)',    // amber-yellow
+    tint:   'rgba(202,138,4,0.26)',
     border: 'rgba(234,179,8,0.54)',
     icon:   '#FDE047',
+    tempColor,
   };
 
   // ── Weather-code themes (cool / normal temps, clean air) ─────────────────
 
-  if (code == null) return { tint: colors.cardGlassStrong, border: colors.cardStroke, icon: colors.accentCyan };
+  if (code == null) return { tint: colors.cardGlassStrong, border: colors.cardStroke, icon: colors.accentCyan, tempColor };
 
   // Thunderstorm
   if (code >= 95) return {
     tint:   'rgba(109,40,217,0.30)',
     border: 'rgba(139,92,246,0.60)',
     icon:   '#A78BFA',
+    tempColor,
   };
   // Snow / blizzard
   if (code >= 71 && code <= 77) return {
     tint:   'rgba(186,230,253,0.24)',
     border: 'rgba(186,230,253,0.55)',
     icon:   '#BAE6FD',
+    tempColor,
   };
   // Heavy showers / showers
   if (code >= 80 && code <= 82) return {
     tint:   'rgba(37,99,235,0.26)',
     border: 'rgba(59,130,246,0.56)',
     icon:   '#60A5FA',
+    tempColor,
   };
   // Heavy rain
   if (code >= 63 && code <= 65) return {
     tint:   'rgba(29,78,216,0.28)',
     border: 'rgba(59,130,246,0.60)',
     icon:   '#3B82F6',
+    tempColor,
   };
   // Light / moderate rain
   if (code >= 61 && code <= 62) return {
     tint:   'rgba(37,99,235,0.22)',
     border: 'rgba(96,165,250,0.52)',
     icon:   '#60A5FA',
+    tempColor,
   };
   // Drizzle
   if (code >= 51 && code <= 55) return {
     tint:   'rgba(56,189,248,0.20)',
     border: 'rgba(56,189,248,0.50)',
     icon:   '#38BDF8',
+    tempColor,
   };
   // Freezing rain
   if (code === 66 || code === 67) return {
     tint:   'rgba(148,163,184,0.24)',
     border: 'rgba(148,163,184,0.52)',
     icon:   '#CBD5E1',
+    tempColor,
   };
   // Fog / haze
   if (code === 45 || code === 48) return {
     tint:   'rgba(100,116,139,0.22)',
     border: 'rgba(100,116,139,0.46)',
     icon:   '#94A3B8',
+    tempColor,
   };
   // Overcast
   if (code === 3) return {
     tint:   'rgba(100,116,139,0.18)',
     border: 'rgba(148,163,184,0.44)',
     icon:   '#94A3B8',
+    tempColor,
   };
   // Partly cloudy
   if (code === 1 || code === 2) return {
     tint:   'rgba(155,200,255,0.20)',
     border: 'rgba(155,200,255,0.48)',
     icon:   colors.accentCyan,
+    tempColor,
   };
   // Clear sky — warm golden (pleasant conditions)
   return {
     tint:   'rgba(251,191,36,0.20)',
     border: 'rgba(251,191,36,0.48)',
     icon:   '#FCD34D',
+    tempColor,
   };
 }
 
@@ -147,7 +177,8 @@ export default function LiveConditionsCard({
   weatherCode,
   condition,
   tempLabel,
-  feelsLike,          // raw °C number for theme computation
+  temp,               // raw °C actual temperature for dynamic color
+  feelsLike,          // raw °C number for card theme (heat tint)
   feelsLikeLabel,
   weatherIcon = ICON.weatherPartly,
   weatherIconNode = null,
@@ -159,7 +190,7 @@ export default function LiveConditionsCard({
   humidityLabel,
   onPress,
 }) {
-  const theme = getConditionTheme(weatherCode, feelsLike, aqi);
+  const theme = getConditionTheme(weatherCode, feelsLike, aqi, temp);
 
   return (
     <GlassCard
@@ -187,7 +218,7 @@ export default function LiveConditionsCard({
           <Text style={styles.condition}>{condition}</Text>
         </View>
         <View style={styles.tempRight}>
-          <Text style={styles.temp}>{tempLabel}</Text>
+          <Text style={[styles.temp, { color: theme.tempColor }]}>{tempLabel}</Text>
           {feelsLikeLabel ? (
             <Text style={styles.feelsLike}>{feelsLikeLabel}</Text>
           ) : null}

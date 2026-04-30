@@ -273,7 +273,7 @@ export default function HomeScreen({ navigation, route }) {
         <ScrollView
           ref={scrollRef}
           style={styles.scroll}
-          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 90, 120) }]}
+          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 120, 150) }]}
           showsVerticalScrollIndicator={false}
           refreshControl={Platform.OS !== 'web' ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} /> : undefined}
         >
