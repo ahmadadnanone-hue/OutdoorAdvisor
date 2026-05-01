@@ -7,10 +7,10 @@ import {
   Switch,
   TextInput,
   StyleSheet,
-  SafeAreaView,
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings, ALL_FAB_ACTION_IDS } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
@@ -123,6 +123,7 @@ const sliderStyles = StyleSheet.create({
 
 /* ---------- Main Screen ---------- */
 export default function AlertsScreen() {
+  const insets = useSafeAreaInsets();
   const themeCtx = useTheme();
   const settings = useSettings();
   const { configured, isSignedIn, isPremium, plan, loading: authLoading, signIn, signOut, signUp, user } = useAuth();
@@ -621,7 +622,7 @@ export default function AlertsScreen() {
 
   return (
     <ScreenGradient>
-      <SafeAreaView style={styles.container}>
+      <View style={[styles.container, { paddingTop: Math.max(insets.top, 12) }]}>
         <Text style={styles.screenTitle}>Settings</Text>
 
         {/* Account card */}
@@ -706,7 +707,7 @@ export default function AlertsScreen() {
         <View style={{ flex: 1 }}>
           {tabContent[activeTab]()}
         </View>
-      </SafeAreaView>
+      </View>
     </ScreenGradient>
   );
 }

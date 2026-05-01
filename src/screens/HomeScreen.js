@@ -3,7 +3,7 @@
  * All UI sections live in src/components/home/.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, SafeAreaView, RefreshControl, ActivityIndicator, Platform, Modal, TouchableOpacity, AppState } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, RefreshControl, ActivityIndicator, Platform, Modal, TouchableOpacity, AppState } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
@@ -16,8 +16,6 @@ import useAiBriefing from '../hooks/useAiBriefing';
 import useAlerts from '../hooks/useAlerts';
 import useSynthesis from '../hooks/useSynthesis';
 import { getWeatherDescription, isNight } from '../utils/weatherCodes';
-import { maybeSendLocalAlert } from '../utils/alertNotifications';
-import { loadStoredNotifications, loadStoredThresholds } from '../utils/alertPreferences';
 import { getActivitySummary } from '../utils/activityScoring';
 import { getActivityById } from '../data/activities';
 import { ScreenGradient } from '../components/layout';
@@ -48,7 +46,6 @@ import {
   getAqiColor, getAqiCategory, getHomeDecision, decisionStatus,
   getWindDirectionLabel, getGreeting, getUserGreetingName, getLocationDisplay,
   getActivityToneColor, buildAqiHistoryInsight, getWindInsight, getPollenInsight,
-  isRainCode, isStormCode, isFogCode,
 } from '../components/home/homeUtils';
 import { loadNotificationInbox, markInboxSeen } from '../utils/notificationInbox';
 
@@ -213,29 +210,15 @@ export default function HomeScreen({ navigation, route }) {
     } finally { setRefreshing(false); }
   }, [isUsingDeviceLocation, location, refreshLocation, refreshAqi, refreshWeather, refreshPollen]);
 
-  // ── Local alert notifications ─────────────────────────────────────────────
+  // ── Notification inbox sync ───────────────────────────────────────────────
+  // All weather/AQI/storm alerts are pushed from the server (api/_lib/alertEngine.js
+  // via the GitHub-Actions cron) so they fire even when the app is closed. The
+  // local fallback that used to live here was only firing when the user opened
+  // the screen, which made notifications feel inconsistent. Just refresh the
+  // in-app inbox so any pushes received while the screen is mounted show up.
   useEffect(() => {
-    if (aqi == null && pm25 == null && weatherCurrent?.weatherCode == null && weatherCurrent?.windSpeed == null && pollenValue == null) return;
-    let cancelled = false;
-    (async () => {
-      const [prefs, thresholds] = await Promise.all([loadStoredNotifications(), loadStoredThresholds()]);
-      if (cancelled) return;
-      const label = locationDisplay.primary || 'your area';
-      const key   = city || `${location.lat?.toFixed?.(2) || '0'}-${location.lon?.toFixed?.(2) || '0'}`;
-      if (prefs.severeAqiWarnings && aqi >= thresholds.aqiAlert)                                             maybeSendLocalAlert(`aqi-${key}`,    { title: 'Severe AQI warning',     body: `${label} is reading AQI ${aqi}. Use an N95 and keep longer outdoor exposure lighter today.` });
-      if (isPremium && prefs.smogAlerts && pm25 >= thresholds.pm25Alert)                                     maybeSendLocalAlert(`smog-${key}`,   { title: 'Smog alert',             body: `PM2.5 is elevated around ${label}. A mask and shorter outdoor sessions will help.` });
-      if (prefs.rainAlerts && isRainCode(weatherCurrent?.weatherCode))                                       maybeSendLocalAlert(`rain-${key}`,   { title: 'Rain alert',             body: `Rain is active near ${label}. Carry rain gear and slow down on the road.` });
-      if (prefs.thunderstormAlerts && isStormCode(weatherCurrent?.weatherCode))                              maybeSendLocalAlert(`storm-${key}`,  { title: 'Thunderstorm alert',     body: `Storm risk is active around ${label}. Delay exposed outdoor plans until the cell passes.` });
-      if (prefs.windAlerts && ((weatherCurrent?.windSpeed ?? 0) >= 28 || (displayWindGusts ?? 0) >= 38))    maybeSendLocalAlert(`wind-${key}`,   { title: 'Wind alert',             body: `Wind is picking up around ${label}. Choose sheltered routes and secure loose items.` });
-      if (isPremium && prefs.pollenAlerts && pollenValue >= 4)                                               maybeSendLocalAlert(`pollen-${key}`, { title: 'High pollen alert',      body: `${pollenDisplayName} pollen is elevated near ${label}. A mask and allergy medication can help.` });
-      if (prefs.heatAlerts && weatherCurrent?.feelsLike >= thresholds.heatAlert)                            maybeSendLocalAlert(`heat-${key}`,   { title: 'Heat alert',             body: `Feels-like heat is high around ${label}. Go later, hydrate well, and take shade breaks.` });
-      if (isPremium && prefs.fogWarnings && isFogCode(weatherCurrent?.weatherCode))                         maybeSendLocalAlert(`fog-${key}`,    { title: 'Low-visibility alert',   body: `Visibility looks reduced around ${label}. Slow down and leave extra margin while driving.` });
-      setTimeout(() => {
-        refreshNotificationInbox();
-      }, 250);
-    })();
-    return () => { cancelled = true; };
-  }, [aqi, city, displayWindGusts, location.lat, location.lon, locationDisplay.primary, pm25, pollenDisplayName, pollenValue, weatherCurrent?.feelsLike, weatherCurrent?.weatherCode, weatherCurrent?.windSpeed, isPremium, refreshNotificationInbox]);
+    refreshNotificationInbox();
+  }, [aqi, weatherCurrent?.weatherCode, refreshNotificationInbox]);
 
   const openNotificationCenter = useCallback(() => {
     refreshNotificationInbox();
@@ -258,10 +241,10 @@ export default function HomeScreen({ navigation, route }) {
   if (locationLoading) {
     return (
       <ScreenGradient>
-        <SafeAreaView style={styles.loading} edges={['top', 'left', 'right']}>
+        <View style={[styles.loading, { paddingTop: Math.max(insets.top, 16) }]}>
           <ActivityIndicator size="large" color={dc.accentCyan} />
           <Text style={styles.loadingText}>Detecting your location…</Text>
-        </SafeAreaView>
+        </View>
       </ScreenGradient>
     );
   }
@@ -269,11 +252,14 @@ export default function HomeScreen({ navigation, route }) {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <ScreenGradient>
-      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <View style={styles.safe}>
         <ScrollView
           ref={scrollRef}
           style={styles.scroll}
-          contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom + 120, 150) }]}
+          contentContainerStyle={[
+            styles.content,
+            { paddingTop: Math.max(insets.top, 12), paddingBottom: 24 },
+          ]}
           showsVerticalScrollIndicator={false}
           refreshControl={Platform.OS !== 'web' ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} /> : undefined}
         >
@@ -481,7 +467,7 @@ export default function HomeScreen({ navigation, route }) {
             </View>
           </ScreenGradient>
         </Modal>
-      </SafeAreaView>
+      </View>
     </ScreenGradient>
   );
 }

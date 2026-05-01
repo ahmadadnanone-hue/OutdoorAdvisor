@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { GlassCard, GlassPill } from '../glass';
 import Icon, { ICON } from '../Icon';
 import { colors, typography, statusColor } from '../../design';
@@ -42,26 +42,18 @@ export default function TravelSnapshotCard({
       {body ? <Text style={styles.body}>{body}</Text> : null}
       {stats.length ? (
         <View style={styles.pills}>
-          {stats.map((st) => {
-            const pill = (
-              <GlassPill
-                label={`${st.value} ${st.label}`}
-                compact
-              />
-            );
-            if (!onStatPress) return <View key={st.label}>{pill}</View>;
-            return (
-              <TouchableOpacity
-                key={st.label}
-                onPress={() => onStatPress(st)}
-                activeOpacity={0.72}
-                style={styles.tappablePill}
-              >
-                {pill}
-                <Text style={styles.moreInfo}>More info ›</Text>
-              </TouchableOpacity>
-            );
-          })}
+          {stats.map((st) => (
+            <GlassPill
+              key={st.label}
+              label={
+                onStatPress
+                  ? `${st.value} ${st.label} · More info ›`
+                  : `${st.value} ${st.label}`
+              }
+              compact
+              onPress={onStatPress ? () => onStatPress(st) : undefined}
+            />
+          ))}
         </View>
       ) : null}
     </GlassCard>
@@ -95,16 +87,5 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginTop: 4,
-  },
-  tappablePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  moreInfo: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.accentCyan,
-    letterSpacing: 0.3,
   },
 });

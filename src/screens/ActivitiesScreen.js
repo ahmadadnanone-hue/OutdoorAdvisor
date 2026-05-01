@@ -12,6 +12,7 @@ import {
   Platform,
   Linking,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import useAQI from '../hooks/useAQI';
@@ -177,6 +178,7 @@ async function openPlaceInMaps(place) {
 }
 
 export default function ActivitiesScreen() {
+  const insets = useSafeAreaInsets();
   const { enabledActivities, addActivity, removeActivity } = useSettings();
   const { isPremium } = useAuth();
   const { city, location, loading: locLoading } = useLocationContext();
@@ -329,19 +331,19 @@ export default function ActivitiesScreen() {
   if (loading) {
     return (
       <ScreenGradient>
-        <SafeAreaView style={styles.center}>
+        <View style={[styles.center, { paddingTop: Math.max(insets.top, 16) }]}>
           <ActivityIndicator size="large" color={dc.accentCyan} />
           <Text style={styles.loadingText}>Loading conditions...</Text>
-        </SafeAreaView>
+        </View>
       </ScreenGradient>
     );
   }
 
   return (
     <ScreenGradient>
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
           <Text style={styles.title}>Activities</Text>
           <View style={styles.headerInfo}>
             <Text style={styles.cityLabel} numberOfLines={1}>{city}</Text>
@@ -586,7 +588,7 @@ export default function ActivitiesScreen() {
             );
           })()}
         </Modal>
-      </SafeAreaView>
+      </View>
     </ScreenGradient>
   );
 }

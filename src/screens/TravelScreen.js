@@ -2,7 +2,6 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import {
   View,
   Text,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
@@ -13,6 +12,7 @@ import {
   Platform,
   StyleSheet,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 
 function openInApp(url) {
@@ -31,8 +31,6 @@ import { fetchAqiForLocation } from '../hooks/useAQI';
 import { getWeatherDescription } from '../utils/weatherCodes';
 import { fetchApiJson } from '../config/api';
 import { fetchNhmpDirect } from '../utils/nhmpParser';
-import { loadStoredNotifications } from '../utils/alertPreferences';
-import { maybeSendLocalAlert } from '../utils/alertNotifications';
 import useAiBriefing from '../hooks/useAiBriefing';
 // useTouristWeather removed — PMD blocks Vercel IPs; replaced by static link directory
 
@@ -376,7 +374,7 @@ const TRAVEL_SECTION_META = {
 const ALL_TRAVEL_SECTION_KEYS = Object.keys(TRAVEL_SECTION_META);
 
 function TouristStationsCard() {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [weather, setWeather] = useState({});
   const [loadingWx, setLoadingWx] = useState(true);
 
@@ -502,6 +500,7 @@ function TouristStationsCard() {
 
 /* ===== Main Screen ===== */
 export default function TravelScreen({ route }) {
+  const insets = useSafeAreaInsets();
   const {
     formatTempShort,
     travelSections = ALL_TRAVEL_SECTION_KEYS,
@@ -531,6 +530,7 @@ export default function TravelScreen({ route }) {
   const [pmdAlertsExpanded, setPmdAlertsExpanded] = useState(false);
   const [travelCustomizeExpanded, setTravelCustomizeExpanded] = useState(false);
   const [closureModalVisible, setClosureModalVisible] = useState(false);
+  const [majorRoutesExpanded, setMajorRoutesExpanded] = useState(false);
 
   const loadNhmp = useCallback(async ({ silent = false } = {}) => {
     if (!silent && nhmpData.length > 0) setNhmpRefreshing(true);
@@ -588,51 +588,10 @@ export default function TravelScreen({ route }) {
     };
   }, [loadNhmp]);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!nhmpData.length && !pmdAlerts.length) return undefined;
-    (async () => {
-      const prefs = await loadStoredNotifications();
-      if (cancelled) return;
-      if (isPremium && prefs.routeClosureAlerts) {
-        const closure = nhmpData.find((item) => item.severity === 'closed');
-        if (closure) {
-          maybeSendLocalAlert('nhmp-route-closure', {
-            title: 'Major route closure',
-            body: closure.route
-              ? `${closure.route} has an active closure advisory. Check NHMP before you leave.`
-              : 'An important route closure advisory is active. Check NHMP before you leave.',
-            url: 'https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx',
-          });
-        }
-      }
-      if (isPremium && prefs.fogWarnings) {
-        const fogAlert = nhmpData.find((item) => item.severity === 'fog');
-        if (fogAlert) {
-          maybeSendLocalAlert('nhmp-fog-warning', {
-            title: 'Motorway fog warning',
-            body: fogAlert.route
-              ? `${fogAlert.route} has fog-related visibility risk. Drive slower and leave extra margin.`
-              : 'A motorway fog advisory is active. Drive slower and leave extra margin.',
-            url: 'https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx',
-          });
-        }
-      }
-      if (isPremium && prefs.routeClosureAlerts && pmdAlerts.length > 0) {
-        const northernAlert = pmdAlerts.find((alert) =>
-          /(murree|naran|kaghan|swat|gilgit|hazara|karakoram|abbottabad|mansehra)/i.test(String(alert))
-        );
-        if (northernAlert) {
-          maybeSendLocalAlert('pmd-corridor-alert', {
-            title: 'Northern route weather alert',
-            body: String(northernAlert).slice(0, 180),
-            url: 'https://nwfc.pmd.gov.pk/',
-          });
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [isPremium, nhmpData, pmdAlerts]);
+  // Notifications for closures, fog, and PMD alerts are pushed server-side
+  // via /api/push?action=cron (sendMotorwayClosureAlerts + sendPmdCriticalAlerts
+  // in api/_lib/alertEngine.js). They fire even when the app is closed, so no
+  // tab-open local fallback is needed here.
 
   const loadRouteStops = useCallback(async (routeIndex) => {
     if (stopData[routeIndex] || fetchingRef.current[routeIndex]) return;
@@ -977,10 +936,30 @@ export default function TravelScreen({ route }) {
     if (key === 'majorRoutes') {
       return (
         <>
-          <Text style={styles.routesTitle}>Weather Along Major Routes</Text>
-          <Text style={styles.routesSubtitle}>Motorways, northern highways, and mountain corridors.</Text>
+          <TouchableOpacity
+            style={styles.majorRoutesHeader}
+            activeOpacity={0.78}
+            onPress={() => {
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setMajorRoutesExpanded((v) => !v);
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.routesTitle}>Weather Along Major Routes</Text>
+              <Text style={styles.routesSubtitle}>
+                {majorRoutesExpanded
+                  ? 'Motorways, northern highways, and mountain corridors.'
+                  : `${sortedRoutes.length} route${sortedRoutes.length === 1 ? '' : 's'} — tap to view`}
+              </Text>
+            </View>
+            <Icon
+              name={majorRoutesExpanded ? ICON.chevronUp : ICON.chevronDown}
+              size={18}
+              color={dc.textMuted}
+            />
+          </TouchableOpacity>
 
-          {sortedRoutes.map(({ route: motorway, sourceIndex, matchedAdvisory, matchedPmdAlerts, riskScore }) => {
+          {majorRoutesExpanded && sortedRoutes.map(({ route: motorway, sourceIndex, matchedAdvisory, matchedPmdAlerts, riskScore }) => {
             const isExpanded = expandedMotorway === sourceIndex;
             const sourceSummary = getRouteSourceSummary(motorway, matchedAdvisory, matchedPmdAlerts);
             const hasAlert = matchedAdvisory?.severity === 'closed' || matchedPmdAlerts.length > 0;
@@ -1087,7 +1066,9 @@ export default function TravelScreen({ route }) {
             );
           })}
 
-          <Text style={styles.footer}>Conditions may change. Recheck before departure.</Text>
+          {majorRoutesExpanded && (
+            <Text style={styles.footer}>Conditions may change. Recheck before departure.</Text>
+          )}
         </>
       );
     }
@@ -1117,15 +1098,16 @@ export default function TravelScreen({ route }) {
     toggleMotorway,
     travelAiBriefing,
     travelAiLoading,
+    majorRoutesExpanded,
   ]);
 
   return (
     <ScreenGradient>
-      <SafeAreaView style={styles.safeArea}>
+      <View style={styles.safeArea}>
         <ScrollView
           ref={scrollRef}
           style={styles.scroll}
-          contentContainerStyle={styles.contentContainer}
+          contentContainerStyle={[styles.contentContainer, { paddingTop: Math.max(insets.top, 12) }]}
           showsVerticalScrollIndicator={false}
         >
           {/* Screen header */}
@@ -1257,7 +1239,7 @@ export default function TravelScreen({ route }) {
             )}
           </GlassCard>
         </ScrollView>
-      </SafeAreaView>
+      </View>
     </ScreenGradient>
   );
 }
@@ -1387,6 +1369,13 @@ const styles = StyleSheet.create({
   aiBody: { fontSize: 14, color: dc.textSecondary, lineHeight: 21, marginBottom: 8 },
   aiTip: { fontSize: 13, fontWeight: '600', color: dc.textPrimary, lineHeight: 19 },
 
+  majorRoutesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginTop: 4,
+    gap: 12,
+  },
   routesTitle: { fontSize: 22, fontWeight: '800', color: dc.textPrimary, letterSpacing: -0.4, marginTop: 8 },
   routesSubtitle: { fontSize: 13, color: dc.textSecondary, marginBottom: 4, lineHeight: 18 },
 
