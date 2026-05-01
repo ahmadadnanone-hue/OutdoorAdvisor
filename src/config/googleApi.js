@@ -69,6 +69,7 @@ export async function reverseGeocode(lat, lon) {
       if (area && cityName) break;
     }
 
+    if (area && cityName) return `${area}, ${cityName}`;
     if (cityName) return cityName;
     if (area) return area;
     // Fallback to the first formatted address's short form

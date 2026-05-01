@@ -45,19 +45,20 @@ export default function TravelSnapshotCard({
           {stats.map((st) => {
             const pill = (
               <GlassPill
-                key={st.label}
                 label={`${st.value} ${st.label}`}
                 compact
               />
             );
-            if (!onStatPress) return pill;
+            if (!onStatPress) return <View key={st.label}>{pill}</View>;
             return (
               <TouchableOpacity
                 key={st.label}
                 onPress={() => onStatPress(st)}
                 activeOpacity={0.72}
+                style={styles.tappablePill}
               >
                 {pill}
+                <Text style={styles.moreInfo}>More info ›</Text>
               </TouchableOpacity>
             );
           })}
@@ -94,5 +95,16 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginTop: 4,
+  },
+  tappablePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  moreInfo: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.accentCyan,
+    letterSpacing: 0.3,
   },
 });

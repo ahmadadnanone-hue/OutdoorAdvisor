@@ -3,8 +3,8 @@ import { kvGetJson, kvSetJson } from './kv.js';
 
 const ALERT_STATE_KEY = 'push:alert-engine:state';
 const PMD_RSS_URL = 'https://cap-sources.s3.amazonaws.com/pk-pmd-en/rss.xml';
-const DAILY_SUMMARY_START_HOUR = 6;
-const DAILY_SUMMARY_END_HOUR = 10;
+const DAILY_SUMMARY_START_HOUR = 5;
+const DAILY_SUMMARY_END_HOUR = 11;
 const NON_CRITICAL_DAILY_LIMIT = 2;
 
 // WMO codes for weather-based alerts
@@ -634,11 +634,14 @@ async function sendMorningSummaries(devices, state) {
   let sent = 0;
   const summaries = state.sentDailySummaries || {};
 
+  // Morning summary is exempt from the non-critical daily cap so it always
+  // lands once per device per day. Per-device-per-day dedupe via
+  // `summaries[token] === day` keeps it to one push.
   const candidates = devices.filter((device) => {
     const prefs = device.preferences || {};
     if (prefs.dailySummary === false) return false;
     if (summaries[device.expoPushToken] === day) return false;
-    return canSendNonCriticalToday(state, device.expoPushToken, day);
+    return true;
   });
 
   if (!candidates.length) return null;
@@ -659,7 +662,6 @@ async function sendMorningSummaries(devices, state) {
     });
     sent += response.attempted;
     summaries[device.expoPushToken] = day;
-    incrementNonCritical(state, device.expoPushToken, day);
   }
 
   state.sentDailySummaries = summaries;

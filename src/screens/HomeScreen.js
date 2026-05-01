@@ -258,7 +258,7 @@ export default function HomeScreen({ navigation, route }) {
   if (locationLoading) {
     return (
       <ScreenGradient>
-        <SafeAreaView style={styles.loading}>
+        <SafeAreaView style={styles.loading} edges={['top', 'left', 'right']}>
           <ActivityIndicator size="large" color={dc.accentCyan} />
           <Text style={styles.loadingText}>Detecting your location…</Text>
         </SafeAreaView>
@@ -269,7 +269,7 @@ export default function HomeScreen({ navigation, route }) {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <ScreenGradient>
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
         <ScrollView
           ref={scrollRef}
           style={styles.scroll}
