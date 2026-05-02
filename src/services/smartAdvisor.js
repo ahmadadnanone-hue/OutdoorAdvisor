@@ -149,18 +149,20 @@ function summarizeConditions({ aqi, weather }) {
 
 function computeOutdoorScore({ steps, aqi, weather }) {
   const temp = weather?.current?.temp ?? null;
+  const feelsLike = weather?.current?.feelsLike ?? null;
+  const heatValue = feelsLike ?? temp;
   const isRain = isRainRightNow(weather);
 
   let aqiScore = 0;
   if (aqi <= 50) aqiScore = 4;
   else if (aqi <= 100) aqiScore = 3;
-  else if (aqi <= 150) aqiScore = 2;
-  else if (aqi <= 200) aqiScore = 1;
+  else if (aqi <= 150) aqiScore = 1;
+  else if (aqi <= 200) aqiScore = 0;
 
   let weatherScore = 0;
-  if (!isRain && temp != null && temp >= 18 && temp <= 32) weatherScore = 4;
-  else if (!isRain && temp != null && temp >= 15 && temp <= 38) weatherScore = 3;
-  else if (!isRain && temp != null) weatherScore = 2;
+  if (!isRain && heatValue != null && heatValue >= 18 && heatValue <= 30) weatherScore = 4;
+  else if (!isRain && heatValue != null && heatValue >= 15 && heatValue <= 36) weatherScore = 3;
+  else if (!isRain && heatValue != null && heatValue <= 42) weatherScore = 2;
   else weatherScore = 1;
 
   let activityScore = 0;

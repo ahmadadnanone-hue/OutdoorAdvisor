@@ -118,6 +118,7 @@ export default function HomeScreen({ navigation, route }) {
     lon:          location.lon,
     locationName: locationDisplay.primary,
     pollenLabel:  pollenCategory !== '--' ? pollenCategory : null,
+    aqi:          aqi ?? null,
     enabled:      location.lat != null && location.lon != null,
   });
 

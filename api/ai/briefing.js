@@ -254,7 +254,7 @@ async function fetchCapSummary() {
   return items.slice(0, 5);
 }
 
-async function fetchSynthesisData(lat, lon, googleApiKey) {
+async function fetchSynthesisData(lat, lon, googleApiKey, clientAqi) {
   const [meteo, aqiRes, alertsRes] = await Promise.allSettled([
     fetchOpenMeteo(lat, lon),
     fetchGoogleAqi(lat, lon, googleApiKey),
@@ -275,7 +275,7 @@ async function fetchSynthesisData(lat, lon, googleApiKey) {
     weatherLabel: WMO_LABELS[cur?.weather_code] ?? 'Variable',
     uvIndex: cur?.uv_index ?? null,
     rainNext3h: hourlyRain.length ? Math.max(...hourlyRain) : null,
-    aqi: a?.aqi ?? null,
+    aqi: clientAqi ?? a?.aqi ?? null,
     pm25: a?.pm25 ?? null,
     capAlerts: alerts,
     tomorrowMax: tod?.temperature_2m_max?.[1] ?? null,
@@ -383,9 +383,11 @@ function synthesisFallback(signals, locationName, pollenLabel) {
     ? 'Some caution needed before heading outside.'
     : 'Conditions look workable for most outdoor plans today.';
 
-  const aqiNote = aqiNum > 150 ? `AQI is high at ${aqiNum} — limit extended exposure.`
-    : aqiNum > 100 ? `AQI ${aqiNum} is moderate — sensitive groups take care.`
-    : aqiNum > 0  ? `Air quality is good at AQI ${aqiNum}.`
+  const aqiNote = aqiNum > 200 ? `AQI ${aqiNum} is very unhealthy — keep outdoor time minimal.`
+    : aqiNum > 150 ? `AQI ${aqiNum} is unhealthy — limit outdoor exposure.`
+    : aqiNum > 100 ? `AQI ${aqiNum} is elevated — unhealthy for sensitive groups.`
+    : aqiNum > 50  ? `AQI ${aqiNum} is moderate — generally acceptable outside.`
+    : aqiNum > 0   ? `Air quality is good at AQI ${aqiNum}.`
     : '';
 
   const weatherNote = isRaining
@@ -532,12 +534,12 @@ export default async function handler(req, res) {
 
   // ── Synthesize: server fetches all sources, returns unified brief ─────────
   if (kind === 'synthesize') {
-    const { lat, lon, locationName, pollenLabel } = body;
+    const { lat, lon, locationName, pollenLabel, clientAqi } = body;
     if (!lat || !lon) return sendJson(res, 400, { error: 'lat and lon required for synthesize.' });
 
     res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=3600');
 
-    const signals = await fetchSynthesisData(Number(lat), Number(lon), googleKey);
+    const signals = await fetchSynthesisData(Number(lat), Number(lon), googleKey, clientAqi != null ? Number(clientAqi) : null);
     const fallback = synthesisFallback(signals, locationName, pollenLabel);
 
     // Synthesis is gated by GEMINI_API_KEY on the server — no token check needed.

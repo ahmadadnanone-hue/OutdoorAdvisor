@@ -19,15 +19,16 @@ import * as persistentCache from '../utils/persistentCache';
 const CACHE_NS  = 'synthesis_v1';
 const CACHE_TTL = 30 * 60 * 1000; // 30 min — matches Vercel s-maxage
 
-function cacheKey(lat, lon) {
-  return `${lat.toFixed(2)}:${lon.toFixed(2)}`;
+function cacheKey(lat, lon, clientAqi) {
+  const aqiBucket = clientAqi != null ? `-${Math.round(clientAqi / 25) * 25}` : '';
+  return `${lat.toFixed(2)}:${lon.toFixed(2)}${aqiBucket}`;
 }
 
 function isFresh(entry) {
   return entry && Date.now() - entry.timestamp < CACHE_TTL;
 }
 
-export default function useSynthesis({ lat, lon, locationName, pollenLabel, enabled = true }) {
+export default function useSynthesis({ lat, lon, locationName, pollenLabel, aqi, enabled = true }) {
   const [synthesis, setSynthesis]   = useState(null);
   const [loading,   setLoading]     = useState(false);
   const [error,     setError]       = useState(null);
@@ -37,12 +38,14 @@ export default function useSynthesis({ lat, lon, locationName, pollenLabel, enab
   const lonRef                      = useRef(lon);
   const locationNameRef             = useRef(locationName);
   const pollenRef                   = useRef(pollenLabel);
+  const aqiRef                      = useRef(aqi);
 
   // Keep refs up-to-date without causing re-renders
   latRef.current          = lat;
   lonRef.current          = lon;
   locationNameRef.current = locationName;
   pollenRef.current       = pollenLabel;
+  aqiRef.current          = aqi;
 
   const doFetch = useCallback(async ({ force = false } = {}) => {
     const curLat = latRef.current;
@@ -50,7 +53,7 @@ export default function useSynthesis({ lat, lon, locationName, pollenLabel, enab
     if (!enabled || curLat == null || curLon == null) return;
     if (fetchingRef.current) return;
 
-    const key = cacheKey(curLat, curLon);
+    const key = cacheKey(curLat, curLon, aqiRef.current);
 
     if (!force) {
       const entry = persistentCache.getEntry(CACHE_NS, key);
@@ -82,6 +85,7 @@ export default function useSynthesis({ lat, lon, locationName, pollenLabel, enab
           lon:          curLon,
           locationName: locationNameRef.current,
           pollenLabel:  pollenRef.current,
+          clientAqi:    aqiRef.current ?? null,
         }),
       });
 
@@ -99,10 +103,11 @@ export default function useSynthesis({ lat, lon, locationName, pollenLabel, enab
     }
   }, [enabled]);
 
-  // Fetch on mount + when location changes
+  // Fetch on mount + when location or AQI bucket changes
+  const aqiBucket = aqi != null ? Math.round(aqi / 25) * 25 : null;
   useEffect(() => {
     doFetch();
-  }, [doFetch, lat, lon]);
+  }, [doFetch, lat, lon, aqiBucket]);
 
   // Refresh on app foreground if cache is stale
   useEffect(() => {
