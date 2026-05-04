@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { colors, radius as radiusTokens, shadows } from '../../design';
 
@@ -21,40 +22,28 @@ export default function GlassTabBar({
   floating = true,
   style,
 }) {
+  const insets = useSafeAreaInsets();
   return (
     <View style={[styles.wrap, floating ? styles.floating : null, style]}>
       <BlurView
         intensity={62}
         tint="dark"
-        style={[styles.fill, { borderRadius: radiusTokens.pill }]}
+        style={styles.fill}
       />
       <View
         pointerEvents="none"
-        style={[
-          styles.fill,
-          {
-            borderRadius: radiusTokens.pill,
-            backgroundColor: colors.tabBarGlass,
-          },
-        ]}
+        style={[styles.fill, { backgroundColor: colors.tabBarGlass }]}
       />
       <LinearGradient
         pointerEvents="none"
         colors={['rgba(255,255,255,0.16)', 'rgba(255,255,255,0.05)']}
-        style={[styles.fill, { borderRadius: radiusTokens.pill }]}
+        style={styles.fill}
       />
       <View
         pointerEvents="none"
-        style={[
-          styles.fill,
-          {
-            borderRadius: radiusTokens.pill,
-            borderWidth: 1,
-            borderColor: colors.cardStroke,
-          },
-        ]}
+        style={[styles.fill, { borderTopWidth: 1, borderColor: colors.cardStroke }]}
       />
-      <View style={styles.row}>
+      <View style={[styles.row, { paddingBottom: Math.max(insets.bottom, 10) }]}>
         {items.map((item) => (
           <TabItem
             key={item.key}
@@ -170,17 +159,18 @@ function TabItem({ item, active, onPress }) {
 const styles = StyleSheet.create({
   wrap: {
     overflow: 'hidden',
-    borderRadius: radiusTokens.pill,
-    marginHorizontal: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     ...shadows.card,
   },
-  floating: { marginBottom: 16 },
+  floating: { marginBottom: 0 },
   fill: { ...StyleSheet.absoluteFillObject },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 10,
+    paddingTop: 10,
+    paddingBottom: 10,
     paddingHorizontal: 8,
   },
   itemOuter: { flex: 1 },

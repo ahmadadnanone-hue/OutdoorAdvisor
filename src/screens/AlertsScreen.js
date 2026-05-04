@@ -308,7 +308,7 @@ export default function AlertsScreen() {
 
   /* ---------- Thresholds Tab ---------- */
   const renderThresholds = () => (
-    <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]} showsVerticalScrollIndicator={false}>
       <Text style={styles.sectionDesc}>Set the levels at which you want to receive alerts. Values are saved automatically.</Text>
       {[
         { key: 'aqiAlert',  label: 'AQI Alert Level',   range: '50 - 500', min: 50,  max: 500, step: 10, trackColor: dc.accentRed },
@@ -356,7 +356,7 @@ export default function AlertsScreen() {
     ];
 
     return (
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]} showsVerticalScrollIndicator={false}>
         {!isPremium && (
           <GlassCard tintColor={dc.infoGlass} borderColor={dc.infoStroke} style={styles.premiumBanner} contentStyle={styles.premiumBannerContent}>
             <Text style={styles.premiumBannerTitle}>Premium unlocks higher-value alerts</Text>
@@ -486,7 +486,7 @@ export default function AlertsScreen() {
     const disabledKeys = ALL_SECTION_KEYS.filter((k) => !enabledKeys.includes(k));
 
     return (
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]} showsVerticalScrollIndicator={false}>
         <Text style={styles.groupLabel}>Measurement Units</Text>
         <Text style={styles.sectionDesc}>Choose how temperature and precipitation are shown across the app.</Text>
         <GlassCard contentStyle={styles.themePickerContent}>

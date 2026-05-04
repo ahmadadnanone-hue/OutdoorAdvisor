@@ -258,7 +258,7 @@ export default function HomeScreen({ navigation, route }) {
           style={styles.scroll}
           contentContainerStyle={[
             styles.content,
-            { paddingTop: Math.max(insets.top, 12), paddingBottom: 24 },
+            { paddingTop: Math.max(insets.top, 12), paddingBottom: insets.bottom + 90 },
           ]}
           showsVerticalScrollIndicator={false}
           refreshControl={Platform.OS !== 'web' ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} /> : undefined}

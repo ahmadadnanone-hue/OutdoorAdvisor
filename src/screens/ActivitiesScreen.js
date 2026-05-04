@@ -359,7 +359,7 @@ export default function ActivitiesScreen() {
           keyExtractor={(item) => item.id}
           numColumns={2}
           columnWrapperStyle={styles.row}
-          contentContainerStyle={styles.grid}
+          contentContainerStyle={[styles.grid, { paddingBottom: insets.bottom + 90 }]}
           showsVerticalScrollIndicator={false}
         />
 

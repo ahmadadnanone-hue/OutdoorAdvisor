@@ -88,7 +88,7 @@ function GlassNavBar({ state, navigation, onRouteChange }) {
       pointerEvents="box-none"
       style={[
         styles.tabBarShell,
-        { paddingBottom: Math.max(insets.bottom - 2, 6) },
+        { paddingBottom: 0 },
       ]}
     >
       <GlassTabBar
