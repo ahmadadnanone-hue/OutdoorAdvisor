@@ -284,6 +284,7 @@ export default function HomeScreen({ navigation, route }) {
             fetchedAt={synthesisFetchedAt}
             isPremium={isPremium}
             onRefresh={() => refreshSynthesis(true)}
+            decision={decision}
           />
 
           <AlertBanner alerts={alerts} />

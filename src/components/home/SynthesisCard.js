@@ -22,6 +22,8 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 // ─── Severity helpers ─────────────────────────────────────────────────────────
+const SEVERITY_RANK = { go: 0, caution: 1, danger: 2 };
+
 function severityToStatus(severity) {
   if (severity === 'danger')  return 'danger';
   if (severity === 'caution') return 'caution';
@@ -32,6 +34,18 @@ function severityIcon(severity) {
   if (severity === 'danger')  return ICON.danger;
   if (severity === 'caution') return ICON.warning;
   return ICON.success;
+}
+
+// Map device decision label → synthesis severity tier
+function decisionLabelToSeverity(label) {
+  if (label === 'Better to limit exposure') return 'danger';
+  if (label === 'Go with care') return 'caution';
+  return 'go';
+}
+
+// Return whichever severity is more conservative
+function maxSeverity(a, b) {
+  return SEVERITY_RANK[a] >= SEVERITY_RANK[b] ? a : b;
 }
 
 function ageLabel(fetchedAt) {
@@ -59,6 +73,7 @@ export default function SynthesisCard({
   fetchedAt,
   isPremium,
   onRefresh,
+  decision,
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -67,13 +82,28 @@ export default function SynthesisCard({
     setExpanded((v) => !v);
   }, []);
 
-  // Derive display values
-  const severity = synthesis?.severity ?? 'go';
-  const status   = severityToStatus(severity);
-  const s        = statusColor(status);
-  const icon     = severityIcon(severity);
+  // Clamp synthesis severity up to device decision so the brief never shows
+  // a more optimistic verdict than the device's own AQI/weather data suggests
+  // (server uses Google UAQI; device uses AQICN — different scales)
+  const synthSeverity  = synthesis?.severity ?? 'go';
+  const deviceSeverity = decisionLabelToSeverity(decision?.label);
+  const severity       = maxSeverity(synthSeverity, deviceSeverity);
+  const clamped        = severity !== synthSeverity;
 
-  const headline = synthesis?.headline ?? (loading ? null : 'Gathering live conditions…');
+  const status = severityToStatus(severity);
+  const s      = statusColor(status);
+  const icon   = severityIcon(severity);
+
+  // If we had to clamp up, the synthesis headline is misleading — replace it
+  const headline = (() => {
+    if (!synthesis?.headline) return loading ? null : 'Gathering live conditions…';
+    if (clamped) {
+      return severity === 'danger'
+        ? 'Difficult conditions — plan outdoor exposure carefully.'
+        : 'Some caution needed before heading outside.';
+    }
+    return synthesis.headline;
+  })();
   const summary  = synthesis?.summary  ?? null;
   const actions  = synthesis?.actions  ?? [];
   const window   = synthesis?.window   ?? null;
