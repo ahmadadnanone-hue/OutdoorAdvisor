@@ -25,6 +25,7 @@ function openInApp(url) {
 
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
+import { useLocationContext } from '../context/LocationContext';
 import { TRAVEL_ROUTES } from '../data/cities';
 import { fetchWeatherForLocation } from '../hooks/useWeather';
 import { fetchAqiForLocation } from '../hooks/useAQI';
@@ -151,6 +152,44 @@ function findRelevantPmdAlerts(route, alerts) {
     const text = String(alert || '').toLowerCase();
     return keywords.some((keyword) => text.includes(keyword));
   });
+}
+
+function normalizeText(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isNdmaImportant(advisory) {
+  return advisory?.important || advisory?.level === 'Extreme' || advisory?.level === 'Severe';
+}
+
+function ndmaTone(advisory) {
+  if (advisory?.level === 'Extreme') return 'danger';
+  if (advisory?.level === 'Severe' || advisory?.level === 'Moderate') return 'caution';
+  return 'ok';
+}
+
+function advisoryMatchesPinnedArea(advisory, city, region) {
+  const cityText = normalizeText(city);
+  const regionText = normalizeText(region);
+  if (!cityText && !regionText) return false;
+  const regions = advisory?.regions || [];
+  return regions.some((item) => {
+    const value = normalizeText(item);
+    if (!value || value === 'pakistan') return false;
+    return (
+      (cityText && (cityText.includes(value) || value.includes(cityText))) ||
+      (regionText && (regionText.includes(value) || value.includes(regionText)))
+    );
+  });
+}
+
+function formatNdmaDate(date) {
+  if (!date) return null;
+  try {
+    return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+  } catch {
+    return date;
+  }
 }
 
 function getRouteSourceSummary(route, advisory, matchedAlerts) {
@@ -510,6 +549,7 @@ export default function TravelScreen({ route }) {
     resetTravelSections,
   } = useSettings();
   const { isPremium } = useAuth();
+  const { city: pinnedCity, region: pinnedRegion } = useLocationContext();
   const [expandedMotorway, setExpandedMotorway] = useState(null);
   const [stopData, setStopData] = useState({});
   const fetchingRef = useRef({});
@@ -529,6 +569,10 @@ export default function TravelScreen({ route }) {
   const [pmdLoading, setPmdLoading] = useState(true);
   const [pmdBlocked, setPmdBlocked] = useState(false);
   const [pmdAlertsExpanded, setPmdAlertsExpanded] = useState(false);
+  const [ndmaAdvisories, setNdmaAdvisories] = useState([]);
+  const [ndmaLoading, setNdmaLoading] = useState(true);
+  const [ndmaError, setNdmaError] = useState(false);
+  const [ndmaExpanded, setNdmaExpanded] = useState(false);
   const [travelCustomizeExpanded, setTravelCustomizeExpanded] = useState(false);
   const [closureModalVisible, setClosureModalVisible] = useState(false);
   const [majorRoutesExpanded, setMajorRoutesExpanded] = useState(false);
@@ -587,11 +631,28 @@ export default function TravelScreen({ route }) {
       }
     })();
 
+    (async () => {
+      try {
+        const query = pinnedCity ? `?limit=8&location=${encodeURIComponent(pinnedCity)}` : '?limit=8';
+        const json = await fetchApiJson(`/api/ndma${query}`);
+        if (!nhmpCancelRef.current && json.success) {
+          setNdmaAdvisories(Array.isArray(json.advisories) ? json.advisories : []);
+          setNdmaError(false);
+        } else if (!nhmpCancelRef.current) {
+          setNdmaError(true);
+        }
+      } catch {
+        if (!nhmpCancelRef.current) setNdmaError(true);
+      } finally {
+        if (!nhmpCancelRef.current) setNdmaLoading(false);
+      }
+    })();
+
     return () => {
       nhmpCancelRef.current = true;
       clearInterval(nhmpInterval);
     };
-  }, [loadNhmp]);
+  }, [loadNhmp, pinnedCity]);
 
   // Notifications for closures, fog, and PMD alerts are pushed server-side
   // via /api/push?action=cron (sendMotorwayClosureAlerts + sendPmdCriticalAlerts
@@ -655,6 +716,9 @@ export default function TravelScreen({ route }) {
 
   const activeAlerts = nhmpData.filter((a) => a.severity !== 'clear');
   const clearRoutes = nhmpData.filter((a) => a.severity === 'clear');
+  const importantNdma = ndmaAdvisories.filter(isNdmaImportant);
+  const localNdma = importantNdma.filter((item) => advisoryMatchesPinnedArea(item, pinnedCity, pinnedRegion));
+  const nationalNdma = importantNdma.filter((item) => !localNdma.some((local) => local.key === item.key));
   const travelSummary = getTravelRiskSummary({ nhmpData, pmdAlerts });
 
   const focusRoute =
@@ -676,6 +740,10 @@ export default function TravelScreen({ route }) {
     clearRouteCount: clearRoutes.length,
     pmdAlertCount: pmdAlerts.length,
     pmdAlerts: pmdAlerts.slice(0, 3),
+    ndmaAdvisoryCount: importantNdma.length,
+    ndmaLocalAdvisories: localNdma.slice(0, 2).map((item) => ({
+      title: item.title, level: item.level, hazard: item.hazard, regions: item.regions,
+    })),
     focusRoute: focusRoute ? {
       id: focusRoute.id, name: focusRoute.name, kind: focusRoute.kind,
       stops: focusRouteStops.slice(0, 4).map((stop) => ({
@@ -683,22 +751,23 @@ export default function TravelScreen({ route }) {
         humidity: stop.humidity, weatherLabel: getWeatherDescription(stop.weatherCode).description,
       })),
     } : null,
-  }), [travelSummary.label, activeAlerts, clearRoutes.length, pmdAlerts, focusRoute, focusRouteStops]);
+  }), [travelSummary.label, activeAlerts, clearRoutes.length, pmdAlerts, importantNdma.length, localNdma, focusRoute, focusRouteStops]);
 
   const travelAiSignature = useMemo(() => [
     travelSummary.label,
     activeAlerts.map((item) => `${item.severity}:${item.route || item.status}`).join('|'),
     clearRoutes.length,
     pmdAlerts.slice(0, 3).join('|'),
+    importantNdma.slice(0, 3).map((item) => `${item.key}:${item.level}`).join('|'),
     focusRoute?.id || 'all',
     focusRouteStops.map((stop) => `${stop.name}:${stop.temp}:${stop.aqi}:${stop.weatherCode}`).join('|'),
-  ].join('||'), [travelSummary.label, activeAlerts, clearRoutes.length, pmdAlerts, focusRoute?.id, focusRouteStops]);
+  ].join('||'), [travelSummary.label, activeAlerts, clearRoutes.length, pmdAlerts, importantNdma, focusRoute?.id, focusRouteStops]);
 
   const { data: travelAiBriefing, loading: travelAiLoading } = useAiBriefing({
     kind: 'travel',
     signature: travelAiSignature,
     payload: travelAiPayload,
-    enabled: isPremium && (nhmpData.length > 0 || pmdAlerts.length > 0),
+    enabled: isPremium && (nhmpData.length > 0 || pmdAlerts.length > 0 || importantNdma.length > 0),
   });
 
   const sortedRoutes = useMemo(() =>
@@ -723,6 +792,13 @@ export default function TravelScreen({ route }) {
     : pmdAlerts.length > 0 ? 'caution'
     : 'ok';
 
+  const ndmaStatus =
+    ndmaLoading ? 'unknown'
+    : ndmaError ? 'unknown'
+    : localNdma.some((item) => ndmaTone(item) === 'danger') ? 'danger'
+    : localNdma.length > 0 || importantNdma.length > 0 ? 'caution'
+    : 'ok';
+
   const nhmpTimestamp = nhmpTime
     ? nhmpStale
       ? `Last known: ${new Date(nhmpTime).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}, ${new Date(nhmpTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
@@ -735,6 +811,7 @@ export default function TravelScreen({ route }) {
     if (key === 'sources') {
       const nhmpDot = nhmpStatus === 'danger' ? dc.accentRed : nhmpStatus === 'caution' ? dc.accentYellow : nhmpStatus === 'ok' ? dc.accentGreen : dc.textMuted;
       const pmdDot  = pmdStatus  === 'danger' ? dc.accentRed : pmdStatus  === 'caution' ? dc.accentYellow : pmdStatus  === 'ok' ? dc.accentGreen : dc.textMuted;
+      const ndmaDot = ndmaStatus === 'danger' ? dc.accentRed : ndmaStatus === 'caution' ? dc.accentYellow : ndmaStatus === 'ok' ? dc.accentGreen : dc.textMuted;
       return (
         <GlassCard style={styles.sectionCard} contentStyle={styles.sectionContent}>
           <Text style={styles.sectionEyebrow}>OFFICIAL SOURCES</Text>
@@ -787,6 +864,33 @@ export default function TravelScreen({ route }) {
             </View>
           </TouchableOpacity>
 
+          <View style={styles.officialSourceDivider} />
+
+          {/* NDMA row */}
+          <TouchableOpacity
+            style={styles.officialSourceRow}
+            onPress={() => openInApp('https://www.ndma.gov.pk/advisories')}
+            activeOpacity={0.75}
+          >
+            <View style={[styles.officialSourceDot, { backgroundColor: ndmaDot }]} />
+            <View style={styles.officialSourceInfo}>
+              <Text style={styles.officialSourceName}>NDMA</Text>
+              <Text style={styles.officialSourceDetail}>
+                {ndmaLoading ? 'Loading…'
+                  : ndmaError ? 'Check NDMA directly'
+                  : localNdma.length > 0
+                    ? `${localNdma.length} advisory${localNdma.length > 1 ? 'ies' : ''} for ${pinnedCity || 'your area'}`
+                    : importantNdma.length > 0
+                      ? `${importantNdma.length} national hazard watch item${importantNdma.length > 1 ? 's' : ''}`
+                      : 'No major national hazard advisory'}
+              </Text>
+            </View>
+            <View style={styles.officialSourceLink}>
+              <Text style={styles.officialSourceLinkText}>Advisories</Text>
+              <Icon name="open-outline" size={11} color={dc.accentCyan} />
+            </View>
+          </TouchableOpacity>
+
           {/* PMD quick-links row */}
           <View style={styles.officialLinksRow}>
             <TouchableOpacity
@@ -814,6 +918,65 @@ export default function TravelScreen({ route }) {
               <Text style={styles.officialLinkBtnText}>Fog Update</Text>
             </TouchableOpacity>
           </View>
+
+          {/* NDMA active advisories inline */}
+          {importantNdma.length > 0 && (
+            <TouchableOpacity
+              style={[styles.officialAlertsToggle, { borderTopColor: dc.cardStrokeSoft }]}
+              onPress={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setNdmaExpanded((v) => !v);
+              }}
+              activeOpacity={0.8}
+            >
+              <Icon name="shield-checkmark-outline" size={14} color={localNdma.length ? dc.accentRed : dc.accentYellow} />
+              <Text style={[styles.officialAlertsToggleText, { color: localNdma.length ? dc.accentRed : dc.accentYellow }]}>
+                {localNdma.length ? `${localNdma.length} NDMA alert${localNdma.length > 1 ? 's' : ''} for your area` : `${importantNdma.length} NDMA national watch item${importantNdma.length > 1 ? 's' : ''}`}
+              </Text>
+              <Icon name={ndmaExpanded ? ICON.chevronUp : ICON.chevronDown} size={13} color={dc.textMuted} style={{ marginLeft: 'auto' }} />
+            </TouchableOpacity>
+          )}
+          {ndmaExpanded && importantNdma.length > 0 && (
+            <TouchableOpacity
+              style={styles.ndmaAlertDetails}
+              onPress={() => openInApp('https://www.ndma.gov.pk/advisories')}
+              activeOpacity={0.8}
+            >
+              {localNdma.length > 0 && (
+                <>
+                  <Text style={styles.ndmaGroupLabel}>FOR YOUR AREA</Text>
+                  {localNdma.slice(0, 3).map((item) => (
+                    <View key={item.key} style={styles.ndmaAlertItem}>
+                      <Text style={[styles.ndmaLevel, { color: ndmaTone(item) === 'danger' ? dc.accentRed : dc.accentYellow }]}>
+                        {item.level} · {item.hazard}
+                      </Text>
+                      <Text style={styles.ndmaTitle}>{item.title}</Text>
+                      <Text style={styles.ndmaMeta}>
+                        {[formatNdmaDate(item.date), (item.regions || []).slice(0, 4).join(', ')].filter(Boolean).join(' · ')}
+                      </Text>
+                    </View>
+                  ))}
+                </>
+              )}
+              {nationalNdma.length > 0 && (
+                <>
+                  <Text style={[styles.ndmaGroupLabel, localNdma.length && { marginTop: 10 }]}>NATIONAL WATCH</Text>
+                  {nationalNdma.slice(0, 3).map((item) => (
+                    <View key={item.key} style={styles.ndmaAlertItem}>
+                      <Text style={[styles.ndmaLevel, { color: ndmaTone(item) === 'danger' ? dc.accentRed : dc.accentYellow }]}>
+                        {item.level} · {item.hazard}
+                      </Text>
+                      <Text style={styles.ndmaTitle}>{item.title}</Text>
+                      <Text style={styles.ndmaMeta}>
+                        {[formatNdmaDate(item.date), (item.regions || []).slice(0, 4).join(', ')].filter(Boolean).join(' · ')}
+                      </Text>
+                    </View>
+                  ))}
+                </>
+              )}
+              <Text style={styles.advisoryHint}>Tap for official NDMA advisory documents</Text>
+            </TouchableOpacity>
+          )}
 
           {/* PMD active alerts inline */}
           {pmdAlerts.length > 0 && (
@@ -1354,6 +1517,13 @@ const styles = StyleSheet.create({
   pmdAlertSubtitle: { fontSize: 12, color: dc.textSecondary, marginTop: 2 },
   pmdAlertDetails: { backgroundColor: dc.dangerGlass, borderRadius: 12, padding: 12, marginTop: 4 },
   pmdAlertItem: { fontSize: 12, color: dc.textSecondary, lineHeight: 17, marginBottom: 4 },
+
+  ndmaAlertDetails: { backgroundColor: dc.warningGlass, borderRadius: 12, padding: 12, marginTop: 4, borderWidth: 1, borderColor: dc.warningStroke },
+  ndmaGroupLabel: { fontSize: 10, fontWeight: '800', color: dc.textMuted, letterSpacing: 1.2, marginBottom: 8 },
+  ndmaAlertItem: { paddingBottom: 10, marginBottom: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: dc.cardStrokeSoft },
+  ndmaLevel: { fontSize: 10, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 3 },
+  ndmaTitle: { fontSize: 13, fontWeight: '700', color: dc.textPrimary, lineHeight: 18 },
+  ndmaMeta: { fontSize: 11, color: dc.textMuted, marginTop: 3, lineHeight: 15 },
 
   pmdCityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 },
   pmdCityCard: { borderWidth: 1, borderRadius: 14, padding: 12, width: '48%', minWidth: 140 },
