@@ -364,34 +364,36 @@ function synthesisFallback(signals, locationName, pollenLabel) {
   const isRaining = weatherCode != null && RAIN_CODES.includes(weatherCode);
   const aqiNum = aqi ?? 0;
   const heatVal = feelsLike ?? temp ?? null;
-  const isExtremeHeat = heatVal != null && heatVal >= 45;
-  const isHot        = heatVal != null && heatVal >= 38;
+  const isExtremeHeat = heatVal != null && heatVal >= 42; // matches prompt: danger feels≥42°C
+  const isHot         = heatVal != null && heatVal >= 35; // matches prompt: caution feels 35-41°C
   const hasExtreme = capAlerts?.some((a) => a.severity === 'Extreme' || a.severity === 'Severe');
   const hasMod = capAlerts?.some((a) => a.severity === 'Moderate');
 
-  const severity = aqiNum > 200 || hasExtreme || isExtremeHeat ? 'danger'
-    : aqiNum > 100 || hasMod || isRaining || isHot ? 'caution'
+  // Thresholds match buildSynthesisPrompt severity rules exactly
+  const severity = aqiNum > 170 || hasExtreme || isExtremeHeat ? 'danger'
+    : aqiNum > 80 || hasMod || isRaining || isHot ? 'caution'
     : 'go';
 
   const headline = isExtremeHeat
     ? `Dangerous heat at ${Math.round(heatVal)}°C — stay indoors if possible.`
-    : isHot && severity === 'caution'
-    ? `Hot at ${Math.round(heatVal)}°C — avoid midday and stay hydrated.`
+    : isHot && severity !== 'go'
+    ? `Warm at ${Math.round(heatVal)}°C — avoid midday and stay hydrated.`
     : severity === 'danger'
     ? 'Conditions are difficult — plan outdoor exposure carefully.'
     : severity === 'caution'
     ? 'Some caution needed before heading outside.'
     : 'Conditions look workable for most outdoor plans today.';
 
-  const aqiNote = aqiNum > 150 ? `AQI is high at ${aqiNum} — limit extended exposure.`
-    : aqiNum > 100 ? `AQI ${aqiNum} is moderate — sensitive groups take care.`
-    : aqiNum > 0  ? `Air quality is good at AQI ${aqiNum}.`
+  // Qualitative only — avoids contradicting the live card which uses a different AQI source (AQICN vs Google UAQI)
+  const aqiNote = aqiNum > 170 ? 'Air quality is very poor — limit outdoor exposure.'
+    : aqiNum > 80  ? 'Air quality is moderate — sensitive groups should take care.'
+    : aqiNum > 0   ? 'Air quality is acceptable right now.'
     : '';
 
   const weatherNote = isRaining
     ? 'Rain is active — carry gear and add road margin.'
     : isExtremeHeat ? `Extreme heat at ${Math.round(heatVal)}°C. Avoid outdoor activity until evening.`
-    : isHot ? `It feels like ${Math.round(heatVal)}°C — the heat is the main risk right now.`
+    : isHot ? `It feels like ${Math.round(heatVal)}°C — heat is the main risk right now.`
     : temp != null ? `It feels like ${Math.round(feelsLike ?? temp)}°C outside.`
     : 'Check the live conditions below.';
 
@@ -399,7 +401,8 @@ function synthesisFallback(signals, locationName, pollenLabel) {
     isExtremeHeat ? 'Stay indoors during 10 AM – 6 PM' : null,
     isHot && !isExtremeHeat ? 'Avoid 11 AM – 4 PM peak heat' : null,
     isHot ? 'Drink water every 20–30 minutes' : null,
-    aqiNum > 150 ? 'Wear N95 mask outdoors' : null,
+    aqiNum > 170 ? 'Wear N95 mask outdoors' : null,
+    aqiNum > 80 && aqiNum <= 170 ? 'Sensitive groups limit extended outdoor time' : null,
     isRaining ? 'Carry rain gear and drive carefully' : null,
     hasExtreme ? 'Review the PMD alert details below' : null,
     !isHot && !isRaining && severity === 'go' ? 'Morning or evening slots are ideal' : null,

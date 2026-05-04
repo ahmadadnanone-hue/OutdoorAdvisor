@@ -372,6 +372,7 @@ const TRAVEL_SECTION_META = {
 };
 
 const ALL_TRAVEL_SECTION_KEYS = Object.keys(TRAVEL_SECTION_META);
+const VALID_TRAVEL_SECTION_KEYS = new Set(ALL_TRAVEL_SECTION_KEYS);
 
 function TouristStationsCard() {
   const [expanded, setExpanded] = useState(false);
@@ -531,6 +532,10 @@ export default function TravelScreen({ route }) {
   const [travelCustomizeExpanded, setTravelCustomizeExpanded] = useState(false);
   const [closureModalVisible, setClosureModalVisible] = useState(false);
   const [majorRoutesExpanded, setMajorRoutesExpanded] = useState(false);
+  const safeTravelSections = useMemo(
+    () => (travelSections || []).filter((key) => VALID_TRAVEL_SECTION_KEYS.has(key)),
+    [travelSections]
+  );
 
   const loadNhmp = useCallback(async ({ silent = false } = {}) => {
     if (!silent && nhmpData.length > 0) setNhmpRefreshing(true);
@@ -724,7 +729,7 @@ export default function TravelScreen({ route }) {
       : `Updated ${new Date(nhmpTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
     : null;
 
-  const disabledTravelSections = ALL_TRAVEL_SECTION_KEYS.filter((key) => !travelSections.includes(key));
+  const disabledTravelSections = ALL_TRAVEL_SECTION_KEYS.filter((key) => !safeTravelSections.includes(key));
 
   const renderTravelSection = useCallback((key) => {
     if (key === 'sources') {
@@ -1099,6 +1104,7 @@ export default function TravelScreen({ route }) {
     travelAiBriefing,
     travelAiLoading,
     majorRoutesExpanded,
+    safeTravelSections,
   ]);
 
   return (
@@ -1134,7 +1140,7 @@ export default function TravelScreen({ route }) {
             }}
           />
 
-          {travelSections.map((key) => (
+          {safeTravelSections.map((key) => (
             <React.Fragment key={key}>
               {renderTravelSection(key)}
             </React.Fragment>
@@ -1170,10 +1176,10 @@ export default function TravelScreen({ route }) {
                   </TouchableOpacity>
                 </View>
 
-                {travelSections.map((key, index) => {
+                {safeTravelSections.map((key, index) => {
                   const meta = TRAVEL_SECTION_META[key];
                   const isFirst = index === 0;
-                  const isLast = index === travelSections.length - 1;
+                  const isLast = index === safeTravelSections.length - 1;
                   return (
                     <GlassCard key={key} style={styles.travelSectionItemCard} contentStyle={styles.travelSectionItemContent}>
                       <View style={styles.travelSectionIconWrap}>

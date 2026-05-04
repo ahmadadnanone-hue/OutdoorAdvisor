@@ -1,6 +1,6 @@
 # OutdoorAdvisor Notification Architecture
 
-Last updated: 2026-04-29
+Last updated: 2026-05-01
 
 ## Goal
 
@@ -8,12 +8,12 @@ OutdoorAdvisor must deliver high-value outdoor, weather, AQI, and travel alerts 
 
 ## Current Notification Types
 
-- Daily Outdoor Advisory: calm morning guidance on AQI, heat, rain, and road signals before the user leaves.
+- Local Outdoor Summaries: three daily advisory pushes (morning, afternoon, evening) based on the user's saved pin, AQI, WeatherKit-first weather, rain risk, heat, and wind.
 - Smart Movement Nudges: Apple Health steps plus AQI/weather to suggest a walk or safer indoor alternative.
 - PMD Severe/Extreme Alerts: official CAP/RSS weather warnings.
 - Severe AQI Warnings: unhealthy air-quality threshold alerts.
 - Smog Season Alerts: seasonal/high-risk smog conditions.
-- Rain Alerts: active rain or rain risk affecting plans and driving.
+- Rain Alerts: active rain or near-term rain risk affecting plans and driving.
 - Thunderstorm Alerts: lightning/severe storm risk.
 - Wind Alerts: gusty conditions affecting activity or travel.
 - High Pollen Alerts: allergy-heavy days.
@@ -107,8 +107,12 @@ Default behavior: once per day unless user explicitly asks for more.
   - initial PMD critical alert sender,
   - severe AQI threshold sender,
   - WeatherKit-first wind, thunderstorm, and rain checks with Open-Meteo fallback,
-  - morning advisory sender,
+  - WeatherKit/Open-Meteo near-term rain-risk checks,
+  - morning, afternoon, and evening local outdoor summary sender,
   - dedupe and daily non-critical cap state.
+
+- `src/context/LocationContext.js`
+  - refreshes the native push registration after device-location refreshes and manual pin changes so the server uses the latest exact lat/lon for closed-app pushes.
 
 - `src/services/nativeNotificationInbox.js`
   - listens for native Expo pushes received while the app is foregrounded,
@@ -139,12 +143,12 @@ Default behavior: once per day unless user explicitly asks for more.
 7. Confirm the GitHub Actions scheduler runs `/api/push?action=cron` and does not require the app to open.
 8. Tap a remote push and confirm it appears in the Home Notification Center after the app opens.
 
+Latest production check on 2026-05-01: authenticated `/api/push?action=cron&mode=codex-three-summary-check` returned `success: true`, `devices: 10`, `sent: 9`, with result `{ type: "outdoor-summary", sent: 9 }`.
+
 ## Next Hardening Steps
 
-1. Add NHMP route-closure and motorway-fog checks to the server alert engine.
-2. Add heat, pollen, smog season, NHMP closure, and motorway-fog checks to the server alert engine.
-3. Add per-user route/corridor preferences for travel alerts.
-4. Store notification inbox events server-side for cross-device history.
-5. Add receipt-based automatic token cleanup for permanent Expo/APNs failures.
-6. Add a delivery dashboard: active tokens, sends, failures, last cron run, last PMD alert key.
-7. Decide whether critical travel alerts should be free while premium keeps advanced/custom alerts.
+1. Add heat, pollen, smog season, and motorway-fog checks to the server alert engine.
+2. Add a delivery dashboard: active tokens, sends, failures, last cron run, last summary window sent, last PMD alert key.
+3. Add server-side notification inbox events for cross-device history.
+4. Add receipt-based automatic token cleanup for permanent Expo/APNs failures.
+5. Decide whether critical travel alerts should be free while premium keeps advanced/custom alerts.

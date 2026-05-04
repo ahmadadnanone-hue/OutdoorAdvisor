@@ -34,7 +34,6 @@ const DEFAULT_HOME_SECTIONS = [
 const DEFAULT_TRAVEL_SECTIONS = [
   'sources',
   'nhmp',
-  'pmd',
   'aiInsight',
   'touristLinks',
   'majorRoutes',

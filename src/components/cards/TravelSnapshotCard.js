@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { GlassCard, GlassPill } from '../glass';
 import Icon, { ICON } from '../Icon';
 import { colors, typography, statusColor } from '../../design';

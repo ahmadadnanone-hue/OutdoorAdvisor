@@ -3,8 +3,11 @@ import { kvGetJson, kvSetJson } from './kv.js';
 
 const ALERT_STATE_KEY = 'push:alert-engine:state';
 const PMD_RSS_URL = 'https://cap-sources.s3.amazonaws.com/pk-pmd-en/rss.xml';
-const DAILY_SUMMARY_START_HOUR = 5;
-const DAILY_SUMMARY_END_HOUR = 11;
+const DAILY_SUMMARY_WINDOWS = [
+  { id: 'morning', start: 6, end: 10, label: 'Morning outdoor check' },
+  { id: 'afternoon', start: 12, end: 15, label: 'Afternoon outdoor check' },
+  { id: 'evening', start: 17, end: 21, label: 'Evening outdoor check' },
+];
 const NON_CRITICAL_DAILY_LIMIT = 2;
 
 // WMO codes for weather-based alerts
@@ -39,10 +42,13 @@ export async function runAlertEngine({ mode = 'scheduled' } = {}) {
   const rainResult      = await sendRainAlerts(activeDevices, state);
   if (rainResult)      results.push(rainResult);
 
+  const imminentRainResult = await sendImminentRainAlerts(activeDevices, state);
+  if (imminentRainResult) results.push(imminentRainResult);
+
   const motorwayResult  = await sendMotorwayClosureAlerts(activeDevices, state);
   if (motorwayResult)  results.push(motorwayResult);
 
-  const summaryResult   = await sendMorningSummaries(activeDevices, state);
+  const summaryResult   = await sendOutdoorSummaries(activeDevices, state);
   if (summaryResult)   results.push(summaryResult);
 
   state.lastRunAt = Date.now();
@@ -187,6 +193,47 @@ async function sendRainAlerts(devices, state) {
   return sent ? { type: 'rain', sent } : null;
 }
 
+async function sendImminentRainAlerts(devices, state) {
+  const candidates = devices.filter((d) => {
+    const prefs = d.preferences || {};
+    return prefs.rainAlerts !== false && d.location?.lat != null && d.location?.lon != null;
+  });
+  if (!candidates.length) return null;
+
+  let sent = 0;
+  state.sentImminentRainAlerts = state.sentImminentRainAlerts || {};
+
+  for (const device of candidates) {
+    const wx = await fetchWeatherForAlerts(device.location.lat, device.location.lon);
+    if (!wx || isRaining(wx)) continue;
+
+    const rainSoon = getRainSoonSignal(wx);
+    if (!rainSoon) continue;
+
+    const key = `${device.expoPushToken}:rain-soon:${pakistanDateKey(new Date())}`;
+    if (Date.now() - (state.sentImminentRainAlerts[key] || 0) < 3 * 60 * 60 * 1000) continue;
+    if (!canSendNonCriticalToday(state, device.expoPushToken, pakistanDateKey(new Date()))) continue;
+
+    const city = getDeviceLocationLabel(device);
+    const response = await sendNativePush([device], {
+      id: key,
+      title: `Rain may reach ${city} soon`,
+      body: `Your pin shows ${rainSoon.label}. Finish exposed errands now, keep rain gear close, and recheck before leaving.`,
+      category: 'Weather',
+      source: 'weather-rain-soon',
+      url: 'https://outdooradvisor.app',
+      data: { precipProbability: rainSoon.probability, weatherCode: rainSoon.weatherCode },
+      priority: rainSoon.probability >= 75 ? 'high' : 'normal',
+    });
+
+    sent += response.attempted;
+    state.sentImminentRainAlerts[key] = Date.now();
+    incrementNonCritical(state, device.expoPushToken, pakistanDateKey(new Date()));
+  }
+
+  return sent ? { type: 'rain-soon', sent } : null;
+}
+
 // ─── Personalised copy builders ───────────────────────────────────────────────
 function buildWindCopy(city, speed, gusts, isSevere) {
   if (isSevere) {
@@ -233,7 +280,8 @@ function buildRainCopy(city, isHeavy, precip) {
 
 // ─── Weather fetch: WeatherKit first, Open-Meteo fallback ────────────────────
 // Returns a normalised shape:
-// { windSpeed, windGusts, weatherCode, conditionCode, precipitation, nativeAlerts }
+// { temp, feelsLike, humidity, windSpeed, windGusts, weatherCode, conditionCode,
+//   precipitation, precipitationIntensity, hourly, daily, nativeAlerts }
 async function fetchWeatherForAlerts(lat, lon) {
   const wk = await fetchWeatherKit(lat, lon);
   if (wk) return wk;
@@ -252,12 +300,17 @@ async function fetchWeatherKit(lat, lon) {
     if (!json?.current) return null;
     const c = json.current;
     return {
+      temp:                   c.temp                   ?? null,
+      feelsLike:              c.feelsLike              ?? null,
+      humidity:               c.humidity               ?? null,
       windSpeed:              c.windSpeed              ?? 0,
       windGusts:              c.windGusts              ?? 0,
       weatherCode:            c.weatherCode            ?? 0,
       conditionCode:          c.conditionCode          ?? null,
       precipitation:          null,
       precipitationIntensity: c.precipitationIntensity ?? null,
+      hourly:                 Array.isArray(json.hourly) ? json.hourly.slice(0, 6) : [],
+      daily:                  Array.isArray(json.daily) ? json.daily.slice(0, 2) : [],
       nativeAlerts:           json.alerts              ?? [],
       source:                 'WeatherKit',
     };
@@ -268,18 +321,47 @@ async function fetchWeatherKit(lat, lon) {
 
 async function fetchOpenMeteoNormalised(lat, lon) {
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=weather_code,wind_speed_10m,wind_gusts_10m,precipitation&wind_speed_unit=kmh&forecast_days=1`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_gusts_10m,precipitation&hourly=temperature_2m,weather_code,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,precipitation_sum,precipitation_probability_max&wind_speed_unit=kmh&forecast_days=2&timezone=auto`;
     const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!response.ok) return null;
     const json = await response.json();
     if (!json?.current) return null;
     const c = json.current;
+    const hourlyTimes = json.hourly?.time || [];
+    const hourlyCodes = json.hourly?.weather_code || [];
+    const hourlyTemps = json.hourly?.temperature_2m || [];
+    const hourlyRain  = json.hourly?.precipitation_probability || [];
+    const dailyTimes  = json.daily?.time || [];
+    const dailyCodes  = json.daily?.weather_code || [];
+    const dailyMax    = json.daily?.temperature_2m_max || [];
+    const dailyMin    = json.daily?.temperature_2m_min || [];
+    const dailyUv     = json.daily?.uv_index_max || [];
+    const dailyRain   = json.daily?.precipitation_probability_max || [];
     return {
+      temp:          c.temperature_2m          ?? null,
+      feelsLike:     c.apparent_temperature    ?? null,
+      humidity:      c.relative_humidity_2m    ?? null,
       windSpeed:     c.wind_speed_10m  ?? 0,
       windGusts:     c.wind_gusts_10m  ?? 0,
       weatherCode:   c.weather_code    ?? 0,
       conditionCode: null,
       precipitation: c.precipitation   ?? null,
+      precipitationIntensity: c.precipitation ?? null,
+      hourly: hourlyTimes.slice(0, 6).map((time, index) => ({
+        time,
+        temp: hourlyTemps[index] ?? null,
+        weatherCode: hourlyCodes[index] ?? null,
+        precipProbability: hourlyRain[index] ?? null,
+        conditionCode: null,
+      })),
+      daily: dailyTimes.slice(0, 2).map((date, index) => ({
+        date,
+        maxTemp: dailyMax[index] ?? null,
+        minTemp: dailyMin[index] ?? null,
+        weatherCode: dailyCodes[index] ?? null,
+        precipProbability: dailyRain[index] ?? null,
+        uvIndex: dailyUv[index] ?? null,
+      })),
       nativeAlerts:  [],
       source:        'OpenMeteo',
     };
@@ -327,6 +409,23 @@ function isRaining(wx) {
 function isHeavyRain(wx) {
   if (WK_HEAVY_RAIN_CONDITIONS.has(wx.conditionCode)) return true;
   return HEAVY_RAIN_CODES.has(wx.weatherCode);
+}
+
+function getRainSoonSignal(wx) {
+  const upcoming = (wx.hourly || []).slice(0, 2);
+  const rainy = upcoming.find((hour) => {
+    const probability = Number(hour?.precipProbability ?? 0);
+    const code = hour?.weatherCode;
+    const condition = hour?.conditionCode;
+    return probability >= 60 || RAIN_CODES.has(code) || WK_RAIN_DEFINITE.has(condition) || WK_RAIN_AREA.has(condition);
+  });
+  if (!rainy) return null;
+  const probability = Number(rainy.precipProbability ?? 0);
+  const minutes = rainy.time ? Math.max(15, Math.round((new Date(rainy.time).getTime() - Date.now()) / 60000)) : 60;
+  const label = probability > 0
+    ? `${probability}% rain risk in about ${minutes <= 30 ? '30 minutes' : '1-2 hours'}`
+    : `rain signals in about ${minutes <= 30 ? '30 minutes' : '1-2 hours'}`;
+  return { probability, label, weatherCode: rainy.weatherCode ?? null };
 }
 
 // ─── Motorway closure alerts (premium, per-route subscription) ────────────────
@@ -625,47 +724,58 @@ function buildAqiBody(aqi, city) {
   return `Air quality is unhealthy in ${city} (AQI ${aqi.aqi}).${pm25} Keep outdoor time short, choose lighter activity, and use a mask if you will be out for long.`;
 }
 
-async function sendMorningSummaries(devices, state) {
+async function sendOutdoorSummaries(devices, state) {
   const now = new Date();
-  const hour = hourInPakistan(now);
-  if (hour < DAILY_SUMMARY_START_HOUR || hour >= DAILY_SUMMARY_END_HOUR) return null;
-
   const day = pakistanDateKey(now);
   let sent = 0;
-  const summaries = state.sentDailySummaries || {};
+  const summaries = state.sentOutdoorSummaries || {};
 
-  // Morning summary is exempt from the non-critical daily cap so it always
-  // lands once per device per day. Per-device-per-day dedupe via
-  // `summaries[token] === day` keeps it to one push.
   const candidates = devices.filter((device) => {
     const prefs = device.preferences || {};
     if (prefs.dailySummary === false) return false;
-    if (summaries[device.expoPushToken] === day) return false;
-    return true;
+    return device.location?.lat != null && device.location?.lon != null;
   });
 
   if (!candidates.length) return null;
 
   for (const device of candidates) {
-    const city = device.location?.city || 'your area';
-    const hour = hourInPakistan(new Date());
-    const timeGreeting = hour < 8 ? 'Early morning check' : 'Good morning';
+    const window = getDueSummaryWindow(device, now);
+    if (!window) continue;
+
+    const tokenState = summaries[device.expoPushToken] || {};
+    if (tokenState[window.id] === day) continue;
+
+    const [wx, aqi] = await Promise.all([
+      fetchWeatherForAlerts(device.location.lat, device.location.lon),
+      fetchAqi(device.location.lat, device.location.lon),
+    ]);
+
+    const city = getDeviceLocationLabel(device);
+    const advisory = buildOutdoorSummaryCopy({ city, window, wx, aqi });
+    const notifId = `${device.expoPushToken}:outdoor-summary:${window.id}:${day}`;
     const response = await sendNativePush([device], {
-      id: `${device.expoPushToken}:daily-summary:${day}`,
-      title: `${timeGreeting} - ${city} outdoor advisory`,
-      body: 'Before you head out, recheck AQI, heat, rain, and road signals. Adjust timing or route if any card looks elevated.',
+      id: notifId,
+      title: advisory.title,
+      body: advisory.body,
       category: 'Summary',
-      source: 'daily-summary',
+      source: 'outdoor-summary',
       url: 'https://outdooradvisor.app',
-      data: { day },
+      data: {
+        day,
+        window: window.id,
+        weatherSource: wx?.source || null,
+        aqi: aqi?.aqi ?? null,
+        temp: wx?.temp ?? null,
+      },
       priority: 'normal',
     });
     sent += response.attempted;
-    summaries[device.expoPushToken] = day;
+    summaries[device.expoPushToken] = { ...tokenState, [window.id]: day };
   }
 
+  state.sentOutdoorSummaries = summaries;
   state.sentDailySummaries = summaries;
-  return sent ? { type: 'daily-summary', sent } : null;
+  return sent ? { type: 'outdoor-summary', sent } : null;
 }
 
 async function fetchCriticalPmdAlerts() {
@@ -731,6 +841,23 @@ function incrementNonCritical(state, token, day) {
   };
 }
 
+function getDueSummaryWindow(device, date) {
+  const hour = hourInTimeZone(date, device.timezone || 'Asia/Karachi');
+  return DAILY_SUMMARY_WINDOWS.find((window) => hour >= window.start && hour < window.end) || null;
+}
+
+function hourInTimeZone(date, timeZone) {
+  try {
+    return Number(new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour: 'numeric',
+      hour12: false,
+    }).format(date));
+  } catch {
+    return hourInPakistan(date);
+  }
+}
+
 function hourInPakistan(date) {
   return Number(new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Karachi',
@@ -746,6 +873,60 @@ function pakistanDateKey(date) {
     month: '2-digit',
     day: '2-digit',
   }).format(date);
+}
+
+function getDeviceLocationLabel(device) {
+  const city = device.location?.city;
+  const region = device.location?.region;
+  if (city && region && !String(city).toLowerCase().includes(String(region).toLowerCase())) {
+    return `${city}, ${region}`;
+  }
+  return city || region || 'your pinned area';
+}
+
+function buildOutdoorSummaryCopy({ city, window, wx, aqi }) {
+  const temp = wx?.feelsLike ?? wx?.temp;
+  const wind = wx?.windGusts ?? wx?.windSpeed;
+  const rainSoon = wx ? getRainSoonSignal(wx) : null;
+  const today = wx?.daily?.[0] || null;
+  const aqiValue = aqi?.aqi ?? null;
+
+  const risks = [];
+  if (aqiValue != null && aqiValue >= 170) risks.push(`AQI ${aqiValue} is rough`);
+  else if (aqiValue != null && aqiValue >= 100) risks.push(`AQI ${aqiValue} needs lighter plans`);
+  if (temp != null && temp >= 38) risks.push(`feels near ${Math.round(temp)}C`);
+  if (rainSoon) risks.push(rainSoon.label);
+  else if (today?.precipProbability >= 50) risks.push(`${today.precipProbability}% rain risk today`);
+  if (wind != null && wind >= 45) risks.push(`gusts near ${Math.round(wind)} km/h`);
+
+  const goodWindow = window.id === 'morning'
+    ? 'Use the cooler window early'
+    : window.id === 'afternoon'
+    ? 'Keep outdoor time short this afternoon'
+    : 'Evening is the better window if conditions stay steady';
+
+  const action = risks.length
+    ? `${goodWindow}; ${risks.slice(0, 2).join(' and ')}.`
+    : `${goodWindow}; your pin looks workable for easy outdoor plans.`;
+
+  const condition = wx?.conditionCode ? weatherConditionLabel(wx.conditionCode) : null;
+  const weatherBits = [
+    temp != null ? `feels ${Math.round(temp)}C` : null,
+    condition,
+    aqiValue != null ? `AQI ${aqiValue}` : null,
+  ].filter(Boolean);
+
+  return {
+    title: `${window.label} - ${city}`,
+    body: `${weatherBits.length ? `${weatherBits.join(', ')}. ` : ''}${action}`,
+  };
+}
+
+function weatherConditionLabel(conditionCode) {
+  if (!conditionCode) return null;
+  return String(conditionCode)
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .toLowerCase();
 }
 
 async function loadState() {

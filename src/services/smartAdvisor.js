@@ -9,6 +9,8 @@ import { getNotificationDeliveryState } from './notificationService';
 
 const SMART_STATE_KEY = 'outdooradvisor_smart_advisor_state_v1';
 const WALK_NUDGE_COOLDOWN_MS    = 4 * 60 * 60 * 1000;
+
+let _advisorRunning = false;
 const MORNING_SUMMARY_HOUR_START = 6;
 const MORNING_SUMMARY_HOUR_END   = 10;
 const DAILY_STEP_GOAL            = 5000;
@@ -273,6 +275,16 @@ async function maybeSendDailySummary({ prefs, locationLabel, aqi, weather, state
 }
 
 export async function runSmartAdvisorCheck({ reason = 'manual', promptForHealth = false } = {}) {
+  if (_advisorRunning) return { sent: false, reason: 'already-running' };
+  _advisorRunning = true;
+  try {
+    return await _runSmartAdvisorCheck({ reason, promptForHealth });
+  } finally {
+    _advisorRunning = false;
+  }
+}
+
+async function _runSmartAdvisorCheck({ reason = 'manual', promptForHealth = false } = {}) {
   const prefs = await loadStoredNotifications();
   const locationSnapshot = await loadLocationSnapshot();
   if (!locationSnapshot?.lat || !locationSnapshot?.lon) {

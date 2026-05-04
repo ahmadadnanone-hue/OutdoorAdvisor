@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Platform, StyleSheet, AppState } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Analytics } from '@vercel/analytics/react';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { SettingsProvider } from './src/context/SettingsContext';
@@ -42,7 +43,7 @@ import AlertsScreen from './src/screens/AlertsScreen';
 import { GlassTabBar } from './src/components/glass';
 import Icon, { ICON } from './src/components/Icon';
 import FABMenu from './src/components/FABMenu';
-import { colors as dc } from './src/design';
+import { colors as dc, gradient } from './src/design';
 import { ensureLocalNotificationPermission } from './src/utils/alertNotifications';
 import { getTodayHealthSnapshot, initializeHealthPermissions } from './src/hooks/useHealthData';
 import { registerOutdoorAdvisorBackgroundTask } from './src/services/backgroundTask';
@@ -135,7 +136,7 @@ function AppNavigator() {
 
   return (
     <>
-      <StatusBar style="light" />
+      <StatusBar style="light" translucent backgroundColor="transparent" />
       <NavigationContainer
         theme={{
           dark: isDark,
@@ -171,6 +172,10 @@ function AppNavigator() {
 }
 
 const styles = StyleSheet.create({
+  appRoot: {
+    flex: 1,
+    backgroundColor: dc.bgTop,
+  },
   tabBarShell: {
     backgroundColor: 'transparent',
   },
@@ -201,10 +206,14 @@ export default function App() {
     const root = document.getElementById('root');
 
     document.documentElement.style.backgroundColor = dc.bgTop;
+    document.documentElement.style.backgroundImage = `linear-gradient(160deg, ${gradient.screen.join(', ')})`;
+    document.documentElement.style.backgroundAttachment = 'fixed';
     document.documentElement.style.height = '100dvh';
     document.documentElement.style.minHeight = '100dvh';
     document.documentElement.style.overflow = 'hidden';
     document.body.style.backgroundColor = dc.bgTop;
+    document.body.style.backgroundImage = `linear-gradient(160deg, ${gradient.screen.join(', ')})`;
+    document.body.style.backgroundAttachment = 'fixed';
     document.body.style.margin = '0';
     document.body.style.height = '100dvh';
     document.body.style.minHeight = '100dvh';
@@ -238,9 +247,13 @@ export default function App() {
   }, []);
 
   return (
-    // Root fill: gradient's bottom stop so the home-indicator zone is seamless.
-    // The tab bar shell stays transparent — the gradient shows through cleanly.
-    <View style={{ flex: 1, backgroundColor: dc.bgBottom }}>
+    <View style={styles.appRoot}>
+      <LinearGradient
+        colors={gradient.screen}
+        start={gradient.screenStart}
+        end={gradient.screenEnd}
+        style={StyleSheet.absoluteFill}
+      />
       <SafeAreaProvider>
         <AuthProvider>
           <LocationProvider>

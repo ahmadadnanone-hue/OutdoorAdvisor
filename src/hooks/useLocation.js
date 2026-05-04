@@ -4,6 +4,7 @@ import { CITIES } from '../data/cities';
 import { reverseGeocode } from '../config/googleApi';
 import * as persistentCache from '../utils/persistentCache';
 import { saveLocationSnapshot } from '../utils/locationSnapshot';
+import { registerNativePushToken } from '../services/pushRegistration';
 
 const DEFAULT_CITY = CITIES.find((c) => c.name === 'Lahore');
 const LOCATION_CACHE_NS = 'device_location';
@@ -88,6 +89,7 @@ export default function useLocation() {
       const resolved = { ...nextLocation, city: resolvedCity, source: 'device' };
       persistentCache.set(LOCATION_CACHE_NS, LOCATION_CACHE_KEY, resolved);
       saveLocationSnapshot(resolved).catch(() => {});
+      registerNativePushToken({ prompt: false, locationOverride: resolved }).catch(() => {});
       return resolved;
     } catch (err) {
       const fallback = { lat: DEFAULT_CITY.lat, lon: DEFAULT_CITY.lon, city: DEFAULT_CITY.name, source: 'device' };
@@ -124,6 +126,10 @@ export default function useLocation() {
         city: found.name,
         source: 'manual',
       }).catch(() => {});
+      registerNativePushToken({
+        prompt: false,
+        locationOverride: { ...nextLocation, city: found.name, source: 'manual' },
+      }).catch(() => {});
     }
   }, []);
 
@@ -144,6 +150,10 @@ export default function useLocation() {
       lon,
       city: name || 'Selected',
       source: 'manual',
+    }).catch(() => {});
+    registerNativePushToken({
+      prompt: false,
+      locationOverride: { lat, lon, city: name || 'Selected', source: 'manual' },
     }).catch(() => {});
   }, []);
 

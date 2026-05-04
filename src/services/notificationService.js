@@ -100,19 +100,26 @@ export async function sendSmartNotification(title, body, options = {}) {
     notification.onclick = () => {
       if (options.url) window.open(options.url, '_blank');
     };
+
+    await appendInboxNotification(payload);
   } else {
+    // Pass category in data so the native inbox listener picks it up correctly.
+    // Do NOT call appendInboxNotification here — the addNotificationReceivedListener
+    // in nativeNotificationInbox.js handles that to avoid double-writes.
     await Notifications.scheduleNotificationAsync({
       content: {
         title,
         body,
-        data: options.url ? { url: options.url } : undefined,
+        data: {
+          ...(options.url ? { url: options.url } : {}),
+          category: payload.category,
+        },
         sound: 'default',
       },
       trigger: null,
     });
   }
 
-  await appendInboxNotification(payload);
   await incrementCounter(quota.counter);
   return true;
 }
@@ -136,7 +143,10 @@ export async function scheduleNotification(title, body, secondsFromNow = 0, opti
     content: {
       title,
       body,
-      data: options.url ? { url: options.url } : undefined,
+      data: {
+        ...(options.url ? { url: options.url } : {}),
+        category: options.category || 'Smart',
+      },
       sound: 'default',
     },
     trigger: {
