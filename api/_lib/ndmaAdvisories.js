@@ -196,6 +196,7 @@ function cleanText(value) {
 function cleanTitle(text, date) {
   let title = cleanText(text)
     .replace(/\bView\b/gi, '')
+    .replace(/\bNew\s*[-–—>]+\s*/gi, '')
     .replace(/\(\s*\d{1,2}\s+[A-Za-z]+\s+20\d{2}\s*\)/g, '')
     .replace(/\s+/g, ' ')
     .trim();
