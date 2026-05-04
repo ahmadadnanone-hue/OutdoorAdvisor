@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { derivePremiumState } from '../../src/lib/premium.js';
+import { fetchNdmaAdvisories, summarizeNdmaForBrief } from '../_lib/ndmaAdvisories.js';
 
 function sendJson(res, status, payload) {
   res.status(status).json(payload);
@@ -254,15 +255,17 @@ async function fetchCapSummary() {
   return items.slice(0, 5);
 }
 
-async function fetchSynthesisData(lat, lon, googleApiKey) {
-  const [meteo, aqiRes, alertsRes] = await Promise.allSettled([
+async function fetchSynthesisData(lat, lon, googleApiKey, locationName) {
+  const [meteo, aqiRes, alertsRes, ndmaRes] = await Promise.allSettled([
     fetchOpenMeteo(lat, lon),
     fetchGoogleAqi(lat, lon, googleApiKey),
     fetchCapSummary(),
+    fetchNdmaAdvisories({ limit: 6 }),
   ]);
   const w = meteo.status === 'fulfilled' ? meteo.value : null;
   const a = aqiRes.status === 'fulfilled' ? aqiRes.value : null;
   const alerts = alertsRes.status === 'fulfilled' ? alertsRes.value : [];
+  const ndma = ndmaRes.status === 'fulfilled' ? summarizeNdmaForBrief(ndmaRes.value, locationName) : [];
   const cur = w?.current;
   const hourlyRain = w?.hourly?.precipitation_probability?.slice(0, 3) ?? [];
   const tod = w?.daily;
@@ -278,6 +281,7 @@ async function fetchSynthesisData(lat, lon, googleApiKey) {
     aqi: a?.aqi ?? null,
     pm25: a?.pm25 ?? null,
     capAlerts: alerts,
+    ndmaAlerts: ndma,
     tomorrowMax: tod?.temperature_2m_max?.[1] ?? null,
     tomorrowMin: tod?.temperature_2m_min?.[1] ?? null,
     tomorrowCode: tod?.weather_code?.[1] ?? null,
@@ -289,7 +293,7 @@ async function fetchSynthesisData(lat, lon, googleApiKey) {
 
 function buildSynthesisPrompt(signals, locationName, pollenLabel) {
   const { temp, feelsLike, humidity, weatherLabel, windKph, uvIndex, aqi, pm25,
-          rainNext3h, capAlerts, tomorrowMax, tomorrowMin, tomorrowCode, tomorrowRain } = signals;
+          rainNext3h, capAlerts, ndmaAlerts, tomorrowMax, tomorrowMin, tomorrowCode, tomorrowRain } = signals;
 
   const now = new Date();
   const hour = now.getHours();
@@ -331,6 +335,10 @@ function buildSynthesisPrompt(signals, locationName, pollenLabel) {
     ? capAlerts.map((c) => `[${c.severity}] ${c.title}`).join(' | ')
     : 'No active PMD alerts';
 
+  const ndmaLine = ndmaAlerts?.length
+    ? ndmaAlerts.map((a) => `[${a.level}] ${a.hazard}: ${a.title}`).join(' | ')
+    : 'No matching NDMA advisory';
+
   const tomorrowLine = tomorrowMax != null
     ? `${WMO_LABELS[tomorrowCode] ?? 'Variable'}, ${Math.round(tomorrowMin)}–${Math.round(tomorrowMax)}°C${tomorrowRain > 2 ? `, ${Math.round(tomorrowRain)}mm rain` : ''}`
     : 'Unavailable';
@@ -345,21 +353,22 @@ LOCATION: ${locationName || 'Pakistan'} · ${day}, ${timeCtx}
 WEATHER: ${weatherLine}
 AIR QUALITY: ${aqiLine}${extraLines ? '\n' + extraLines : ''}
 ALERTS: ${alertsLine}
+NDMA: ${ndmaLine}
 TOMORROW: ${tomorrowLine}
 
 JSON schema (all fields required, no extra keys):
 {"severity":"go|caution|danger","headline":"<≤10 words>","summary":"<2 sentences>","actions":["<verb phrase>","<verb phrase>"],"window":"<best time or null>"}
 
 Severity rules (pick worst that applies):
-- "danger": AQI>170, UV≥11, Extreme/Severe alert, thunderstorm, feels≥42°C
-- "caution": AQI 81-170, UV 6-10, active rain, feels 35-41°C, High pollen, Moderate alert
+- "danger": AQI>170, UV≥11, Extreme/Severe PMD or NDMA alert, thunderstorm, feels≥42°C
+- "caution": AQI 81-170, UV 6-10, active rain, feels 35-41°C, High pollen, Moderate PMD/NDMA alert
 - "go": everything else
 Mention the 2 most impactful risks in summary. Tailor actions to the time of day.
 `.trim();
 }
 
 function synthesisFallback(signals, locationName, pollenLabel) {
-  const { aqi, capAlerts, weatherCode, temp, feelsLike } = signals ?? {};
+  const { aqi, capAlerts, ndmaAlerts, weatherCode, temp, feelsLike } = signals ?? {};
   const RAIN_CODES = [51,53,55,61,63,65,80,81,82,95,96,99];
   const isRaining = weatherCode != null && RAIN_CODES.includes(weatherCode);
   const aqiNum = aqi ?? 0;
@@ -368,10 +377,12 @@ function synthesisFallback(signals, locationName, pollenLabel) {
   const isHot         = heatVal != null && heatVal >= 35; // matches prompt: caution feels 35-41°C
   const hasExtreme = capAlerts?.some((a) => a.severity === 'Extreme' || a.severity === 'Severe');
   const hasMod = capAlerts?.some((a) => a.severity === 'Moderate');
+  const hasNdmaExtreme = ndmaAlerts?.some((a) => a.level === 'Extreme' || a.level === 'Severe');
+  const hasNdmaMod = ndmaAlerts?.some((a) => a.level === 'Moderate');
 
   // Thresholds match buildSynthesisPrompt severity rules exactly
-  const severity = aqiNum > 170 || hasExtreme || isExtremeHeat ? 'danger'
-    : aqiNum > 80 || hasMod || isRaining || isHot ? 'caution'
+  const severity = aqiNum > 170 || hasExtreme || hasNdmaExtreme || isExtremeHeat ? 'danger'
+    : aqiNum > 80 || hasMod || hasNdmaMod || isRaining || isHot ? 'caution'
     : 'go';
 
   const headline = isExtremeHeat
@@ -396,6 +407,7 @@ function synthesisFallback(signals, locationName, pollenLabel) {
     : isHot ? `It feels like ${Math.round(heatVal)}°C — heat is the main risk right now.`
     : temp != null ? `It feels like ${Math.round(feelsLike ?? temp)}°C outside.`
     : 'Check the live conditions below.';
+  const ndmaNote = hasNdmaExtreme ? `NDMA also flags ${ndmaAlerts[0].hazard.toLowerCase()} risk.` : '';
 
   const actions = [
     isExtremeHeat ? 'Stay indoors during 10 AM – 6 PM' : null,
@@ -405,6 +417,7 @@ function synthesisFallback(signals, locationName, pollenLabel) {
     aqiNum > 80 && aqiNum <= 170 ? 'Sensitive groups limit extended outdoor time' : null,
     isRaining ? 'Carry rain gear and drive carefully' : null,
     hasExtreme ? 'Review the PMD alert details below' : null,
+    hasNdmaExtreme ? 'Review the NDMA advisory before travel' : null,
     !isHot && !isRaining && severity === 'go' ? 'Morning or evening slots are ideal' : null,
   ].filter(Boolean).slice(0, 3);
 
@@ -416,7 +429,7 @@ function synthesisFallback(signals, locationName, pollenLabel) {
     provider: 'fallback',
     severity,
     headline,
-    summary: [aqiNote, weatherNote].filter(Boolean).join(' ') || `${locationName || 'Your area'} — check the conditions below.`,
+    summary: [aqiNote, weatherNote, ndmaNote].filter(Boolean).join(' ') || `${locationName || 'Your area'} — check the conditions below.`,
     actions: actions.length ? actions : ['Review the condition cards below'],
     window,
   };
@@ -540,7 +553,7 @@ export default async function handler(req, res) {
 
     res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=3600');
 
-    const signals = await fetchSynthesisData(Number(lat), Number(lon), googleKey);
+    const signals = await fetchSynthesisData(Number(lat), Number(lon), googleKey, locationName);
     const fallback = synthesisFallback(signals, locationName, pollenLabel);
 
     // Synthesis is gated by GEMINI_API_KEY on the server — no token check needed.

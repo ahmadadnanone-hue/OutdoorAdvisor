@@ -1,5 +1,10 @@
 import { listNativeDevices, sendNativePush } from './nativePush.js';
 import { kvGetJson, kvSetJson } from './kv.js';
+import {
+  buildNdmaPushCopy,
+  fetchNdmaAdvisories,
+  ndmaAdvisoryMatchesDevice,
+} from './ndmaAdvisories.js';
 
 const ALERT_STATE_KEY = 'push:alert-engine:state';
 const PMD_RSS_URL = 'https://cap-sources.s3.amazonaws.com/pk-pmd-en/rss.xml';
@@ -29,6 +34,9 @@ export async function runAlertEngine({ mode = 'scheduled' } = {}) {
   const results = [];
   const pmdResult       = await sendPmdCriticalAlerts(activeDevices, state);
   if (pmdResult)       results.push(pmdResult);
+
+  const ndmaResult      = await sendNdmaAdvisoryAlerts(activeDevices, state, { mode });
+  if (ndmaResult)      results.push(ndmaResult);
 
   const aqiResult       = await sendSevereAqiAlerts(activeDevices, state);
   if (aqiResult)       results.push(aqiResult);
@@ -669,6 +677,77 @@ async function sendPmdCriticalAlerts(devices, state) {
 
   state.sentPmdAlerts = sentKeys;
   return sent ? { type: 'pmd-critical', sent } : null;
+}
+
+async function sendNdmaAdvisoryAlerts(devices, state, { mode = 'scheduled' } = {}) {
+  const force = /ndma|manual|test/i.test(String(mode || ''));
+  const now = new Date();
+  const day = pakistanDateKey(now);
+  const hour = hourInPakistan(now);
+
+  state.ndmaLastCheckedDay = state.ndmaLastCheckedDay || null;
+  state.sentNdmaAlerts = state.sentNdmaAlerts || {};
+
+  // The GitHub scheduler runs every 15 minutes; only scrape NDMA once each
+  // Pakistan morning unless a manual/test mode explicitly asks for NDMA.
+  if (!force && (hour < 6 || state.ndmaLastCheckedDay === day)) return null;
+
+  let advisories = [];
+  try {
+    advisories = await fetchNdmaAdvisories({ limit: 10 });
+    state.ndmaLastCheckedDay = day;
+    state.ndmaLastCheckedAt = Date.now();
+    state.ndmaLatest = advisories.slice(0, 5);
+  } catch (error) {
+    state.ndmaLastError = {
+      message: error?.message || 'NDMA fetch failed',
+      at: Date.now(),
+    };
+    return { type: 'ndma', sent: 0, error: state.ndmaLastError.message };
+  }
+
+  const important = advisories.filter((advisory) => advisory.important);
+  if (!important.length) return { type: 'ndma', sent: 0, checked: advisories.length };
+
+  let sent = 0;
+  for (const advisory of important) {
+    const alreadySentAt = state.sentNdmaAlerts[advisory.key] || 0;
+    if (!force && alreadySentAt && Date.now() - alreadySentAt < 7 * 24 * 60 * 60 * 1000) continue;
+
+    const matched = devices.filter((device) => ndmaAdvisoryMatchesDevice(advisory, device));
+    if (!matched.length) {
+      state.sentNdmaAlerts[advisory.key] = Date.now();
+      continue;
+    }
+
+    for (const device of matched) {
+      const deviceKey = `${advisory.key}:${device.expoPushToken}`;
+      if (!force && state.sentNdmaAlerts[deviceKey]) continue;
+      const { title, body } = buildNdmaPushCopy(advisory, device);
+      const response = await sendNativePush([device], {
+        id: deviceKey,
+        title,
+        body,
+        category: 'Official Advisory',
+        source: 'ndma-advisory',
+        url: advisory.sourceUrl || 'https://www.ndma.gov.pk/advisories',
+        data: {
+          advisoryKey: advisory.key,
+          hazard: advisory.hazard,
+          level: advisory.level,
+          date: advisory.date,
+          sourceUrl: advisory.sourceUrl,
+        },
+        priority: advisory.level === 'Extreme' ? 'high' : 'normal',
+      });
+      sent += response.attempted;
+      state.sentNdmaAlerts[deviceKey] = Date.now();
+    }
+
+    state.sentNdmaAlerts[advisory.key] = Date.now();
+  }
+
+  return sent ? { type: 'ndma', sent, checked: advisories.length } : { type: 'ndma', sent: 0, checked: advisories.length };
 }
 
 async function fetchAqi(lat, lon) {

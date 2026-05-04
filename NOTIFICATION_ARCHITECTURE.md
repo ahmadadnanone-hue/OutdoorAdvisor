@@ -11,6 +11,7 @@ OutdoorAdvisor must deliver high-value outdoor, weather, AQI, and travel alerts 
 - Local Outdoor Summaries: three daily advisory pushes (morning, afternoon, evening) based on the user's saved pin, AQI, WeatherKit-first weather, rain risk, heat, and wind.
 - Smart Movement Nudges: Apple Health steps plus AQI/weather to suggest a walk or safer indoor alternative.
 - PMD Severe/Extreme Alerts: official CAP/RSS weather warnings.
+- NDMA National Advisories: official national hazard advisories for GLOF, flash flood, heatwave, storm, and related disaster-risk alerts.
 - Severe AQI Warnings: unhealthy air-quality threshold alerts.
 - Smog Season Alerts: seasonal/high-risk smog conditions.
 - Rain Alerts: active rain or near-term rain risk affecting plans and driving.
@@ -105,6 +106,7 @@ Default behavior: once per day unless user explicitly asks for more.
 
 - `api/_lib/alertEngine.js`
   - initial PMD critical alert sender,
+  - daily morning NDMA advisory monitor with official-source dedupe and location targeting,
   - severe AQI threshold sender,
   - WeatherKit-first wind, thunderstorm, and rain checks with Open-Meteo fallback,
   - WeatherKit/Open-Meteo near-term rain-risk checks,
@@ -147,8 +149,9 @@ Latest production check on 2026-05-01: authenticated `/api/push?action=cron&mode
 
 ## Next Hardening Steps
 
-1. Add heat, pollen, smog season, and motorway-fog checks to the server alert engine.
-2. Add a delivery dashboard: active tokens, sends, failures, last cron run, last summary window sent, last PMD alert key.
-3. Add server-side notification inbox events for cross-device history.
-4. Add receipt-based automatic token cleanup for permanent Expo/APNs failures.
-5. Decide whether critical travel alerts should be free while premium keeps advanced/custom alerts.
+1. Improve NDMA attachment parsing so PDF/DOCX advisory bodies can enrich district targeting beyond title-based/default hazard regions.
+2. Add heat, pollen, smog season, and motorway-fog checks to the server alert engine.
+3. Add a delivery dashboard: active tokens, sends, failures, last cron run, last summary window sent, last PMD/NDMA alert key.
+4. Add server-side notification inbox events for cross-device history.
+5. Add receipt-based automatic token cleanup for permanent Expo/APNs failures.
+6. Decide whether critical travel alerts should be free while premium keeps advanced/custom alerts.
