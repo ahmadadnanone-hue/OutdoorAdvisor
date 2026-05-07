@@ -2,6 +2,40 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const INBOX_KEY = 'outdooradvisor_notification_inbox_v1';
 const MAX_ITEMS = 40;
+const CONTENT_DEDUPE_WINDOW_MS = 6 * 60 * 60 * 1000;
+
+function normalizeText(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function getContentKey(item) {
+  return `${normalizeText(item?.title)}|${normalizeText(item?.body)}`;
+}
+
+function compactInboxItems(items) {
+  const seenIds = new Set();
+  const seenContent = new Map();
+  const compacted = [];
+
+  for (const item of items) {
+    if (!item?.title && !item?.body) continue;
+    const idKey = item.dedupeKey || item.id;
+    if (idKey && seenIds.has(idKey)) continue;
+
+    const contentKey = getContentKey(item);
+    const createdAt = Number(item.createdAt || Date.now());
+    const previousAt = seenContent.get(contentKey);
+    if (previousAt != null && Math.abs(previousAt - createdAt) < CONTENT_DEDUPE_WINDOW_MS) {
+      continue;
+    }
+
+    if (idKey) seenIds.add(idKey);
+    seenContent.set(contentKey, createdAt);
+    compacted.push(item);
+  }
+
+  return compacted.slice(0, MAX_ITEMS);
+}
 
 function inferCategory(payload) {
   const title = String(payload?.title || '').toLowerCase();
@@ -15,14 +49,19 @@ export async function loadNotificationInbox() {
   try {
     const raw = await AsyncStorage.getItem(INBOX_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    const compacted = compactInboxItems(parsed);
+    if (compacted.length !== parsed.length) {
+      await saveNotificationInbox(compacted);
+    }
+    return compacted;
   } catch {
     return [];
   }
 }
 
 export async function saveNotificationInbox(items) {
-  await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(items.slice(0, MAX_ITEMS)));
+  await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(compactInboxItems(items)));
 }
 
 export async function appendInboxNotification(payload) {
@@ -30,7 +69,13 @@ export async function appendInboxNotification(payload) {
   const current = await loadNotificationInbox();
   const id = payload.id || payload.remoteId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const dedupeKey = payload.dedupeKey || payload.remoteId || id;
-  if (current.some((item) => item.dedupeKey === dedupeKey || item.id === id)) {
+  const contentKey = getContentKey(payload);
+  const now = Date.now();
+  if (current.some((item) =>
+    item.dedupeKey === dedupeKey ||
+    item.id === id ||
+    (getContentKey(item) === contentKey && Math.abs(Number(item.createdAt || now) - now) < CONTENT_DEDUPE_WINDOW_MS)
+  )) {
     return current;
   }
   const next = [
@@ -42,7 +87,7 @@ export async function appendInboxNotification(payload) {
       url: payload.url || null,
       category: payload.category || inferCategory(payload),
       source: payload.source || null,
-      createdAt: Date.now(),
+      createdAt: now,
       seen: false,
     },
     ...current,

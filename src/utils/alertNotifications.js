@@ -91,14 +91,21 @@ export async function maybeSendLocalAlert(key, payload, cooldownMs = DEFAULT_COO
         content: {
           title: payload.title,
           body: payload.body,
-          data: payload.url ? { url: payload.url } : undefined,
+          data: {
+            ...(payload.url ? { url: payload.url } : {}),
+            ...(payload.category ? { category: payload.category } : {}),
+            ...(payload.source ? { source: payload.source } : {}),
+            notificationId: payload.dedupeKey || payload.id || key,
+          },
           sound: 'default',
         },
         trigger: null,
       });
     }
 
-    await appendInboxNotification(payload);
+    if (Platform.OS === 'web') {
+      await appendInboxNotification(payload);
+    }
     persistentCache.set(ALERT_CACHE_NS, key, { sentAt: Date.now() });
     return true;
   } catch {

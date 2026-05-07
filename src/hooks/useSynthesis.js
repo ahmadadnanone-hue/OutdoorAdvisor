@@ -2,7 +2,8 @@
  * useSynthesis — unified outdoor intelligence hook.
  *
  * Calls /api/ai/briefing with kind:'synthesize'. The server fetches
- * Weather + AQI + CAP alerts in parallel and returns a single brief:
+ * Weather + AQI in parallel and returns a single Home outdoor brief.
+ * Official PMD/NHMP/NDMA advisories stay scoped to Travel decisions:
  *   { severity, headline, summary, actions[], window, provider }
  *
  * Refresh triggers:

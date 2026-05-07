@@ -109,7 +109,7 @@ export default function HomeScreen({ navigation, route }) {
   const { alerts } = useAlerts();
   const { data: homeAiBriefing, loading: homeAiLoading } = useAiBriefing({ kind: 'home', signature: homeAiSignature, payload: homeAiPayload, enabled: isPremium && (aqi != null || weatherCurrent?.weatherCode != null || weatherCurrent?.temp != null || pollenValue != null) });
 
-  // ── Unified synthesis (all sources → one brief) ───────────────────────────
+  // ── Unified synthesis (Home weather/air context only) ─────────────────────
   const { synthesis, loading: synthesisLoading, fetchedAt: synthesisFetchedAt, refresh: refreshSynthesis } = useSynthesis({
     lat:          location.lat,
     lon:          location.lon,
@@ -434,7 +434,11 @@ export default function HomeScreen({ navigation, route }) {
                   <Text style={styles.notificationAction}>Mark all read</Text>
                 </TouchableOpacity>
               </View>
-              <ScrollView contentContainerStyle={styles.notificationList} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={styles.notificationScroll}
+                contentContainerStyle={styles.notificationList}
+                showsVerticalScrollIndicator={false}
+              >
                 {notificationInbox.length === 0 ? (
                   <GlassCard contentStyle={styles.notificationCardContent}>
                     <Text style={styles.notificationEmptyTitle}>No alerts saved yet</Text>
@@ -453,7 +457,7 @@ export default function HomeScreen({ navigation, route }) {
                         {new Date(item.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                       </Text>
                     </View>
-                    <Text style={styles.notificationItemTitle}>{item.title}</Text>
+                    <Text style={styles.notificationItemTitle} numberOfLines={2}>{item.title}</Text>
                     <Text style={styles.notificationItemBody}>{item.body}</Text>
                   </GlassCard>
                 ))}
@@ -485,7 +489,8 @@ const styles = StyleSheet.create({
   notificationHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8 },
   notificationTitle: { fontSize: 22, fontWeight: '700', color: dc.textPrimary, letterSpacing: -0.25 },
   notificationAction: { fontSize: 13, fontWeight: '700', color: dc.accentCyan },
-  notificationList: { gap: 12, paddingTop: 4, paddingBottom: 8 },
+  notificationScroll: { flex: 1 },
+  notificationList: { gap: 12, paddingTop: 4, paddingBottom: 20 },
   notificationCard: { marginBottom: 12 },
   notificationCardContent: { padding: 16, gap: 8 },
   notificationRowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -498,8 +503,8 @@ const styles = StyleSheet.create({
   notificationEmptyTitle: { fontSize: 15, fontWeight: '700', color: dc.textPrimary },
   notificationEmptyBody: { fontSize: 13, lineHeight: 19, color: dc.textSecondary },
   notificationCloseButton: {
-    marginTop: 'auto',
     height: 50,
+    flexShrink: 0,
     borderRadius: 18,
     backgroundColor: dc.accentCyan,
     alignItems: 'center',

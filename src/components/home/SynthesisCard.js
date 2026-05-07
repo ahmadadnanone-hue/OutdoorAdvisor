@@ -185,7 +185,7 @@ export default function SynthesisCard({
             <View style={styles.upgradeRow}>
               <Icon name="lock-closed-outline" size={11} color={dc.textMuted} />
               <Text style={styles.upgradeText}>
-                AI synthesis unlocked with Premium — draws from all live sources at once.
+                AI synthesis unlocked with Premium — focuses on local weather, air, pollen, and timing.
               </Text>
             </View>
           )}

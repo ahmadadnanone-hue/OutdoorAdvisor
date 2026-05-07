@@ -183,6 +183,44 @@ function advisoryMatchesPinnedArea(advisory, city, region) {
   });
 }
 
+function stationKeywords(station) {
+  return [
+    station.name,
+    station.region,
+    ...(station.aliases || []),
+  ]
+    .map(normalizeText)
+    .filter(Boolean);
+}
+
+function textMatchesStation(text, station) {
+  const haystack = normalizeText(text);
+  if (!haystack) return false;
+  return stationKeywords(station).some((keyword) => haystack.includes(keyword) || keyword.includes(haystack));
+}
+
+function findStationAdvisories(station, { pmdAlerts = [], ndmaAdvisories = [], nhmpData = [] } = {}) {
+  const pmd = pmdAlerts.filter((alert) => textMatchesStation(alert, station));
+  const nhmp = nhmpData.filter((advisory) =>
+    textMatchesStation(`${advisory.route || ''} ${advisory.sector || ''} ${advisory.status || ''}`, station)
+  );
+  const ndma = ndmaAdvisories.filter((advisory) => {
+    const regionText = (advisory.regions || []).join(' ');
+    const advisoryText = `${advisory.title || ''} ${advisory.hazard || ''} ${regionText}`;
+    return textMatchesStation(advisoryText, station);
+  });
+
+  const tone =
+    nhmp.some((item) => item.severity === 'closed') ||
+    ndma.some((item) => ndmaTone(item) === 'danger')
+      ? 'danger'
+      : pmd.length > 0 || nhmp.length > 0 || ndma.length > 0
+        ? 'caution'
+        : 'ok';
+
+  return { pmd, nhmp, ndma, tone, count: pmd.length + nhmp.length + ndma.length };
+}
+
 function formatNdmaDate(date) {
   if (!date) return null;
   try {
@@ -367,17 +405,17 @@ function StopRow({ stop, formatTempShort }) {
 // Live weather is fetched from WeatherKit/Open-Meteo for each station.
 // Tapping a station opens the official PMD page in-app.
 const TOURIST_STATIONS = [
-  { id: '41573', name: 'Murree',        region: 'Punjab',            icon: 'partly-sunny-outline', lat: 33.9073, lon: 73.3943 },
-  { id: '41516', name: 'Gilgit',        region: 'Gilgit-Baltistan',  icon: 'snow-outline',         lat: 35.9219, lon: 74.3085 },
-  { id: '41505', name: 'Hunza',         region: 'Gilgit-Baltistan',  icon: 'snow-outline',         lat: 36.3120, lon: 74.6478 },
-  { id: '41510', name: 'Kalam',         region: 'KPK',               icon: 'rainy-outline',        lat: 35.4883, lon: 72.5891 },
-  { id: '43532', name: 'Muzaffarabad',  region: 'AJK',               icon: 'cloudy-outline',       lat: 34.3542, lon: 73.4715 },
-  { id: '41506', name: 'Chitral',       region: 'KPK',               icon: 'snow-outline',         lat: 35.8531, lon: 71.7880 },
-  { id: '41523', name: 'Saidu Sharif',  region: 'Swat, KPK',         icon: 'partly-sunny-outline', lat: 34.7503, lon: 72.3579 },
-  { id: '41525', name: 'Malam Jabba',   region: 'KPK',               icon: 'snow-outline',         lat: 34.8101, lon: 72.5668 },
-  { id: '43533', name: 'Garhi Dopatta', region: 'AJK',               icon: 'cloudy-outline',       lat: 34.3800, lon: 73.6300 },
-  { id: '41574', name: 'Rawalakot',     region: 'AJK',               icon: 'partly-sunny-outline', lat: 33.8700, lon: 73.7600 },
-  { id: '41661', name: 'Quetta',        region: 'Balochistan',       icon: 'sunny-outline',        lat: 30.1927, lon: 67.0099 },
+  { id: '41573', name: 'Murree',        region: 'Punjab',            icon: 'partly-sunny-outline', lat: 33.9073, lon: 73.3943, aliases: ['Bhurban', 'Patriata', 'Kohala'] },
+  { id: '41516', name: 'Gilgit',        region: 'Gilgit-Baltistan',  icon: 'snow-outline',         lat: 35.9219, lon: 74.3085, aliases: ['GB', 'Gilgit Baltistan'] },
+  { id: '41505', name: 'Hunza',         region: 'Gilgit-Baltistan',  icon: 'snow-outline',         lat: 36.3120, lon: 74.6478, aliases: ['Hunza Nagar', 'GB'] },
+  { id: '41510', name: 'Kalam',         region: 'KPK',               icon: 'rainy-outline',        lat: 35.4883, lon: 72.5891, aliases: ['Swat', 'Khyber Pakhtunkhwa'] },
+  { id: '43532', name: 'Muzaffarabad',  region: 'AJK',               icon: 'cloudy-outline',       lat: 34.3542, lon: 73.4715, aliases: ['Azad Kashmir'] },
+  { id: '41506', name: 'Chitral',       region: 'KPK',               icon: 'snow-outline',         lat: 35.8531, lon: 71.7880, aliases: ['Khyber Pakhtunkhwa'] },
+  { id: '41523', name: 'Saidu Sharif',  region: 'Swat, KPK',         icon: 'partly-sunny-outline', lat: 34.7503, lon: 72.3579, aliases: ['Mingora', 'Swat'] },
+  { id: '41525', name: 'Malam Jabba',   region: 'KPK',               icon: 'snow-outline',         lat: 34.8101, lon: 72.5668, aliases: ['Swat', 'Malamjabba'] },
+  { id: '43533', name: 'Garhi Dopatta', region: 'AJK',               icon: 'cloudy-outline',       lat: 34.3800, lon: 73.6300, aliases: ['Azad Kashmir'] },
+  { id: '41574', name: 'Rawalakot',     region: 'AJK',               icon: 'partly-sunny-outline', lat: 33.8700, lon: 73.7600, aliases: ['Poonch', 'Azad Kashmir'] },
+  { id: '41661', name: 'Quetta',        region: 'Balochistan',       icon: 'sunny-outline',        lat: 30.1927, lon: 67.0099, aliases: ['Kalat', 'Ziarat'] },
 ];
 
 const PMD_BASE = 'https://nwfc.pmd.gov.pk/new/tourist.php?station=';
@@ -413,7 +451,7 @@ const TRAVEL_SECTION_META = {
 const ALL_TRAVEL_SECTION_KEYS = Object.keys(TRAVEL_SECTION_META);
 const VALID_TRAVEL_SECTION_KEYS = new Set(ALL_TRAVEL_SECTION_KEYS);
 
-function TouristStationsCard() {
+function TouristStationsCard({ pmdAlerts = [], ndmaAdvisories = [], nhmpData = [] }) {
   const [expanded, setExpanded] = useState(false);
   const [weather, setWeather] = useState({});
   const [loadingWx, setLoadingWx] = useState(true);
@@ -469,16 +507,29 @@ function TouristStationsCard() {
           <View style={styles.touristGrid}>
             {TOURIST_STATIONS.map((s) => {
               const wx = weather[s.id];
+              const stationAdvisories = findStationAdvisories(s, { pmdAlerts, ndmaAdvisories, nhmpData });
               const { description: cond } = wx ? getWeatherDescription(wx.weatherCode) : { description: '—' };
               const temp = wx?.temp != null ? `${Math.round(wx.temp)}°` : null;
               const wind = wx?.windSpeed != null ? `${Math.round(wx.windSpeed)} km/h` : null;
               const humidity = wx?.humidity != null ? `${wx.humidity}%` : null;
               const daily = null; // future: attach daily forecast when needed
+              const advisoryTint =
+                stationAdvisories.tone === 'danger'
+                  ? { borderColor: dc.dangerStroke, backgroundColor: dc.dangerGlass }
+                  : stationAdvisories.tone === 'caution'
+                    ? { borderColor: dc.warningStroke, backgroundColor: dc.warningGlass }
+                    : null;
+              const advisoryColor = stationAdvisories.tone === 'danger' ? dc.accentRed : dc.accentYellow;
+              const advisoryLabel =
+                stationAdvisories.ndma.length > 0 ? 'NDMA'
+                : stationAdvisories.pmd.length > 0 ? 'PMD'
+                : stationAdvisories.nhmp.length > 0 ? 'NHMP'
+                : null;
 
               return (
                 <TouchableOpacity
                   key={s.id}
-                  style={styles.touristCard}
+                  style={[styles.touristCard, advisoryTint]}
                   onPress={() => openInApp(`${PMD_BASE}${s.id}`)}
                   activeOpacity={0.75}
                 >
@@ -516,6 +567,14 @@ function TouristStationsCard() {
                         </View>
                       )}
                       <Icon name="open-outline" size={10} color={dc.textMuted} style={{ marginLeft: 'auto' }} />
+                    </View>
+                  )}
+                  {stationAdvisories.count > 0 && (
+                    <View style={styles.touristAdvisoryRow}>
+                      <Icon name="alert-circle-outline" size={12} color={advisoryColor} />
+                      <Text style={[styles.touristAdvisoryText, { color: advisoryColor }]} numberOfLines={1}>
+                        {advisoryLabel} advisory matched this station
+                      </Text>
                     </View>
                   )}
                 </TouchableOpacity>
@@ -1098,7 +1157,7 @@ export default function TravelScreen({ route }) {
     }
 
     if (key === 'touristLinks') {
-      return <TouristStationsCard />;
+      return <TouristStationsCard pmdAlerts={pmdAlerts} ndmaAdvisories={importantNdma} nhmpData={activeAlerts} />;
     }
 
     if (key === 'majorRoutes') {
@@ -1247,6 +1306,7 @@ export default function TravelScreen({ route }) {
     clearRoutes,
     expandedMotorway,
     formatTempShort,
+    importantNdma,
     isPremium,
     loadNhmp,
     nhmpAlertsExpanded,
@@ -1935,6 +1995,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     flexWrap: 'wrap',
+  },
+  touristAdvisoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 9,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: dc.cardStrokeSoft,
+  },
+  touristAdvisoryText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   touristStat: {
     flexDirection: 'row',

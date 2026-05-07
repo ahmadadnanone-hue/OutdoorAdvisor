@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
   },
   icon: {},
   labelStack: {
-    flex: 1,
+    flexShrink: 1,
     minWidth: 0,
   },
   label: {
