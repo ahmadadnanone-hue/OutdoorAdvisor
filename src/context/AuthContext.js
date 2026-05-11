@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { AppState, Platform } from 'react-native';
 import { isSupabaseConfigured, setSupabaseAutoRefresh, supabase } from '../lib/supabase';
 import { derivePremiumState } from '../lib/premium';
+import { getTrialState, TRIAL_DAYS_TOTAL } from '../utils/trialState';
 
 const AuthContext = createContext();
 const DEFAULT_WEB_AUTH_REDIRECT = 'https://outdooradvisor.vercel.app';
@@ -14,10 +15,45 @@ function getEmailRedirectTo() {
   return process.env.EXPO_PUBLIC_SITE_URL?.trim() || DEFAULT_WEB_AUTH_REDIRECT;
 }
 
+const DEFAULT_TRIAL_STATE = {
+  inTrial: false,
+  daysRemaining: 0,
+  expiresAt: null,
+  loading: true,
+};
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(isSupabaseConfigured);
+  const [trial, setTrial] = useState(DEFAULT_TRIAL_STATE);
+
+  // ── 7-day device-based free trial ─────────────────────────────────────────
+  useEffect(() => {
+    let mounted = true;
+
+    const syncTrial = async () => {
+      const next = await getTrialState();
+      if (!mounted) return;
+      setTrial({
+        inTrial:       next.inTrial,
+        daysRemaining: next.daysRemaining,
+        expiresAt:     next.expiresAt,
+        loading:       false,
+      });
+    };
+
+    syncTrial();
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') syncTrial();
+    });
+
+    return () => {
+      mounted = false;
+      sub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
@@ -100,19 +136,38 @@ export function AuthProvider({ children }) {
   const value = useMemo(
     () => {
       const premiumState = derivePremiumState(user);
+      // Compose premium: entitlement (paid user / allowlist) OR active trial.
+      // `plan` is "premium" for entitlement, "trial" while the trial is live,
+      // and "free" after the trial expires with no entitlement.
+      const entitlementPremium = premiumState.isPremium;
+      const isPremium = entitlementPremium || trial.inTrial;
+      const plan = entitlementPremium
+        ? premiumState.plan
+        : trial.inTrial ? 'trial' : 'free';
+
       return {
         configured: isSupabaseConfigured,
         loading,
         session,
         user,
         isSignedIn: Boolean(user),
-        ...premiumState,
+        isPremium,
+        plan,
+        entitlementPremium,
+        trial: {
+          inTrial:       trial.inTrial,
+          daysRemaining: trial.daysRemaining,
+          totalDays:     TRIAL_DAYS_TOTAL,
+          expiresAt:     trial.expiresAt,
+          expired:       !trial.loading && !trial.inTrial && !entitlementPremium,
+          loading:       trial.loading,
+        },
         signIn,
         signUp,
         signOut,
       };
     },
-    [loading, session, user, signIn, signUp, signOut]
+    [loading, session, user, trial, signIn, signUp, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

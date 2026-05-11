@@ -8,6 +8,8 @@ export default function HomeHeader({
   greeting,
   greetingName,
   isPremium,
+  trial,
+  entitlementPremium,
   locationLabel,
   locationSubLabel,
   onLocationPress,
@@ -15,6 +17,20 @@ export default function HomeHeader({
   onNotificationsPress,
   unreadNotificationCount = 0,
 }) {
+  // Badge precedence: paid entitlement > active trial > free
+  let badge = null;
+  if (entitlementPremium) {
+    badge = { label: 'PREMIUM', style: styles.planBadgePremium };
+  } else if (trial?.inTrial) {
+    const d = trial.daysRemaining;
+    badge = {
+      label: `TRIAL · ${d} DAY${d === 1 ? '' : 'S'} LEFT`,
+      style: styles.planBadgeTrial,
+    };
+  } else {
+    badge = { label: 'FREE', style: styles.planBadgeFree };
+  }
+
   return (
     <View style={styles.headerBar}>
 
@@ -23,11 +39,7 @@ export default function HomeHeader({
         <View style={styles.greetingBlock}>
           <Text style={styles.greeting}>{greeting}</Text>
           {!!greetingName && <Text style={styles.greetingName}>{greetingName}</Text>}
-          {isPremium ? (
-            <Text style={styles.planBadgePremium}>PREMIUM</Text>
-          ) : (
-            <Text style={styles.planBadgeFree}>FREE</Text>
-          )}
+          <Text style={badge.style}>{badge.label}</Text>
         </View>
 
         <View style={styles.bellWrap}>
@@ -109,6 +121,13 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     marginTop: 4,
     color: dc.textMuted,
+  },
+  planBadgeTrial: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    marginTop: 4,
+    color: dc.accentCyan,
   },
 
   // Bell button top-right

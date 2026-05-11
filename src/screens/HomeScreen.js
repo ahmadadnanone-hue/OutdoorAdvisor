@@ -57,7 +57,7 @@ const ACTIVITY_IDS             = ['running', 'cycling', 'walking', 'swimming', '
 export default function HomeScreen({ navigation, route }) {
   const { colors } = useTheme();
   const settings = useSettings();
-  const { isPremium, user } = useAuth();
+  const { isPremium, entitlementPremium, trial, user } = useAuth();
   const insets = useSafeAreaInsets();
   const health = useHealthData({ prompt: false });
 
@@ -266,6 +266,8 @@ export default function HomeScreen({ navigation, route }) {
           <HomeHeader
             greeting={getGreeting()}
             isPremium={isPremium}
+            entitlementPremium={entitlementPremium}
+            trial={trial}
             locationLabel={locationDisplay.primary}
             locationSubLabel={locationDisplay.secondary}
             onLocationPress={() => setCityPickerVisible(true)}
@@ -276,6 +278,15 @@ export default function HomeScreen({ navigation, route }) {
 
           <CacheIndicator visible={aqiCached || weatherCached} updatedAt={lastUpdated !== '--' ? lastUpdated : null} />
           {!!refreshNote && <Text style={styles.refreshNote}>{refreshNote}</Text>}
+
+          {trial?.expired ? (
+            <GlassCard contentStyle={styles.trialEndedContent}>
+              <Text style={styles.trialEndedTitle}>Your 7-day trial has ended</Text>
+              <Text style={styles.trialEndedBody}>
+                You're now on the free plan. Core conditions stay free forever — pollen, wind, full details, 7-day forecast, and AI briefings are part of premium.
+              </Text>
+            </GlassCard>
+          ) : null}
 
           {/* ── Unified outdoor brief (all sources) ── */}
           <SynthesisCard
@@ -484,6 +495,9 @@ const styles = StyleSheet.create({
   scroll:      { flex: 1 },
   content:     { padding: 16, gap: 16 },
   refreshNote: { fontSize: 12, color: dc.textMuted, textAlign: 'center', paddingVertical: 6 },
+  trialEndedContent: { padding: 16, gap: 6 },
+  trialEndedTitle: { fontSize: 14, fontWeight: '700', color: dc.textPrimary },
+  trialEndedBody: { fontSize: 13, lineHeight: 19, color: dc.textSecondary },
   footer:      { fontSize: 11, color: dc.textMuted, textAlign: 'center', marginTop: 8 },
   notificationSafe: { flex: 1, gap: 14 },
   notificationHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8 },
