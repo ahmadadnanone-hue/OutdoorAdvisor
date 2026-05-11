@@ -36,8 +36,15 @@ Current platform posture:
 - do not remove or abandon the web project just because iOS is the current priority
 - treat the repo as a shared codebase with an active web surface and an active iOS push
 
+**iOS App Store status (2026-05-11):**
+- App name: **OutdoorAdvisor Pakistan** (App Store Connect app ID `6763982833`)
+- Build 31 (v1.0.0) submitted for App Store review — status: **Waiting for Review**
+- Submission ID: `785fa048-fdd4-4d36-8d9b-5e90f012bdf4`
+- Apple Team: `X6TA54T858`, EAS project: `0b8b92b0-0722-4ab1-b4c4-34df3ba8e956`
+- Do NOT push code changes to master that are not ready to ship until Apple review is resolved
+
 iOS launch direction:
-- primary near-term goal is launching on iOS first
+- primary near-term goal is launching on iOS first — **build 31 now in Apple review**
 - Apple Developer Program enrollment is now complete
 - the UI is being shifted toward a Liquid Glass feel
 - keep that Liquid Glass direction inside Expo / React Native for now; do not assume a Swift / SwiftUI rewrite is in progress
@@ -121,11 +128,17 @@ It is not meant to feel like a generic weather app.
   - `EXPO_PUBLIC_SUPABASE_URL`
   - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 
-### Premium
+### Premium & 7-Day Trial
 - premium gating logic lives in `src/lib/premium.js`
-- some premium checks are UI-side and some are server-enforced
-- known premium user allowlist exists for now as a temporary bridge before store subscriptions
+- **7-day device-based free trial** is now live — `src/utils/trialState.js` records `firstLaunchAt` in AsyncStorage (`outdooradvisor_trial_v1`) on first launch
+- `AuthContext` composes `isPremium = entitlementPremium || trial.inTrial`; exposes `trial: { inTrial, daysRemaining, totalDays, expiresAt, expired }`
+- `HomeHeader` badge: `PREMIUM` (gold) / `TRIAL · N DAYS LEFT` (cyan) / `FREE` (muted)
+- `HomeScreen` shows a "Your 7-day trial has ended" card when `trial.expired === true`
+- After trial ends with no entitlement, user permanently settles into free tier (no IAP — allowed by Apple since we never charge)
+- `EXPO_PUBLIC_TESTFLIGHT_PREMIUM=true` is set in `preview` and `testflight-preview` EAS profiles only — NOT in production
+- entitlement premium: user email in `SEEDED_PREMIUM_EMAILS` or `EXPO_PUBLIC_PREMIUM_EMAILS`, or Supabase user metadata has `plan/tier/subscription_status = premium/active`
 - route planner is premium and experimental
+- **do not add StoreKit/IAP without explicit user instruction** — current model is trial-then-free-tier
 
 ## Important Current Truths
 
@@ -262,9 +275,11 @@ Use this section as the cross-platform handoff checklist for both Claude and Cod
 - `outdooradvisor.app` live on Vercel — treat as primary brand domain
 - Premium gating: email allowlist bridge in place (`src/lib/premium.js`)
 
-### ❌ Blockers — must fix before public App Store review
-1. **App Store Connect metadata/screenshots not submitted** — paste-ready metadata exists in `APP_STORE_METADATA.md`, but screenshots (6.7" + 5.5"), age rating, category, support URL, and privacy URL still need to be entered in App Store Connect.
-2. **Store subscription path not implemented** — premium is still email-allowlist based. If premium features are visible during full review, App Review may ask for real in-app purchases or clearer positioning.
+### ✅ Submitted for App Store Review (2026-05-11)
+- Build 31 (v1.0.0) is **Waiting for Review** — submission ID `785fa048-fdd4-4d36-8d9b-5e90f012bdf4`
+- Privacy Policy URL set: `https://gist.github.com/ahmadadnanone-hue/51b5f2db7f89bce2724dc57bdfd1f2c2`
+- 7-day free trial replaces "premium for everyone" — Apple-compliant (no IAP needed)
+- App name changed to **OutdoorAdvisor Pakistan** (original "OutdoorAdvisor" was taken on the App Store)
 
 ### ⚠️ Known gaps (won't block build #10 TestFlight, will matter for build #11 / full review)
 - No StoreKit 2 real subscriptions — premium is email-allowlist only; may be flagged in App Store review if premium features are visible
@@ -297,6 +312,7 @@ Use this section as the cross-platform handoff checklist for both Claude and Cod
 - update it when a new major route, AI behavior, or notification rule is added
 
 ## Recent Changes
+- 2026-05-11 — **App Store submission complete.** Build 31 (v1.0.0, app name "OutdoorAdvisor Pakistan") submitted and is Waiting for Review. Submission ID `785fa048-fdd4-4d36-8d9b-5e90f012bdf4`. Key changes in this build vs. build 29: (1) 7-day device-based free trial — `src/utils/trialState.js` + `AuthContext` trial composition + HomeHeader trial badge + HomeScreen "trial ended" card; (2) `EXPO_PUBLIC_TESTFLIGHT_PREMIUM` removed from production EAS profile; (3) Info.plist cleaned — Expo Dev Launcher `NSLocalNetworkUsageDescription`, `NSBonjourServices`, and `NSAllowsLocalNetworking` removed; proper `NSLocationAlways*` strings added; (4) `app.config.js` `withInfoPlist` plugin prevents dev keys from being re-added by `expo prebuild`; (5) `aps-environment` changed to `production` in entitlements; (6) WeatherKit credentials filled in `src/config/weatherkit.js` (Team `X6TA54T858`, Key `A33GG7GP8N`, Service ID `com.ahmadadnanone.weatherkit`); (7) Privacy Policy hosted at GitHub Gist; (8) `userInterfaceStyle` set to `dark` in `app.json`.
 - 2026-05-07 — Published the notification/advisory cleanup to both web and iOS. Commit `038ef90` was pushed to `master`, Vercel production deploy `dpl_FmkMcP6J7N12nNUu4VbZ7SdQLXas` completed and aliased to `https://outdooradvisor.app`, and EAS iOS build `6cef9a84-1ded-40b0-84ec-bae6cc39bfea` finished as TestFlight/App Store Connect build number `29` with IPA artifact `https://expo.dev/artifacts/eas/esd7nCSgStUxdrF4D4ZzPG.ipa`. EAS Submit `64b7e9c0-ecb0-44de-ad79-c146335e603e` successfully uploaded the binary to Apple; wait for Apple processing before selecting it in TestFlight.
 - 2026-05-06 — Matched the Travel tab TestFlight target to the current web Travel layout. The NDMA row/expandable local NDMA strip is already present in current `TravelScreen` and will appear in the next TestFlight build; the older TestFlight screenshot is from a build before that Travel update. Fixed the native-only blank Travel Snapshot capsule by changing `GlassPill` label layout from `flex: 1` to `flexShrink: 1`, so the "1 Closures · More info ›" pill keeps its natural text width on iOS instead of collapsing to an empty rounded capsule. Published in the 2026-05-07 web deploy and iOS build #29.
 - 2026-05-06 — Scoped official advisories away from the Home AI outdoor brief. `/api/ai/briefing` `kind: synthesize` no longer fetches PMD CAP or NDMA advisories and no longer lets official advisories raise Home synthesis severity; Home synthesis is now weather, AQI, pollen, UV, rain, heat, and timing only. Travel AI remains the place for NHMP/PMD/NDMA advisory context. `TravelScreen` now matches PMD/NHMP/NDMA advisory text/regions against Tourist Station names, regions, and aliases, and matched advisories tint the affected station card with a PMD/NHMP/NDMA badge. Updated Home/Synthesis copy to avoid "all live sources" wording. Published in the 2026-05-07 web deploy and iOS build #29.
