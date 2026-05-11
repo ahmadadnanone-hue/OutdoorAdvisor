@@ -21,7 +21,11 @@ A **premium iOS-only app** that gives people in Pakistan a calm, practical read 
 - **Source:** GitHub → `https://github.com/ahmadadnanone-hue/OutdoorAdvisor`
 - **Branch:** `master`
 - **Local path:** `/Users/ahmedadnan/OutdoorAdvisor-main/`
-- **Distribution:** Apple App Store via EAS Build / Xcode (not yet submitted — in development)
+- **Distribution:** Apple App Store via EAS Build / Xcode
+- **Current status (2026-05-11):** v1.0.1 build 31 uploaded to App Store Connect, in TestFlight internal testing. Waiting on metadata + screenshots before "Submit for Review".
+- **App Store Connect app ID:** `6763982833`
+- **EAS project ID:** `0b8b92b0-0722-4ab1-b4c4-34df3ba8e956`
+- **Apple Team ID:** `X6TA54T858` (Ahmed Adnan, Individual)
 - **No server** — the app calls external APIs directly from the device
 
 ### Old Vercel web app
@@ -301,7 +305,7 @@ aps-environment: development            → Push notifications (dev)
 |---|---|---|
 | `ThemeProvider` | `ThemeContext.js` | Dark mode always; NavigationContainer colours |
 | `SettingsProvider` | `SettingsContext.js` | Units (°C/°F, km/mi), home section order, user preferences |
-| `AuthProvider` | `AuthContext.js` | Supabase session, sign in/out/up, premium flag |
+| `AuthProvider` | `AuthContext.js` | Supabase session, sign in/out/up, premium flag, 7-day trial state |
 
 ---
 
@@ -317,6 +321,7 @@ aps-environment: development            → Push notifications (dev)
 | `nhmpParser.js` | Scrapes and parses NHMP road advisory HTML |
 | `locationSnapshot.js` | Persists last known location for background tasks |
 | `notificationInbox.js` | AsyncStorage-backed notification history |
+| `trialState.js` | 7-day device-based free trial — records `firstLaunchAt` in AsyncStorage; returns `{ inTrial, daysRemaining, expiresAt }` |
 
 ---
 
@@ -346,6 +351,31 @@ GOOGLE_MAPS_API_KEY                   Google Maps (TravelScreen map tiles)
 
 ---
 
+## Premium & 7-Day Trial
+
+The app uses a **device-based 7-day free trial** for premium features. No IAP — after the trial the user permanently settles into a free tier (allowed by Apple since we never charge).
+
+**How it works:**
+1. On first launch, `src/utils/trialState.js` writes `{ firstLaunchAt: <now> }` to AsyncStorage (key `outdooradvisor_trial_v1`)
+2. `AuthContext` syncs trial state on mount + on AppState foreground, exposes `trial: { inTrial, daysRemaining, totalDays, expiresAt, expired }`
+3. `isPremium = entitlementPremium || trial.inTrial` — composed in `AuthContext`'s `useMemo`
+4. `entitlementPremium` comes from `derivePremiumState(user)` in `src/lib/premium.js` — true when:
+   - User's email is in `SEEDED_PREMIUM_EMAILS` or `EXPO_PUBLIC_PREMIUM_EMAILS`
+   - User has subscription metadata in Supabase (`app_metadata.plan = 'premium'`, etc.)
+5. After trial expires + no entitlement → `isPremium = false`, all `PREMIUM_SECTIONS` ('pollen', 'wind', 'details', 'forecast') are hidden on Home
+
+**UI:**
+- `HomeHeader` badge: `PREMIUM` (gold) / `TRIAL · N DAYS LEFT` (cyan) / `FREE` (muted)
+- `HomeScreen`: shows a "Your 7-day trial has ended" glass card when `trial.expired === true`
+
+**Caveats (acceptable for v1.0):**
+- Reinstalling the app resets the trial
+- No defense against device time manipulation
+
+**Internal testing override:** `EXPO_PUBLIC_TESTFLIGHT_PREMIUM=true` in `eas.json` `preview` and `testflight-preview` profiles gives every signed-in user premium during internal builds. Production profile does NOT set this.
+
+---
+
 ## About Tab (App Store compliance)
 
 `src/components/settings/AboutTab.js` — full legal coverage:
@@ -358,32 +388,53 @@ GOOGLE_MAPS_API_KEY                   Google Maps (TravelScreen map tiles)
 - Contact (mailto link)
 - Legal footer with © year + non-affiliation statement
 
-> Apple requires a **Privacy Policy URL** in App Store Connect. Host the privacy policy text (already written in the app) at any public URL — a GitHub Gist is fine.
+> Apple requires a **Privacy Policy URL** in App Store Connect. The privacy policy is hosted at:
+> `https://gist.github.com/ahmadadnanone-hue/51b5f2db7f89bce2724dc57bdfd1f2c2`
 
 ---
 
 ## App Store Submission Checklist
 
-- [ ] Fill in `src/config/weatherkit.js` with real credentials
-- [ ] Enable WeatherKit + WeatherKit Service ID on developer.apple.com
-- [ ] Change `aps-environment` in entitlements to `production` before release build
-- [ ] Host Privacy Policy at a public URL; add URL to App Store Connect
-- [ ] Run `eas build --platform ios --profile production`
-- [ ] Submit via Xcode Organizer or EAS Submit
-- [ ] App Store Connect metadata: description, keywords, screenshots (6.7" + 5.5")
+**Build prep (done ✅):**
+- [x] Fill in `src/config/weatherkit.js` with real credentials (Team `X6TA54T858`, Key `A33GG7GP8N`, Service ID `com.ahmadadnanone.weatherkit`)
+- [x] Enable WeatherKit + WeatherKit Service ID on developer.apple.com
+- [x] Change `aps-environment` in entitlements to `production`
+- [x] Clean Info.plist (remove Expo Dev Launcher `NSLocalNetworkUsageDescription`, `NSBonjourServices`, `NSAllowsLocalNetworking`)
+- [x] Add proper `NSLocationAlwaysAndWhenInUse` + `NSLocationAlways` strings
+- [x] Add `app.config.js` `withInfoPlist` plugin to prevent prebuild from re-adding dev keys
+- [x] Switch to 7-day device-based free trial (replaced "premium for everyone" production override)
+- [x] Host Privacy Policy at public Gist URL
+- [x] `eas build --platform ios --profile production` → v1.0.1 build 31
+- [x] `eas submit --platform ios --latest` → uploaded to App Store Connect, available in TestFlight
+
+**App Store Connect — still to do before "Submit for Review":**
+- [ ] App Information → Privacy Policy URL: `https://gist.github.com/ahmadadnanone-hue/51b5f2db7f89bce2724dc57bdfd1f2c2`
+- [ ] App Information → Category: Weather (primary), Health & Fitness (secondary)
 - [ ] Age rating: 4+
-- [ ] Category: Weather (primary), Health & Fitness (secondary)
+- [ ] Version 1.0.1 → fill in: Name, Subtitle, Description, Keywords (`weather,air quality,AQI,Pakistan,pollen,Lahore,Karachi,Islamabad,outdoor,road`), Support URL, Marketing URL (optional)
+- [ ] Screenshots: 6.7" iPhone (1290×2796) required; 5.5" iPhone (1242×2208) required
+- [ ] App Review Information: contact email, demo notes ("No login required — open the app to see the 7-day trial unlock all premium features")
+- [ ] Pricing & Availability: Free, available in Pakistan + worldwide (your call)
+- [ ] Export Compliance: answer No (already declared `ITSAppUsesNonExemptEncryption: false`)
+- [ ] Click **Submit for Review**
+
+**Submitting newer builds later:**
+```bash
+cd /Users/ahmedadnan/OutdoorAdvisor-main
+eas build --platform ios --profile production
+eas submit --platform ios --latest
+```
 
 ---
 
 ## Git History (recent)
 
 ```
-0bcee53  Build full App Store-compliant About tab
-974c2a9  Add WeatherKit REST API with Open-Meteo fallback
-10522ee  Replace emoji with Ionicons in FABMenu satellite items
-0553981  Fix FABMenu y-axis direction + add SafeAreaProvider
-8d6fc6a  Add floating action button with quarter-circle spring fan animation
-cfc47a0  Refactor HomeScreen: split 1,900-line file into 13 focused components
-ebfd6e0  Overhaul: iOS-only glass UI, remove Route Planner & all web/legacy code
+0cb8dc9  Switch to 7-day device-based free trial
+ee4b8f7  Prepare for App Store submission (clean Info.plist + aps-environment → production)
+6aead34  Record build 29 deployment
+038ef90  Fix notification inbox and travel advisory scope
+57a6936  Show NDMA advisories in Travel
+39a797e  Build 28: edge-to-edge tab bar, fix scroll content hidden behind bar
+308fe66  Clean NDMA advisory titles
 ```
