@@ -22,7 +22,7 @@ A **premium iOS-only app** that gives people in Pakistan a calm, practical read 
 - **Branch:** `master`
 - **Local path:** `/Users/ahmedadnan/OutdoorAdvisor-main/`
 - **Distribution:** Apple App Store via EAS Build / Xcode
-- **Current status (2026-05-11):** v1.0.1 build 31 uploaded to App Store Connect, in TestFlight internal testing. Waiting on metadata + screenshots before "Submit for Review".
+- **Current status (2026-05-11):** v1.0.0 (build 31) submitted for App Store review. Status: **Waiting for Review**. App name: **OutdoorAdvisor Pakistan**. Submission ID: `785fa048-fdd4-4d36-8d9b-5e90f012bdf4`
 - **App Store Connect app ID:** `6763982833`
 - **EAS project ID:** `0b8b92b0-0722-4ab1-b4c4-34df3ba8e956`
 - **Apple Team ID:** `X6TA54T858` (Ahmed Adnan, Individual)
@@ -416,7 +416,7 @@ The app uses a **device-based 7-day free trial** for premium features. No IAP �
 - [ ] App Review Information: contact email, demo notes ("No login required — open the app to see the 7-day trial unlock all premium features")
 - [ ] Pricing & Availability: Free, available in Pakistan + worldwide (your call)
 - [ ] Export Compliance: answer No (already declared `ITSAppUsesNonExemptEncryption: false`)
-- [ ] Click **Submit for Review**
+- [x] Click **Submit for Review** — done 2026-05-11 3:12 PM, Waiting for Review
 
 **Submitting newer builds later:**
 ```bash
@@ -427,14 +427,21 @@ eas submit --platform ios --latest
 
 ---
 
+## App Store Release History
+
+| Build | Version | Date | Status |
+|---|---|---|---|
+| 31 | 1.0.0 | 2026-05-11 | Submitted for review — Waiting for Review |
+| 30 | 1.0.0 | 2026-05-11 | TestFlight only (pre-trial) |
+
 ## Git History (recent)
 
 ```
+97cee0b  Update CLAUDE.md: document trial system + current submission status
 0cb8dc9  Switch to 7-day device-based free trial
 ee4b8f7  Prepare for App Store submission (clean Info.plist + aps-environment → production)
 6aead34  Record build 29 deployment
 038ef90  Fix notification inbox and travel advisory scope
 57a6936  Show NDMA advisories in Travel
 39a797e  Build 28: edge-to-edge tab bar, fix scroll content hidden behind bar
-308fe66  Clean NDMA advisory titles
 ```
