@@ -3,6 +3,7 @@ import { AppState, Platform } from 'react-native';
 import { isSupabaseConfigured, setSupabaseAutoRefresh, supabase } from '../lib/supabase';
 import { derivePremiumState } from '../lib/premium';
 import { getTrialState, TRIAL_DAYS_TOTAL } from '../utils/trialState';
+import { buildApiUrl } from '../config/api';
 
 const AuthContext = createContext();
 const DEFAULT_WEB_AUTH_REDIRECT = 'https://outdooradvisor.vercel.app';
@@ -133,6 +134,51 @@ export function AuthProvider({ children }) {
     if (error) throw error;
   }, []);
 
+  /**
+   * Permanently delete the signed-in user's account on the server
+   * (Supabase admin delete) and then sign out locally.
+   *
+   * Required for Apple App Store Guideline 5.1.1(v).
+   */
+  const deleteAccount = useCallback(async () => {
+    if (!supabase) {
+      throw new Error('Account deletion is not configured.');
+    }
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    const accessToken = sessionData?.session?.access_token;
+    if (!accessToken) {
+      throw new Error('You must be signed in to delete your account.');
+    }
+
+    const response = await fetch(buildApiUrl('/api/account/delete'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+
+    if (!response.ok || !payload?.success) {
+      const message = payload?.message || `Account deletion failed (${response.status})`;
+      throw new Error(message);
+    }
+
+    // Local sign-out — clears the session even though the server-side user is gone.
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore — the server account is already deleted.
+    }
+  }, []);
+
   const value = useMemo(
     () => {
       const premiumState = derivePremiumState(user);
@@ -165,9 +211,10 @@ export function AuthProvider({ children }) {
         signIn,
         signUp,
         signOut,
+        deleteAccount,
       };
     },
-    [loading, session, user, trial, signIn, signUp, signOut]
+    [loading, session, user, trial, signIn, signUp, signOut, deleteAccount]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
