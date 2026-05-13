@@ -9,7 +9,6 @@ import {
   StyleSheet,
   Platform,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
@@ -127,7 +126,7 @@ export default function AlertsScreen() {
   const insets = useSafeAreaInsets();
   const themeCtx = useTheme();
   const settings = useSettings();
-  const { configured, isSignedIn, isPremium, plan, loading: authLoading, signIn, signOut, signUp, deleteAccount, user } = useAuth();
+  const { configured, isSignedIn, isPremium, plan, loading: authLoading, signIn, signOut, signUp, user } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
 
   const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
@@ -198,52 +197,6 @@ export default function AlertsScreen() {
       setAuthBusy(false);
     }
   }, [signOut]);
-
-  // Apple Guideline 5.1.1(v): in-app account deletion is required for any app
-  // that supports account creation.
-  const performAccountDeletion = useCallback(async () => {
-    setAuthBusy(true);
-    setAuthError('');
-    setAuthMessage('');
-    try {
-      await deleteAccount();
-      setAuthPassword('');
-      setAuthMessage('Your account has been permanently deleted.');
-    } catch (error) {
-      setAuthError(error.message || 'Could not delete account. Please try again.');
-    } finally {
-      setAuthBusy(false);
-    }
-  }, [deleteAccount]);
-
-  const handleDeleteAccount = useCallback(() => {
-    Alert.alert(
-      'Delete Account?',
-      'This will permanently delete your OutdoorAdvisor account and any preferences synced to it. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Account',
-          style: 'destructive',
-          onPress: () => {
-            // Second-step confirmation per Apple's HIG for destructive actions.
-            Alert.alert(
-              'Are you absolutely sure?',
-              'Your account will be deleted immediately and cannot be recovered.',
-              [
-                { text: 'Keep My Account', style: 'cancel' },
-                {
-                  text: 'Yes, Delete',
-                  style: 'destructive',
-                  onPress: performAccountDeletion,
-                },
-              ],
-            );
-          },
-        },
-      ],
-    );
-  }, [performAccountDeletion]);
 
   useEffect(() => {
     let cancelled = false;
@@ -675,39 +628,22 @@ export default function AlertsScreen() {
         {/* Account card */}
         <GlassCard style={styles.accountCard} contentStyle={styles.accountCardContent}>
           {isSignedIn ? (
-            <View style={styles.accountPanel}>
-              <View style={styles.accountSignedInRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.accountTitle}>Signed in</Text>
-                  <Text style={styles.accountBody}>{user?.email || 'Your account is connected on this device.'}</Text>
-                  <Text style={styles.accountPlan}>{isPremium ? 'Premium' : `Plan: ${plan || 'free'}`}</Text>
-                </View>
-                <TouchableOpacity
-                  style={[styles.accountBtn, { backgroundColor: dc.dangerGlass }]}
-                  onPress={handleAuthSignOut}
-                  activeOpacity={0.8}
-                  disabled={authBusy || authLoading}
-                >
-                  {authBusy
-                    ? <ActivityIndicator size="small" color={dc.accentRed} />
-                    : <Text style={[styles.accountBtnText, { color: dc.accentRed }]}>Sign out</Text>}
-                </TouchableOpacity>
+            <View style={styles.accountSignedInRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.accountTitle}>Signed in</Text>
+                <Text style={styles.accountBody}>{user?.email || 'Your account is connected on this device.'}</Text>
+                <Text style={styles.accountPlan}>{isPremium ? 'Premium' : `Plan: ${plan || 'free'}`}</Text>
               </View>
-
-              {!!authMessage && <Text style={[styles.authMessage, { marginTop: 10 }]}>{authMessage}</Text>}
-              {!!authError && <Text style={[styles.authError, { marginTop: 10 }]}>{authError}</Text>}
-
               <TouchableOpacity
-                style={styles.deleteAccountBtn}
-                onPress={handleDeleteAccount}
-                activeOpacity={0.75}
+                style={[styles.accountBtn, { backgroundColor: dc.dangerGlass }]}
+                onPress={handleAuthSignOut}
+                activeOpacity={0.8}
                 disabled={authBusy || authLoading}
               >
-                <Text style={styles.deleteAccountText}>Delete Account</Text>
+                {authBusy
+                  ? <ActivityIndicator size="small" color={dc.accentRed} />
+                  : <Text style={[styles.accountBtnText, { color: dc.accentRed }]}>Sign out</Text>}
               </TouchableOpacity>
-              <Text style={styles.deleteAccountHint}>
-                Permanently deletes your account and any synced preferences. Cannot be undone.
-              </Text>
             </View>
           ) : (
             <View style={styles.accountPanel}>
@@ -807,18 +743,6 @@ const styles = StyleSheet.create({
   authError: { fontSize: 12, lineHeight: 18, marginBottom: 8, color: dc.accentRed },
   authMessage: { fontSize: 12, lineHeight: 18, marginBottom: 8, color: dc.accentGreen },
   authSubmitBtn: { minWidth: 0, alignSelf: 'flex-start', paddingHorizontal: 18 },
-  deleteAccountBtn: {
-    marginTop: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: dc.dangerStroke,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-  },
-  deleteAccountText: { fontSize: 13, fontWeight: '700', color: dc.accentRed },
-  deleteAccountHint: { fontSize: 11, color: dc.textMuted, lineHeight: 15, marginTop: 8, textAlign: 'center' },
 
   tabBar: {
     flexDirection: 'row',

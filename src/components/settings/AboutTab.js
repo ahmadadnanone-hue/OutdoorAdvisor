@@ -4,15 +4,17 @@
  * Covers: app info, mission, data sources, weather disclaimer,
  * privacy summary, terms of use, open-source attributions, contact.
  */
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   Linking, StyleSheet, Modal, Pressable,
+  Alert, ActivityIndicator,
 } from 'react-native';
 import Constants from 'expo-constants';
 import { GlassCard } from '../glass';
 import Icon from '../Icon';
 import { colors as dc } from '../../design';
+import { useAuth } from '../../context/AuthContext';
 
 const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
 const BUILD       = Constants.expoConfig?.ios?.buildNumber ?? '1';
@@ -147,9 +149,51 @@ function LegalModal({ title, body, visible, onClose }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function AboutTab() {
   const [modal, setModal] = useState(null); // { title, body }
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteMessage, setDeleteMessage] = useState('');
+  const { isSignedIn, deleteAccount } = useAuth();
 
   const open = (title, body) => setModal({ title, body });
   const close = () => setModal(null);
+
+  // Apple Guideline 5.1.1(v): in-app account deletion is required for any app
+  // that supports account creation.
+  const performDelete = useCallback(async () => {
+    setDeletingAccount(true);
+    setDeleteMessage('');
+    try {
+      await deleteAccount();
+      setDeleteMessage('Your account has been permanently deleted.');
+    } catch (error) {
+      setDeleteMessage(error.message || 'Could not delete account. Please try again.');
+    } finally {
+      setDeletingAccount(false);
+    }
+  }, [deleteAccount]);
+
+  const handleDeleteAccount = useCallback(() => {
+    Alert.alert(
+      'Delete Account?',
+      'This will permanently delete your OutdoorAdvisor account and any preferences synced to it. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Are you absolutely sure?',
+              'Your account will be deleted immediately and cannot be recovered.',
+              [
+                { text: 'Keep My Account', style: 'cancel' },
+                { text: 'Yes, Delete', style: 'destructive', onPress: performDelete },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  }, [performDelete]);
 
   return (
     <>
@@ -352,6 +396,20 @@ export default function AboutTab() {
           NHMP, PMD, or any government body.{'\n\n'}
           Weather data accuracy is not guaranteed. Not for emergency use.
         </Text>
+
+        {/* ── Delete Account (Apple Guideline 5.1.1(v)) ─────────────── */}
+        {isSignedIn ? (
+          <View style={styles.deleteRow}>
+            {deletingAccount ? (
+              <ActivityIndicator size="small" color={dc.accentRed} />
+            ) : (
+              <TouchableOpacity onPress={handleDeleteAccount} activeOpacity={0.6} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.deleteLink}>Delete account</Text>
+              </TouchableOpacity>
+            )}
+            {!!deleteMessage && <Text style={styles.deleteMessage}>{deleteMessage}</Text>}
+          </View>
+        ) : null}
       </ScrollView>
 
       {/* Legal full-text modal */}
@@ -424,4 +482,9 @@ const styles = StyleSheet.create({
 
   // Footer
   footer: { fontSize: 11, color: dc.textMuted, textAlign: 'center', lineHeight: 17, paddingHorizontal: 8 },
+
+  // Delete account — intentionally small + understated; sits at the very end
+  deleteRow: { alignItems: 'center', marginTop: 18, paddingTop: 12, paddingBottom: 4, borderTopWidth: 1, borderTopColor: dc.cardStrokeSoft },
+  deleteLink: { fontSize: 11, fontWeight: '500', color: dc.textMuted, textDecorationLine: 'underline' },
+  deleteMessage: { fontSize: 10, color: dc.textMuted, marginTop: 6, textAlign: 'center', paddingHorizontal: 12, lineHeight: 14 },
 });

@@ -23,8 +23,17 @@ export default function GlassTabBar({
   style,
 }) {
   const insets = useSafeAreaInsets();
+  // Lift floating bar above the home indicator with a deliberate gap.
+  const floatingBottomLift = floating ? Math.max(insets.bottom, 12) + 6 : 0;
   return (
-    <View style={[styles.wrap, floating ? styles.floating : null, style]}>
+    <View
+      style={[
+        styles.wrap,
+        floating ? styles.floating : null,
+        floating ? { marginBottom: floatingBottomLift } : null,
+        style,
+      ]}
+    >
       <BlurView
         intensity={62}
         tint="dark"
@@ -41,9 +50,9 @@ export default function GlassTabBar({
       />
       <View
         pointerEvents="none"
-        style={[styles.fill, { borderTopWidth: 1, borderColor: colors.cardStroke }]}
+        style={[styles.fill, { borderWidth: 1, borderColor: colors.cardStroke, borderRadius: floating ? radiusTokens.pill : 0 }]}
       />
-      <View style={[styles.row, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+      <View style={styles.row}>
         {items.map((item) => (
           <TabItem
             key={item.key}
@@ -163,7 +172,11 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     ...shadows.card,
   },
-  floating: { marginBottom: 0 },
+  // Floating mode: pill on all four sides + horizontal inset from screen edges.
+  floating: {
+    borderRadius: radiusTokens.pill,
+    marginHorizontal: 16,
+  },
   fill: { ...StyleSheet.absoluteFillObject },
   row: {
     flexDirection: 'row',
