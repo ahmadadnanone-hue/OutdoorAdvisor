@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js';
 import { runAlertEngine } from './_lib/alertEngine.js';
 import {
   checkStoredReceipts,
@@ -43,6 +44,7 @@ export default async function handler(req, res) {
     if (action === 'unregister') return handleUnregister(req, res);
     if (action === 'test') return handleTest(req, res);
     if (action === 'cron') return handleCron(req, res);
+    if (action === 'delete-account') return handleDeleteAccount(req, res);
     return sendJson(res, 400, { error: 'Valid action query parameter is required.' });
   } catch (error) {
     return sendJson(res, 500, {
@@ -111,4 +113,65 @@ async function handleCron(req, res) {
 
 function parseBody(req) {
   return typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
+}
+
+/**
+ * action=delete-account
+ *
+ * Permanently deletes the authenticated Supabase user. Required for Apple
+ * App Store Guideline 5.1.1(v) — apps that support account creation must
+ * also support in-app account deletion.
+ *
+ * Request:
+ *   POST or DELETE
+ *   Authorization: Bearer <supabase_access_token>
+ *
+ * Required server env vars:
+ *   EXPO_PUBLIC_SUPABASE_URL (or SUPABASE_URL)
+ *   SUPABASE_SERVICE_ROLE_KEY
+ */
+async function handleDeleteAccount(req, res) {
+  if (req.method !== 'POST' && req.method !== 'DELETE') {
+    return sendJson(res, 405, { error: 'Method not allowed.' });
+  }
+
+  const supabaseUrl =
+    process.env.SUPABASE_URL ||
+    process.env.EXPO_PUBLIC_SUPABASE_URL ||
+    '';
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return sendJson(res, 500, {
+      success: false,
+      error: 'Account deletion is not configured on the server.',
+    });
+  }
+
+  const authHeader = req.headers.authorization || req.headers.Authorization || '';
+  const token = String(authHeader).replace(/^Bearer\s+/i, '').trim();
+  if (!token) {
+    return sendJson(res, 401, { success: false, error: 'Missing bearer token.' });
+  }
+
+  const admin = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  const { data: userData, error: userErr } = await admin.auth.getUser(token);
+  if (userErr || !userData?.user?.id) {
+    return sendJson(res, 401, { success: false, error: 'Token is invalid or expired.' });
+  }
+
+  const userId = userData.user.id;
+
+  // Best-effort cleanup of optional related rows (ignore missing tables).
+  try { await admin.from('push_tokens').delete().eq('user_id', userId); } catch {}
+
+  const { error: deleteErr } = await admin.auth.admin.deleteUser(userId);
+  if (deleteErr) {
+    return sendJson(res, 500, { success: false, error: deleteErr.message || 'Account deletion failed.' });
+  }
+
+  return sendJson(res, 200, { success: true });
 }

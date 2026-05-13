@@ -151,7 +151,8 @@ export function AuthProvider({ children }) {
       throw new Error('You must be signed in to delete your account.');
     }
 
-    const response = await fetch(buildApiUrl('/api/account/delete'), {
+    // Consolidated into /api/push?action=delete-account (Hobby plan 12-fn limit).
+    const response = await fetch(buildApiUrl('/api/push?action=delete-account'), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
