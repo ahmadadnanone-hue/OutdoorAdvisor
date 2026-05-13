@@ -23,8 +23,8 @@ export default function GlassTabBar({
   style,
 }) {
   const insets = useSafeAreaInsets();
-  // Lift floating bar above the home indicator with a deliberate gap.
-  const floatingBottomLift = floating ? Math.max(insets.bottom, 12) + 6 : 0;
+  // Lift floating bar well above the home indicator — Apple Weather / Google Photos style.
+  const floatingBottomLift = floating ? Math.max(insets.bottom, 12) + 16 : 0;
   return (
     <View
       style={[
@@ -172,24 +172,25 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     ...shadows.card,
   },
-  // Floating mode: pill on all four sides + horizontal inset from screen edges.
+  // Floating mode: compact pill, deliberate inset from screen edges so the bar
+  // clearly hovers (Apple Weather / Google Photos pattern).
   floating: {
     borderRadius: radiusTokens.pill,
-    marginHorizontal: 16,
+    marginHorizontal: 36,
   },
   fill: { ...StyleSheet.absoluteFillObject },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 10,
-    paddingBottom: 10,
-    paddingHorizontal: 8,
+    paddingTop: 6,
+    paddingBottom: 6,
+    paddingHorizontal: 6,
   },
   itemOuter: { flex: 1 },
   item: {
-    paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radiusTokens.pill,
