@@ -173,6 +173,10 @@ async function sendRainAlerts(devices, state) {
 
     if (!isRaining(wx)) continue;
 
+    // Defer to the thunderstorm notification — storm already implies rain, and
+    // a separate rain push is misleading (low-severity copy + wrong icon).
+    if (isThunderstorm(wx)) continue;
+
     const key = `${device.expoPushToken}:rain:${pakistanDateKey(new Date())}`;
     if (Date.now() - (state.sentRainAlerts[key] || 0) < 4 * 60 * 60 * 1000) continue;
 
@@ -214,6 +218,8 @@ async function sendImminentRainAlerts(devices, state) {
   for (const device of candidates) {
     const wx = await fetchWeatherForAlerts(device.location.lat, device.location.lon);
     if (!wx || isRaining(wx)) continue;
+    // Storm notification already covers near-term rain risk; skip the soft nudge.
+    if (isThunderstorm(wx)) continue;
 
     const rainSoon = getRainSoonSignal(wx);
     if (!rainSoon) continue;

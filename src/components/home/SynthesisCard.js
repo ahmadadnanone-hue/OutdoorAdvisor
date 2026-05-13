@@ -94,7 +94,10 @@ export default function SynthesisCard({
   const s      = statusColor(status);
   const icon   = severityIcon(severity);
 
-  // If we had to clamp up, the synthesis headline is misleading — replace it
+  // If we had to clamp up, the synthesis headline is misleading — replace it.
+  // We also replace summary / actions / window because Gemini wrote them for
+  // the original (lower) severity and they contradict the clamped headline
+  // (e.g. red "Difficult conditions" + green "Go for a walk" actions).
   const headline = (() => {
     if (!synthesis?.headline) return loading ? null : 'Gathering live conditions…';
     if (clamped) {
@@ -104,9 +107,49 @@ export default function SynthesisCard({
     }
     return synthesis.headline;
   })();
-  const summary  = synthesis?.summary  ?? null;
-  const actions  = synthesis?.actions  ?? [];
-  const window   = synthesis?.window   ?? null;
+
+  // Time-of-day text — used for both window pill validity check and
+  // clamped-fallback summary copy.
+  const _hourNow = new Date().getHours();
+  const _todPeriod = _hourNow < 12 ? 'morning' : _hourNow < 17 ? 'afternoon' : _hourNow < 20 ? 'evening' : 'night';
+
+  // Suppress a window suggestion that points at a time-of-day that has already
+  // passed (e.g. Gemini says "Morning" but it's 4 PM).
+  const isStaleWindow = (w) => {
+    if (!w) return false;
+    const lower = String(w).toLowerCase();
+    if (_hourNow >= 12 && /\bmorning\b/.test(lower)) return true;
+    if (_hourNow >= 17 && /\bafternoon\b/.test(lower)) return true;
+    if (_hourNow >= 20 && /\bevening\b/.test(lower)) return true;
+    return false;
+  };
+
+  // For clamped state — write summary/actions/window that match the new severity.
+  const clampedCopy = (() => {
+    if (!clamped) return null;
+    if (severity === 'danger') {
+      return {
+        summary: `Live air-quality and weather signals say outdoor exposure should be limited this ${_todPeriod}. Read the cards below before stepping out.`,
+        actions: ['Stay indoors when possible', 'Wear a mask if going out'],
+        window: null,
+      };
+    }
+    return {
+      summary: `Conditions are borderline this ${_todPeriod} — review the cards below before committing to longer outdoor time.`,
+      actions: ['Keep outings short', 'Recheck conditions before leaving'],
+      window: null,
+    };
+  })();
+
+  const rawSummary = synthesis?.summary ?? null;
+  const rawActions = synthesis?.actions ?? [];
+  const rawWindow  = synthesis?.window  ?? null;
+
+  const summary = clampedCopy ? clampedCopy.summary : rawSummary;
+  const actions = clampedCopy ? clampedCopy.actions : rawActions;
+  const window  = clampedCopy
+    ? clampedCopy.window
+    : isStaleWindow(rawWindow) ? null : rawWindow;
   const isAI     = synthesis?.provider === 'gemini';
   const age      = ageLabel(fetchedAt);
 

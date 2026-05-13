@@ -316,6 +316,13 @@ Severity rules (pick worst that applies):
 - "caution": AQI 81-170, UV 6-10, active rain, feels 35-41°C, High pollen
 - "go": everything else
 Mention the 2 most impactful risks in summary. Tailor actions to the time of day.
+
+CRITICAL CONSISTENCY RULES — your summary, actions, and window MUST agree with severity:
+- danger severity → summary, actions, headline must all be cautionary / restrictive. Never write "good for outdoor activities" or suggest "go for a walk" in a danger brief.
+- caution severity → suggest shorter outings, mention the specific risk.
+- "window" must be a FUTURE time-of-day relative to ${timeCtx}. If it is currently ${timeCtx}, do NOT suggest a window already past (e.g. don't say "Morning" when it is Afternoon). Use null if no future safe window exists today.
+- In summary text, reference the current period ("this ${timeCtx.toLowerCase()}") — never a different period.
+- If weather is rain/thunderstorm/stormy, the brief MUST acknowledge it — do NOT write "clear skies".
 `.trim();
 }
 
