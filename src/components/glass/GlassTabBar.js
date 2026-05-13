@@ -22,18 +22,11 @@ export default function GlassTabBar({
   floating = true,
   style,
 }) {
-  const insets = useSafeAreaInsets();
-  // Lift floating bar well above the home indicator — Apple Weather / Google Photos style.
-  const floatingBottomLift = floating ? Math.max(insets.bottom, 12) + 16 : 0;
+  // Positioning (bottom gap, horizontal inset) is owned by the App.js tab slot.
+  // GlassTabBar is just a self-contained pill — its geometry must not depend
+  // on any outer margin assumptions.
   return (
-    <View
-      style={[
-        styles.wrap,
-        floating ? styles.floating : null,
-        floating ? { marginBottom: floatingBottomLift } : null,
-        style,
-      ]}
-    >
+    <View style={[styles.wrap, floating ? styles.floating : styles.edge, style]}>
       <BlurView
         intensity={62}
         tint="dark"
@@ -50,7 +43,14 @@ export default function GlassTabBar({
       />
       <View
         pointerEvents="none"
-        style={[styles.fill, { borderWidth: 1, borderColor: colors.cardStroke, borderRadius: floating ? radiusTokens.pill : 0 }]}
+        style={[
+          styles.fill,
+          {
+            borderWidth: 1,
+            borderColor: colors.cardStroke,
+            borderRadius: floating ? PILL_RADIUS : 0,
+          },
+        ]}
       />
       <View style={styles.row}>
         {items.map((item) => (
@@ -165,18 +165,27 @@ function TabItem({ item, active, onPress }) {
   );
 }
 
+// Pill radius — explicit numeric value avoids React Native style-merge
+// surprises where `borderTopLeftRadius` / `borderTopRightRadius` from an
+// underlying style would override the `borderRadius` shorthand.
+const PILL_RADIUS = 30;
+
 const styles = StyleSheet.create({
   wrap: {
     overflow: 'hidden',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
     ...shadows.card,
   },
-  // Floating mode: compact pill, deliberate inset from screen edges so the bar
-  // clearly hovers (Apple Weather / Google Photos pattern).
+  // Floating mode: full pill on all 4 corners (no top-only radii anywhere).
   floating: {
-    borderRadius: radiusTokens.pill,
-    marginHorizontal: 36,
+    borderTopLeftRadius:     PILL_RADIUS,
+    borderTopRightRadius:    PILL_RADIUS,
+    borderBottomLeftRadius:  PILL_RADIUS,
+    borderBottomRightRadius: PILL_RADIUS,
+  },
+  // Edge mode (unused right now but kept for completeness): top corners only.
+  edge: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
   fill: { ...StyleSheet.absoluteFillObject },
   row: {

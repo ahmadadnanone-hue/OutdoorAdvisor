@@ -88,7 +88,13 @@ function GlassNavBar({ state, navigation, onRouteChange }) {
       pointerEvents="box-none"
       style={[
         styles.tabBarShell,
-        { paddingBottom: 0 },
+        {
+          // Floating bar geometry lives here (the React Navigation tab slot),
+          // not inside GlassTabBar. This is the only level guaranteed to
+          // respect the inset/margin we set.
+          paddingBottom: insets.bottom + 18,
+          paddingHorizontal: 32,
+        },
       ]}
     >
       <GlassTabBar
