@@ -84,24 +84,26 @@ function GlassNavBar({ state, navigation, onRouteChange }) {
   }));
 
   return (
-    <View
-      pointerEvents="box-none"
-      style={[
-        styles.tabBarShell,
-        {
-          // Floating bar geometry lives here (the React Navigation tab slot),
-          // not inside GlassTabBar. This is the only level guaranteed to
-          // respect the inset/margin we set.
-          paddingBottom: insets.bottom + 18,
-          paddingHorizontal: 32,
-        },
-      ]}
-    >
-      <GlassTabBar
-        items={items}
-        activeKey={activeKey}
-        onChange={(key) => navigation.navigate(key)}
-      />
+    // Outer wrapper claims 0 height in React Navigation's tab bar slot so
+    // scenes extend the FULL screen height; the absolute-positioned shell
+    // below overlays the bar on top of the scene without reserving space.
+    <View pointerEvents="box-none" style={styles.tabBarOuter}>
+      <View
+        pointerEvents="box-none"
+        style={[
+          styles.tabBarShell,
+          {
+            paddingBottom: insets.bottom + 18,
+            paddingHorizontal: 32,
+          },
+        ]}
+      >
+        <GlassTabBar
+          items={items}
+          activeKey={activeKey}
+          onChange={(key) => navigation.navigate(key)}
+        />
+      </View>
     </View>
   );
 }
@@ -182,7 +184,21 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: dc.bgTop,
   },
+  // Outer wrapper: zero-height container in the navigator's tab slot so the
+  // scene gets the full screen height. The actual bar sits in the absolute
+  // child below.
+  tabBarOuter: {
+    height: 0,
+    overflow: 'visible',
+  },
+  // Inner shell: absolute-positioned over the scene, aligned to the bottom
+  // edge. The padding inside lifts the floating pill above the home indicator
+  // and insets it from the screen edges.
   tabBarShell: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'transparent',
   },
 });
