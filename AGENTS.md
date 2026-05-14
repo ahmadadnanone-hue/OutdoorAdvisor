@@ -3,6 +3,49 @@
 This file is the quick-start context for any agent working in this repo.
 Update it whenever the product, workflow, or important assumptions change.
 
+---
+
+## 🔒 UI LOCK — DO NOT CHANGE WITHOUT EXPLICIT USER INSTRUCTION
+
+The following UI elements are **approved and final** as of build 41 (2026-05-15). The user has confirmed the app looks correct. Do NOT touch these values for any reason — not for "cleanup", not for "consistency", not as part of another fix.
+
+### Floating Tab Bar (LOCKED)
+- **File:** `src/components/glass/GlassTabBar.js`
+- `PILL_RADIUS = 30` — applied to all 4 corners via `floating` style
+- `floating` style uses `borderTopLeftRadius`, `borderTopRightRadius`, `borderBottomLeftRadius`, `borderBottomRightRadius` all set to `PILL_RADIUS`
+- Do NOT use `borderRadius` shorthand — it gets overridden by React Native style merging
+- Do NOT add `borderTopLeftRadius`/`borderTopRightRadius` directly to `wrap` — it breaks the pill shape
+
+### Tab Bar Shell / Scene Overlay (LOCKED)
+- **File:** `App.js` — `GlassNavBar` component + `styles`
+- `tabBarOuter`: `{ height: 0, overflow: 'visible' }` — zero height so React Navigation allocates no space in the tab slot; scenes extend full screen height
+- `tabBarShell`: `{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'transparent' }` — overlays the scene
+- Inner padding: `paddingBottom: insets.bottom + 18, paddingHorizontal: 32` — lifts pill above home indicator, insets from edges
+- Do NOT add bottom padding to the tab navigator's `sceneStyle` — it creates the blue strip
+- Do NOT change `height: 0` on `tabBarOuter` — it will push scenes up and create dead space
+
+### Background Gradient (LOCKED)
+- **File:** `App.js` — `App()` component root
+- `LinearGradient` with `gradient.screen` colors fills `StyleSheet.absoluteFill` behind the entire app
+- `StatusBar style="light" translucent backgroundColor="transparent"` — status bar blends into gradient
+- Do NOT add `backgroundColor` to any screen root or navigator — it will create banding
+
+### Glass Design System (LOCKED)
+- **Files:** `src/design/` — colors, gradients, shadows, radius tokens
+- `dc.bgTop / dc.bgMid / dc.bgBottom` gradient stops — do not alter
+- `dc.accentCyan = #9BC8FF` — primary active/highlight colour
+- `dc.cardGlass = rgba(255,255,255,0.11)` — standard glass surface
+- `dc.cardStroke = rgba(255,255,255,0.24)` — card border
+- `GlassCard`, `GlassPill`, `GlassButton`, `GlassTabBar` — do not restyle these primitives
+
+### SynthesisCard Severity Logic (LOCKED)
+- **File:** `src/components/home/SynthesisCard.js`
+- Severity clamping: headline/summary/actions/window are ALL replaced when `clamped === true` — do not let Gemini copy bleed through when device severity is higher than synthesis severity
+- `isStaleWindow()` suppresses window pills for past time-of-day — do not remove
+- `clampedCopy` provides severity-matched fallback copy for both `danger` and `caution` — keep both branches
+
+---
+
 ## Project
 
 OutdoorAdvisor is a Pakistan-focused outdoor decision app built with Expo / React Native and deployed on Vercel.
