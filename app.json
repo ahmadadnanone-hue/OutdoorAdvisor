@@ -19,7 +19,8 @@
         "NSLocationAlwaysUsageDescription": "OutdoorAdvisor uses your location in the background to deliver timely outdoor condition and air quality alerts.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.ahmadadnanone.OutdoorAdvisor"
+      "bundleIdentifier": "com.ahmadadnanone.OutdoorAdvisor",
+      "runtimeVersion": "1.0.0"
     },
     "android": {
       "adaptiveIcon": {
@@ -32,6 +33,10 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
       "config": {
@@ -39,7 +44,10 @@
           "apiKey": ""
         }
       },
-      "icon": "./assets/icon.png"
+      "icon": "./assets/icon.png",
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -69,6 +77,9 @@
         "projectId": "0b8b92b0-0722-4ab1-b4c4-34df3ba8e956"
       }
     },
-    "owner": "ahmadadnanone"
+    "owner": "ahmadadnanone",
+    "updates": {
+      "url": "https://u.expo.dev/0b8b92b0-0722-4ab1-b4c4-34df3ba8e956"
+    }
   }
 }
