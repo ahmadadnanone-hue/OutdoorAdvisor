@@ -210,6 +210,40 @@ It is not meant to feel like a generic weather app.
   - `src/components/layout/`
 - Important current gap: `RouteOptionCard` exists, but `RoutePlannerScreen` still uses the older route-results rendering path
 
+## Shipping Changes — OTA vs Full Build
+
+**EAS Production plan is active** (purchased 2026-05-14). This unlocks EAS Update for over-the-air JS patches.
+
+### When to use OTA (EAS Update) — fast path, no App Store review
+Use `eas update --branch production --message "description"` for any change that is **JavaScript only**:
+- UI tweaks, copy changes, color/style fixes
+- Logic fixes in `.js` files (hooks, utils, services, components, screens)
+- Vercel API route changes (those deploy via `vercel deploy --prod --yes` anyway)
+- Examples of queued changes that qualify: tab bar scene overlay fix (`App.js`), SynthesisCard contradiction fix, stale "Morning" window pill suppression
+
+OTA updates land on users' devices within minutes, without going through App Store review or the EAS build queue.
+
+### When a full EAS build is required
+A new `eas build --platform ios --profile production` is **required** when:
+- Adding or changing native modules (anything in `package.json` with native code)
+- Changing `app.json` / `app.config.js` (plugins, permissions, bundle ID, version)
+- Changing `ios/` native files (entitlements, Info.plist, `AppDelegate`)
+- Bumping the Expo SDK version
+- Changing `eas.json` build profiles
+
+### OTA quick-ship workflow
+```bash
+# 1. Make JS changes, push to GitHub
+git add <files> && git commit -m "fix: description" && git push
+
+# 2. Ship OTA update to production channel
+eas update --branch production --message "fix: description"
+
+# Users on the live app get the update on next launch (usually within minutes)
+```
+
+---
+
 ## Workflow Notes
 
 - use `apply_patch` for manual file edits
