@@ -41,7 +41,14 @@ function isTruthyPremium(value) {
   return false;
 }
 
-export function derivePremiumState(user) {
+export function derivePremiumState(/* user */) {
+  // v1.0.2: All features are free for all users. StoreKit IAP will be introduced
+  // in a future update. Returning isPremium:true ensures no features are gated
+  // and satisfies Apple Guideline 2.1.0 (no unlockable content without IAP).
+  return { isPremium: true, plan: 'free' };
+}
+
+export function _derivePremiumStateFull(user) {
   const appMeta = user?.app_metadata || {};
   const userMeta = user?.user_metadata || {};
   const email = normalizeEmail(user?.email);

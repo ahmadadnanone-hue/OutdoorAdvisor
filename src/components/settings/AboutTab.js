@@ -398,18 +398,26 @@ export default function AboutTab() {
         </Text>
 
         {/* ── Delete Account (Apple Guideline 5.1.1(v)) ─────────────── */}
-        {isSignedIn ? (
-          <View style={styles.deleteRow}>
-            {deletingAccount ? (
+        <View style={styles.deleteRow}>
+          {isSignedIn ? (
+            deletingAccount ? (
               <ActivityIndicator size="small" color={dc.accentRed} />
             ) : (
               <TouchableOpacity onPress={handleDeleteAccount} activeOpacity={0.6} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Text style={styles.deleteLink}>Delete account</Text>
               </TouchableOpacity>
-            )}
-            {!!deleteMessage && <Text style={styles.deleteMessage}>{deleteMessage}</Text>}
-          </View>
-        ) : null}
+            )
+          ) : (
+            <TouchableOpacity
+              onPress={() => Linking.openURL('mailto:support@outdooradvisor.app?subject=Delete%20My%20Account')}
+              activeOpacity={0.6}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.deleteLink}>Request account deletion</Text>
+            </TouchableOpacity>
+          )}
+          {!!deleteMessage && <Text style={styles.deleteMessage}>{deleteMessage}</Text>}
+        </View>
       </ScrollView>
 
       {/* Legal full-text modal */}
