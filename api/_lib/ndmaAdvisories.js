@@ -1,5 +1,7 @@
 const NDMA_ADVISORIES_URL = 'https://www.ndma.gov.pk/advisories';
 const NDMA_BASE_URL = 'https://www.ndma.gov.pk';
+const NDMA_PUSH_MAX_AGE_MS = 72 * 60 * 60 * 1000;
+const NDMA_DISPLAY_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 const REGION_KEYWORDS = [
   'Pakistan', 'Punjab', 'South Punjab', 'Upper Punjab', 'Sindh', 'Balochistan',
@@ -22,7 +24,7 @@ const HAZARD_RULES = [
   {
     hazard: 'GLOF / landslide',
     level: 'Extreme',
-    pattern: /\b(glof|glacial lake|landslide|debris flow|flash flood|kkh|karakoram)\b/i,
+    pattern: /\b(glof|glacial lake|landslide|debris flow|kkh|karakoram)\b/i,
     action: 'Avoid riverbeds, unstable slopes, and mountain-road travel during rain; check route status before leaving.',
     defaultRegions: ['Gilgit-Baltistan', 'Hunza', 'Shigar', 'Gilgit', 'Skardu', 'Chitral', 'Kohistan', 'Karakoram Highway'],
   },
@@ -31,14 +33,14 @@ const HAZARD_RULES = [
     level: 'Extreme',
     pattern: /\b(flash flood|torrential|very heavy|heavy fall|urban flooding|flood warning)\b/i,
     action: 'Avoid low-lying roads, nullahs, and unnecessary travel; keep extra time and monitor official updates.',
-    defaultRegions: ['Khyber Pakhtunkhwa', 'Gilgit-Baltistan', 'AJK', 'Punjab'],
+    defaultRegions: [],
   },
   {
     hazard: 'Heatwave',
     level: 'Severe',
     pattern: /\b(heatwave|heat wave|heat dome|extreme heat|temperature.*above normal)\b/i,
     action: 'Avoid peak heat, hydrate often, check vulnerable people, and shift outdoor work to cooler hours.',
-    defaultRegions: ['Rajanpur', 'Rahim Yar Khan', 'Jacobabad', 'Sukkur', 'Hyderabad', 'Sibi', 'Nasirabad', 'Lahore', 'Karachi', 'Multan', 'Faisalabad', 'Peshawar'],
+    defaultRegions: ['Rajanpur', 'Rahim Yar Khan', 'Jacobabad', 'Sukkur', 'Hyderabad', 'Sibi', 'Nasirabad'],
   },
   {
     hazard: 'Storm / wind / lightning',
@@ -87,7 +89,7 @@ export function parseNdmaAdvisories(html) {
 
     const sourceUrl = toAbsoluteUrl(href);
     const fileUrl = extractFileUrl(sourceUrl);
-    const date = extractDate(text) || extractDate(href);
+    const date = extractDate(text) || extractTextualDate(text) || extractDate(href);
     const title = cleanTitle(text, date);
     if (!title || /^view$/i.test(title)) continue;
 
@@ -106,6 +108,7 @@ export function parseNdmaAdvisories(html) {
       fileUrl,
       ...classification,
       regions: regions.length ? regions : classification.defaultRegions,
+      pushEligible: isNdmaPushFresh(date),
     });
   }
 
@@ -138,9 +141,10 @@ export function classifyNdmaAdvisory(title) {
 
 export function ndmaAdvisoryMatchesDevice(advisory, device) {
   if (!advisory?.important) return false;
+  if (advisory.pushEligible === false || !isNdmaPushFresh(advisory.date)) return false;
   const city = normalize(device?.location?.city);
   const region = normalize(device?.location?.region);
-  if (!city || city === 'selected') return true;
+  if (!city || city === 'selected') return false;
 
   const regions = advisory.regions || [];
   if (!regions.length) return false;
@@ -167,6 +171,7 @@ export function summarizeNdmaForBrief(advisories, locationName) {
   const location = normalize(locationName);
   return (advisories || [])
     .filter((advisory) => advisory.important)
+    .filter((advisory) => isNdmaDisplayFresh(advisory.date))
     .filter((advisory) => {
       if (!location) return true;
       if (!advisory.regions?.length) return true;
@@ -220,6 +225,33 @@ function extractDate(value) {
   const day = match[1].padStart(2, '0');
   const month = match[2].padStart(2, '0');
   return `${match[3]}-${month}-${day}`;
+}
+
+function extractTextualDate(value) {
+  const months = {
+    january: '01', february: '02', march: '03', april: '04', may: '05', june: '06',
+    july: '07', august: '08', september: '09', october: '10', november: '11', december: '12',
+  };
+  const match = String(value || '').match(/\b(\d{1,2})(?:st|nd|rd|th)?(?:\s*(?:&|and|-)\s*(\d{1,2})(?:st|nd|rd|th)?)?\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})\b/i);
+  if (!match) return null;
+  const day = String(match[2] || match[1]).padStart(2, '0');
+  const month = months[match[3].toLowerCase()];
+  return `${match[4]}-${month}-${day}`;
+}
+
+export function isNdmaPushFresh(date, now = Date.now()) {
+  return isNdmaFreshWithin(date, NDMA_PUSH_MAX_AGE_MS, now);
+}
+
+export function isNdmaDisplayFresh(date, now = Date.now()) {
+  return isNdmaFreshWithin(date, NDMA_DISPLAY_MAX_AGE_MS, now);
+}
+
+function isNdmaFreshWithin(date, maxAgeMs, now = Date.now()) {
+  if (!date) return false;
+  const timestamp = new Date(`${date}T23:59:59+05:00`).getTime();
+  if (!Number.isFinite(timestamp)) return false;
+  return now - timestamp <= maxAgeMs;
 }
 
 function inferNdmaRegions(text) {

@@ -162,6 +162,13 @@ function isNdmaImportant(advisory) {
   return advisory?.important || advisory?.level === 'Extreme' || advisory?.level === 'Severe';
 }
 
+function isRecentNdmaAdvisory(advisory) {
+  if (!advisory?.date) return false;
+  const timestamp = new Date(`${advisory.date}T23:59:59+05:00`).getTime();
+  if (!Number.isFinite(timestamp)) return false;
+  return Date.now() - timestamp <= 7 * 24 * 60 * 60 * 1000;
+}
+
 function ndmaTone(advisory) {
   if (advisory?.level === 'Extreme') return 'danger';
   if (advisory?.level === 'Severe' || advisory?.level === 'Moderate') return 'caution';
@@ -775,7 +782,7 @@ export default function TravelScreen({ route }) {
 
   const activeAlerts = nhmpData.filter((a) => a.severity !== 'clear');
   const clearRoutes = nhmpData.filter((a) => a.severity === 'clear');
-  const importantNdma = ndmaAdvisories.filter(isNdmaImportant);
+  const importantNdma = ndmaAdvisories.filter((item) => isNdmaImportant(item) && isRecentNdmaAdvisory(item));
   const localNdma = importantNdma.filter((item) => advisoryMatchesPinnedArea(item, pinnedCity, pinnedRegion));
   const nationalNdma = importantNdma.filter((item) => !localNdma.some((local) => local.key === item.key));
   const travelSummary = getTravelRiskSummary({ nhmpData, pmdAlerts });
