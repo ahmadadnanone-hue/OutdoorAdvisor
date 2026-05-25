@@ -95,7 +95,11 @@ OutdoorAdvisor provides general weather, air-quality, pollen, and travel-advisor
 
 WeatherKit is accessed through a server-side Vercel proxy. The app also has Open-Meteo fallback behavior if WeatherKit is unavailable.
 
-Premium functionality is currently limited during TestFlight and may be enabled for allowlisted tester accounts. If a reviewer needs a premium-enabled account or a specific test account, please contact support@outdooradvisor.app.
+OutdoorAdvisor Pakistan is free in this version. There are no paid features, no subscriptions, and no in-app purchases.
+
+The 7-day trial is a free device-based feature preview. During the first 7 days, all optional advanced features are unlocked. After 7 days, the app automatically moves to the free tier: core weather, AQI, activity, and travel-advisory features remain available, while optional advanced features such as AI briefings, detailed pollen/wind/forecast cards, and experimental route planning return to the free-tier limits. The user is not charged, no purchase is offered, and no external payment is available.
+
+Account deletion is available in-app. Sign in with the demo account, open Settings, open About, then use the visible Account Management card near the top of the page and tap Delete account. The app asks for confirmation before permanently deleting the account. A small footer link remains as a backup, but the primary delete control is now a full-width Account Management button for iPhone and iPad accessibility.
 
 The app may request location permission to show local weather, air quality, and travel context. If Health access is granted, the app reads step count, walking/running distance, and active energy to support optional smart movement nudges. Health data is not sold, not used for advertising, and not written back to Apple Health.
 

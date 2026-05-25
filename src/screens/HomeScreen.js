@@ -283,7 +283,7 @@ export default function HomeScreen({ navigation, route }) {
             <GlassCard contentStyle={styles.trialEndedContent}>
               <Text style={styles.trialEndedTitle}>Your 7-day trial has ended</Text>
               <Text style={styles.trialEndedBody}>
-                You're now on the free plan. Core conditions stay free forever — pollen, wind, full details, 7-day forecast, and AI briefings are part of premium.
+                You're now on the free plan. No payment is taken and no purchase is required. Core conditions stay free forever, while optional advanced details return to free-tier limits.
               </Text>
             </GlassCard>
           ) : null}

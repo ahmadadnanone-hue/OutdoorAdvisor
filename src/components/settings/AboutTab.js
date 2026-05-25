@@ -237,6 +237,45 @@ export default function AboutTab() {
           </Text>
         </GlassCard>
 
+        {/* ── Account Management (Apple Guideline 5.1.1(v)) ───────── */}
+        <GlassCard style={styles.card} contentStyle={styles.cardContent}>
+          <SectionHeader icon="person-circle-outline" title="Account Management" />
+          <Text style={styles.body}>
+            Account sign-in is optional. If you created an account, you can permanently delete it from here.
+          </Text>
+          {isSignedIn ? (
+            deletingAccount ? (
+              <View style={styles.accountAction}>
+                <ActivityIndicator size="small" color={dc.accentRed} />
+                <Text style={styles.accountActionText}>Deleting account...</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={handleDeleteAccount}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel="Delete account"
+              >
+                <Icon name="trash-outline" size={17} color={dc.accentRed} />
+                <Text style={styles.deleteButtonText}>Delete account</Text>
+              </TouchableOpacity>
+            )
+          ) : (
+            <TouchableOpacity
+              style={styles.requestDeleteButton}
+              onPress={() => Linking.openURL('mailto:support@outdooradvisor.app?subject=Delete%20My%20Account')}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel="Request account deletion"
+            >
+              <Icon name="mail-outline" size={17} color={dc.accentCyan} />
+              <Text style={styles.requestDeleteButtonText}>Request account deletion</Text>
+            </TouchableOpacity>
+          )}
+          {!!deleteMessage && <Text style={styles.accountMessage}>{deleteMessage}</Text>}
+        </GlassCard>
+
         {/* ── Weather Disclaimer ────────────────────────────────────── */}
         <GlassCard style={styles.card} contentStyle={styles.cardContent}>
           <SectionHeader icon="warning-outline" title="Weather Data Disclaimer" />
@@ -456,6 +495,39 @@ const styles = StyleSheet.create({
 
   // Body text
   body: { fontSize: 14, color: dc.textSecondary, lineHeight: 22 },
+
+  // Account management
+  accountAction: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
+  accountActionText: { fontSize: 14, color: dc.textSecondary, fontWeight: '600' },
+  deleteButton: {
+    marginTop: 16,
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,92,122,0.42)',
+    backgroundColor: 'rgba(255,92,122,0.12)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  deleteButtonText: { fontSize: 15, fontWeight: '800', color: dc.accentRed },
+  requestDeleteButton: {
+    marginTop: 16,
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: dc.cardStroke,
+    backgroundColor: dc.cardGlass,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  requestDeleteButtonText: { fontSize: 15, fontWeight: '800', color: dc.accentCyan },
+  accountMessage: { fontSize: 12, color: dc.textSecondary, marginTop: 10, textAlign: 'center', lineHeight: 17 },
 
   // Info rows
   infoRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 11 },
