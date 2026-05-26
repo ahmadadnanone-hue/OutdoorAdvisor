@@ -9,13 +9,13 @@
 
 OutdoorAdvisor Pakistan is the only app purpose-built for Pakistan's outdoor conditions — combining real-time AQI, weather, pollen, road advisories (NHMP/NDMA), and Gemini AI synthesis into a single daily-driver. It targets urban commuters, parents, highway travellers, and outdoor enthusiasts across Pakistan's major cities.
 
-Monetisation is freemium: the core app is free forever, every new install receives a 7-day full-feature trial, and continued access to premium features requires a low-cost subscription priced for the Pakistani market.
+Monetisation is freemium: the core app is free forever, and premium features require an Apple-managed auto-renewable subscription. The free trial starts only after the user subscribes through Apple with a payment method.
 
 ---
 
 ## 2. Product Tiers
 
-| Feature | Free | Trial (7 days) | Premium |
+| Feature | Free | StoreKit Trial | Premium |
 |---|:---:|:---:|:---:|
 | Live AQI + weather | ✅ | ✅ | ✅ |
 | Outdoor Decision card | ✅ | ✅ | ✅ |
@@ -33,11 +33,11 @@ Monetisation is freemium: the core app is free forever, every new install receiv
 | Home section customisation | ❌ | ✅ | ✅ |
 
 ### Trial mechanics
-- Trial starts on first app launch — stored locally via `outdooradvisor_trial_v1` in AsyncStorage
-- Duration: 7 days from first launch
-- No credit card required — fully device-based, no sign-in needed
-- After expiry with no active subscription: user drops to free tier permanently
-- Trial does not restart on reinstall (keyed to device, not Apple ID) — prevents abuse
+- Trial starts only when the user subscribes through Apple In-App Purchase with a payment method.
+- Monthly subscription: 15-day introductory free trial in App Store Connect.
+- Yearly subscription: 1-month introductory free period in App Store Connect.
+- Users who do not subscribe stay on the free tier.
+- Apple manages trial eligibility, billing, renewal, cancellation, and restore behavior.
 
 ---
 
@@ -48,23 +48,23 @@ Monetisation is freemium: the core app is free forever, every new install receiv
 | Plan | Pakistan | International |
 |---|---|---|
 | Free | PKR 0 / forever | USD 0 / forever |
-| Premium Monthly | **PKR 300 / month** | **USD 3 / month** |
-| Premium Annual | **PKR 2,400 / year** | **USD 24 / year** |
+| Premium Monthly | **PKR 99 / month** | **USD 0.99 / month** |
+| Premium Annual | **Best-value annual plan** | **Best-value annual plan** |
 
 ### Annual Savings
-- Annual plan = 33% saving vs monthly (8 months paid, 4 months free)
-- Industry standard discount — significantly reduces monthly churn
+- Annual plan should include one month free versus monthly pricing.
+- Exact localized yearly prices must be configured in App Store Connect price schedules.
 
 ### Pricing Rationale
 
-**PKR 300/month (Pakistan)**
+**PKR 99/month (Pakistan)**
 - Equivalent to a single fast-food meal or one cup of specialty coffee in Lahore/Karachi
 - Below the psychological "expensive app" ceiling for Pakistani consumers
 - Comparable to Netflix Pakistan (PKR 250–450/mo) which users already accept
 - Accessible to students, young professionals, and middle-income households
 - At 15% Apple developer rate: net ~PKR 255/month per subscriber
 
-**USD 3/month (International)**
+**USD 0.99/month (International)**
 - Targets Pakistani diaspora in UAE, UK, USA, Saudi Arabia, Canada, Australia
 - Significantly below global weather app competitors:
   - Dark Sky was USD 4/year (now Apple Weather, free)
@@ -158,18 +158,15 @@ At 800 subscribers (Month 12 projection), monthly net revenue is ~USD 730 agains
 
 ## 8. Implementation Roadmap (Technical)
 
-The current app uses a device-based 7-day trial with email-allowlist premium. To charge real subscriptions, StoreKit 2 must be implemented.
+The current app has StoreKit client wiring through `expo-iap`. App Store Connect products and a new native build are still required.
 
 ### Required for live subscriptions
 1. **App Store Connect:** Create subscription products
-   - `pk.outdooradvisor.premium.monthly` — PKR 300/mo
-   - `pk.outdooradvisor.premium.annual` — PKR 2,400/yr
-   - `com.outdooradvisor.premium.monthly` — USD 3/mo
-   - `com.outdooradvisor.premium.annual` — USD 24/yr
+   - `com.ahmadadnanone.outdooradvisor.premium.monthly` — PKR 99 in Pakistan, USD 0.99 internationally, 15-day intro trial
+   - `com.ahmadadnanone.outdooradvisor.premium.yearly` — annual best-value price, 1-month intro/free offer
 2. **StoreKit 2 integration** in the app:
    - Purchase flow (monthly/annual selection screen)
-   - Receipt validation (server-side via Supabase function)
-   - Entitlement grant — replaces current email-allowlist check in `src/lib/premium.js`
+   - Entitlement grant from StoreKit active subscription state, plus internal allowlist for admin/test users
    - Restore purchases button (Apple requirement)
 3. **Subscription management UI** in Settings → Account:
    - Show current plan, renewal date, manage/cancel link
@@ -177,7 +174,7 @@ The current app uses a device-based 7-day trial with email-allowlist premium. To
    - Subscription terms, auto-renewal disclosure, cancellation instructions (Apple requirement)
 
 ### This requires a new native build (not OTA-shippable)
-StoreKit is a native module. Plan for 2–3 days of development + one EAS build + App Store review cycle.
+StoreKit is a native module. This requires one EAS build and App Store review cycle; OTA cannot add the native module.
 
 ---
 
@@ -185,7 +182,7 @@ StoreKit is a native module. Plan for 2–3 days of development + one EAS build 
 
 Use this text in App Store Connect Review Notes when submitting:
 
-> *OutdoorAdvisor Pakistan offers a permanently free tier with core weather and AQI features. Every new install receives a 7-day free trial with full premium access — no payment or sign-in required. After the trial period, users may subscribe to Premium at PKR 300/month or USD 3/month (local pricing varies by region) via in-app purchase to retain access to AI outdoor synthesis, pollen data, detailed forecasts, smart push notifications, and travel intelligence. No payment is ever required to use the core outdoor decision features, live conditions, or road advisories.*
+> *OutdoorAdvisor Pakistan offers a permanently free tier with core weather, AQI, activity, and travel-advisory features. Premium features are available only through Apple In-App Purchase auto-renewable subscriptions. The monthly product `com.ahmadadnanone.outdooradvisor.premium.monthly` includes a 15-day introductory free trial and is priced at USD 0.99 internationally / PKR 99 in Pakistan. The yearly product `com.ahmadadnanone.outdooradvisor.premium.yearly` is the best-value annual plan with a 1-month introductory free period. Users who do not subscribe remain on the free tier. Apple manages trial eligibility, payment method, renewal, cancellation, and restore purchases.*
 
 ---
 
@@ -194,10 +191,10 @@ Use this text in App Store Connect Review Notes when submitting:
 | | |
 |---|---|
 | Free tier | Permanent, no expiry, core features |
-| Trial | 7 days, full access, no card required |
-| Premium Pakistan | PKR 300/mo or PKR 2,400/yr |
-| Premium International | USD 3/mo or USD 24/yr |
+| Trial | Apple-managed intro offer after subscribe/payment method |
+| Premium Pakistan | PKR 99/mo plus annual best-value plan |
+| Premium International | USD 0.99/mo plus annual best-value plan |
 | Apple cut | 30% yr 1, 15% yr 2+ (small developer) |
 | Break-even | ~21 paying subscribers at current server costs |
-| Next technical step | StoreKit 2 integration for live IAP |
+| Next technical step | Create App Store Connect subscription products and ship native build |
 | Key seasonal opportunity | Pakistan smog season Oct–Jan |

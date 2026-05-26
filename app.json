@@ -70,7 +70,8 @@
         }
       ],
       "expo-web-browser",
-      "expo-font"
+      "expo-font",
+      "expo-iap"
     ],
     "extra": {
       "eas": {

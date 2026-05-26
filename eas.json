@@ -10,17 +10,11 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal",
-      "env": {
-        "EXPO_PUBLIC_TESTFLIGHT_PREMIUM": "true"
-      }
+      "distribution": "internal"
     },
     "testflight-preview": {
       "distribution": "store",
-      "autoIncrement": true,
-      "env": {
-        "EXPO_PUBLIC_TESTFLIGHT_PREMIUM": "true"
-      }
+      "autoIncrement": true
     },
     "production": {
       "autoIncrement": true

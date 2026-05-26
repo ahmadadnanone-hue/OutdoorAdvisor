@@ -171,17 +171,20 @@ It is not meant to feel like a generic weather app.
   - `EXPO_PUBLIC_SUPABASE_URL`
   - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 
-### Premium & 7-Day Trial
-- premium gating logic lives in `src/lib/premium.js`
-- **7-day device-based free trial** is now live — `src/utils/trialState.js` records `firstLaunchAt` in AsyncStorage (`outdooradvisor_trial_v1`) on first launch
-- `AuthContext` composes `isPremium = entitlementPremium || trial.inTrial`; exposes `trial: { inTrial, daysRemaining, totalDays, expiresAt, expired }`
-- `HomeHeader` badge: `PREMIUM` (gold) / `TRIAL · N DAYS LEFT` (cyan) / `FREE` (muted)
-- `HomeScreen` shows a "Your 7-day trial has ended" card when `trial.expired === true`
-- After trial ends with no entitlement, user permanently settles into free tier (no IAP — allowed by Apple since we never charge)
-- `EXPO_PUBLIC_TESTFLIGHT_PREMIUM=true` is set in `preview` and `testflight-preview` EAS profiles only — NOT in production
+### Premium & StoreKit Subscriptions
+- premium gating logic lives in `src/lib/premium.js`, with StoreKit state coming from `src/hooks/useStoreKitSubscriptions.js`
+- StoreKit product IDs live in `src/config/subscriptions.js`:
+  - monthly: `com.ahmadadnanone.outdooradvisor.premium.monthly`
+  - yearly: `com.ahmadadnanone.outdooradvisor.premium.yearly`
+- Public premium access should come from an active Apple auto-renewable subscription. Internal allowlist/Supabase metadata can still grant admin/test premium.
+- The old device-started 7-day trial no longer grants production premium. Public trials are Apple-managed introductory offers: monthly should have a 15-day free trial; yearly should have a 1-month free intro offer.
+- Users who do not subscribe stay on the free tier. Core weather, AQI, activities, and travel advisories remain free; AI/detail/weather-depth/route-planner style features are premium-gated.
+- `AuthContext` now composes premium from StoreKit subscription state plus internal entitlement; it no longer composes `isPremium` from local `trial.inTrial`.
+- `HomeScreen` shows a StoreKit subscribe card for free users with monthly/yearly buttons and restore purchases.
+- `EXPO_PUBLIC_TESTFLIGHT_PREMIUM` was removed from EAS profiles on 2026-05-26 so TestFlight/App Review builds exercise the real StoreKit/free-tier path.
 - entitlement premium: user email in `SEEDED_PREMIUM_EMAILS` or `EXPO_PUBLIC_PREMIUM_EMAILS`, or Supabase user metadata has `plan/tier/subscription_status = premium/active`
 - route planner is premium and experimental
-- **do not add StoreKit/IAP without explicit user instruction** — current model is trial-then-free-tier
+- Adding `expo-iap` requires a full native EAS build. OTA is not enough for the subscription implementation.
 
 ## Important Current Truths
 
@@ -195,8 +198,8 @@ It is not meant to feel like a generic weather app.
 - do not assume Vercel is only relying on auto-deploy from GitHub; manual prod deploy has been the current workflow
 - the Vercel web app is still active and should be preserved even if it is temporarily behind the latest iOS-focused work
 - current strategy is iOS-first, not web-abandoned
-- notifications, subscriptions, and privacy/legal hardening are not finished for full app-store readiness
-- real App Store subscriptions are not implemented yet
+- notifications and privacy/legal hardening still need ongoing review for full app-store readiness
+- StoreKit subscription client wiring is now implemented with `expo-iap`, but App Store Connect products/prices/offers and a new native build are still required before release
 - Apple Developer Program enrollment is complete, so app-store preparation is now a real active track
 - NHMP source is not an API; it is scraped from:
   - `https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx`
@@ -350,16 +353,16 @@ Use this section as the cross-platform handoff checklist for both Claude and Cod
 - Bundle ID `com.ahmadadnanone.OutdoorAdvisor` registered; HealthKit, WeatherKit, Push capabilities enabled on Apple portal
 - About tab: privacy policy text, terms, disclaimer, and branded emails all complete (`src/components/settings/AboutTab.js`)
 - `outdooradvisor.app` live on Vercel — treat as primary brand domain
-- Premium gating: email allowlist bridge in place (`src/lib/premium.js`)
+- Premium gating: StoreKit subscription state plus email/Supabase allowlist bridge in place (`src/lib/premium.js`, `src/hooks/useStoreKitSubscriptions.js`)
 
 ### ✅ Submitted for App Store Review (2026-05-11)
 - Build 31 (v1.0.0) is **Waiting for Review** — submission ID `785fa048-fdd4-4d36-8d9b-5e90f012bdf4`
 - Privacy Policy URL set: `https://gist.github.com/ahmadadnanone-hue/51b5f2db7f89bce2724dc57bdfd1f2c2`
-- 7-day free trial replaces "premium for everyone" — Apple-compliant (no IAP needed)
+- StoreKit subscription work is replacing the older device-based trial approach; next public submission should use Apple IAP products and reviewer notes.
 - App name changed to **OutdoorAdvisor Pakistan** (original "OutdoorAdvisor" was taken on the App Store)
 
 ### ⚠️ Known gaps (won't block build #10 TestFlight, will matter for build #11 / full review)
-- No StoreKit 2 real subscriptions — premium is email-allowlist only; may be flagged in App Store review if premium features are visible
+- StoreKit client wiring exists, but App Store Connect subscription products/offers still need to be created and attached before the next review submission.
 - Native push backbone now exists, the production push route has a valid Expo/EAS APNs key (`ZQ96CMG8QN`), and the GitHub Actions scheduler has been restored at `.github/workflows/push-cron.yml` to call `/api/push?action=cron` every 15 minutes. A protected production test push returned an Expo ticket with status `ok`; still confirm on-device receipt while the app is closed and monitor scheduled cron delivery.
 - UI Blueprint phases 6, 7, 9, 10 not complete (Route Planner results card, motion polish, safety copy pass)
   - `expo-font` and SDK patch mismatches were fixed after the audit; latest build-20 prep aligned `expo` to `~55.0.18` and `expo-notifications` to `~55.0.21`
@@ -389,6 +392,7 @@ Use this section as the cross-platform handoff checklist for both Claude and Cod
 - update it when a new major route, AI behavior, or notification rule is added
 
 ## Recent Changes
+- 2026-05-26 — Started real StoreKit subscription implementation after Apple questioned how premium works after the trial. Added `expo-iap` plus `expo-iap` config plugin, new subscription product config (`src/config/subscriptions.js`), StoreKit subscription hook (`src/hooks/useStoreKitSubscriptions.js`), and rewired `AuthContext` so premium now comes from active StoreKit subscription state or internal allowlist/Supabase entitlement instead of the old device-started trial. `HomeScreen` now shows a premium subscribe card for free users with monthly/yearly subscription buttons and restore purchases. App Store Connect still needs the matching auto-renewable subscription products created: monthly `com.ahmadadnanone.outdooradvisor.premium.monthly` with 15-day intro trial and yearly `com.ahmadadnanone.outdooradvisor.premium.yearly` with 1-month intro/free offer. A full native EAS build is required; OTA cannot ship this native IAP change.
 - 2026-05-25 — Addressed App Review rejection after build 41 resubmission. Apple rejected build `1.0.2 (41)` on iPad Air 11-inch (M3), iPadOS 26.5, asking what happens after the 7-day trial and saying the delete-account feature was inaccessible. `src/components/settings/AboutTab.js` now shows a prominent Account Management card near the top of About with a full-width Delete account button for signed-in users (and request-deletion fallback for signed-out users), while keeping the footer link as backup. `src/screens/HomeScreen.js` now clarifies after trial expiry that no payment is taken and no purchase is required. `APP_STORE_METADATA.md` review notes now directly answer the 7-day trial question and explain the new in-app delete-account path for reviewers. Commit `c68986c` was pushed to `master`, EAS Update group `0e312d7a-7ef8-4645-bfc1-a294d85da87f` was published to the production branch for iOS runtime `1.0.0`, Vercel prod deploy `dpl_1LKi5kGAxXzQSqgbeX9BVmycVf9U` went live on `https://outdooradvisor.app`, and App Store Connect was updated/replied/resubmitted at 2026-05-25 3:25 PM PKT. Current App Store review status: **Waiting for Review**.
 - 2026-05-18 — Fixed stale/locality-bad NDMA pushes after the phone received old advisories on Mon May 18 around 9:51 PKT. `api/_lib/ndmaAdvisories.js` now blocks NDMA push delivery unless the advisory has a parseable date within the last 72 hours, and Travel/AI display treats NDMA items older than 7 days as stale rather than active. Plain flash-flood warnings are no longer classified as GLOF, unscoped flash-flood advisories no longer default to all Punjab, selected/unknown-location devices no longer receive NDMA pushes, and heatwave default targeting is limited to the affected heat-dome districts (Rajanpur, Rahim Yar Khan, Jacobabad, Sukkur, Hyderabad, Sibi, Nasirabad) instead of Lahore/metro users. Existing old iOS notifications still need to be manually cleared from Notification Center, but future cron runs should not resend those stale April/May advisories.
 - 2026-05-15 — **Build 41 finished and submitted to TestFlight.** EAS build `97fbd02f-9fd6-4f9a-88ad-82b0b944b039`, app version `1.0.2`, build number `41`, IPA `https://expo.dev/artifacts/eas/jLwaHVZT7d6yehVjjZ3osv.ipa`. EAS Submit `de321771-43cb-4213-a12d-3b6bf9e27b96` handed off to Apple. Key change over build 35: **`expo-updates` is now installed and wired** — all future JS-only fixes ship as OTA (`eas update --branch production`) without a new App Store build. Also baked in: tab bar scene overlay fix (no blue strip), SynthesisCard contradiction fix, stale window pill suppression. Built from `/tmp/oa-build` (fresh GitHub clone) because `/Users/ahmedadnan/OutdoorAdvisor-main` is a git worktree and newer EAS CLI cannot shallow-clone worktrees via `file://` — always build from a fresh clone or the user's own terminal going forward.

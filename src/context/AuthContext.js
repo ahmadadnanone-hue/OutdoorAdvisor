@@ -2,7 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { AppState, Platform } from 'react-native';
 import { isSupabaseConfigured, setSupabaseAutoRefresh, supabase } from '../lib/supabase';
 import { derivePremiumState } from '../lib/premium';
-import { getTrialState, TRIAL_DAYS_TOTAL } from '../utils/trialState';
+import { SUBSCRIPTION_TRIAL_DAYS } from '../config/subscriptions';
+import useStoreKitSubscriptions from '../hooks/useStoreKitSubscriptions';
 import { buildApiUrl } from '../config/api';
 
 const AuthContext = createContext();
@@ -20,41 +21,14 @@ const DEFAULT_TRIAL_STATE = {
   inTrial: false,
   daysRemaining: 0,
   expiresAt: null,
-  loading: true,
+  loading: false,
 };
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(isSupabaseConfigured);
-  const [trial, setTrial] = useState(DEFAULT_TRIAL_STATE);
-
-  // ── 7-day device-based free trial ─────────────────────────────────────────
-  useEffect(() => {
-    let mounted = true;
-
-    const syncTrial = async () => {
-      const next = await getTrialState();
-      if (!mounted) return;
-      setTrial({
-        inTrial:       next.inTrial,
-        daysRemaining: next.daysRemaining,
-        expiresAt:     next.expiresAt,
-        loading:       false,
-      });
-    };
-
-    syncTrial();
-
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') syncTrial();
-    });
-
-    return () => {
-      mounted = false;
-      sub.remove();
-    };
-  }, []);
+  const subscription = useStoreKitSubscriptions();
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
@@ -183,14 +157,14 @@ export function AuthProvider({ children }) {
   const value = useMemo(
     () => {
       const premiumState = derivePremiumState(user);
-      // Compose premium: entitlement (paid user / allowlist) OR active trial.
-      // `plan` is "premium" for entitlement, "trial" while the trial is live,
-      // and "free" after the trial expires with no entitlement.
-      const entitlementPremium = premiumState.isPremium;
-      const isPremium = entitlementPremium || trial.inTrial;
-      const plan = entitlementPremium
-        ? premiumState.plan
-        : trial.inTrial ? 'trial' : 'free';
+      // Premium now comes from StoreKit subscription state or internal allowlist.
+      // The public trial is Apple-managed: users start it by subscribing with a
+      // payment method, then StoreKit reports an active subscription entitlement.
+      const entitlementPremium = premiumState.isPremium || subscription.isActive;
+      const isPremium = entitlementPremium;
+      const plan = subscription.isActive
+        ? (subscription.activePlan || 'premium')
+        : premiumState.plan;
 
       return {
         configured: isSupabaseConfigured,
@@ -202,20 +176,18 @@ export function AuthProvider({ children }) {
         plan,
         entitlementPremium,
         trial: {
-          inTrial:       trial.inTrial,
-          daysRemaining: trial.daysRemaining,
-          totalDays:     TRIAL_DAYS_TOTAL,
-          expiresAt:     trial.expiresAt,
-          expired:       !trial.loading && !trial.inTrial && !entitlementPremium,
-          loading:       trial.loading,
+          ...DEFAULT_TRIAL_STATE,
+          totalDays:     SUBSCRIPTION_TRIAL_DAYS,
+          expired:       false,
         },
+        subscription,
         signIn,
         signUp,
         signOut,
         deleteAccount,
       };
     },
-    [loading, session, user, trial, signIn, signUp, signOut, deleteAccount]
+    [loading, session, user, subscription, signIn, signUp, signOut, deleteAccount]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

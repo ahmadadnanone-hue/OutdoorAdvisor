@@ -3,7 +3,7 @@
  * All UI sections live in src/components/home/.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, RefreshControl, ActivityIndicator, Platform, Modal, TouchableOpacity, AppState } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, RefreshControl, ActivityIndicator, Platform, Modal, TouchableOpacity, AppState, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
@@ -57,7 +57,7 @@ const ACTIVITY_IDS             = ['running', 'cycling', 'walking', 'swimming', '
 export default function HomeScreen({ navigation, route }) {
   const { colors } = useTheme();
   const settings = useSettings();
-  const { isPremium, entitlementPremium, trial, user } = useAuth();
+  const { isPremium, entitlementPremium, trial, user, subscription } = useAuth();
   const insets = useSafeAreaInsets();
   const health = useHealthData({ prompt: false });
 
@@ -225,6 +225,24 @@ export default function HomeScreen({ navigation, route }) {
     setNotificationCenterVisible(true);
   }, [refreshNotificationInbox]);
 
+  const startSubscription = useCallback(async (planKey) => {
+    try {
+      await subscription?.subscribeToPlan?.(planKey);
+    } catch (error) {
+      if (error?.code === 'user-cancelled') return;
+      Alert.alert('Subscription unavailable', error?.message || 'Please try again in a moment.');
+    }
+  }, [subscription]);
+
+  const restoreSubscription = useCallback(async () => {
+    try {
+      await subscription?.restoreSubscriptions?.();
+      Alert.alert('Restore complete', 'If an active subscription exists for this Apple ID, premium will unlock automatically.');
+    } catch (error) {
+      Alert.alert('Restore unavailable', error?.message || 'Please try again in a moment.');
+    }
+  }, [subscription]);
+
   const markAllNotificationsRead = useCallback(async () => {
     const next = await markInboxSeen();
     setNotificationInbox(next);
@@ -279,11 +297,39 @@ export default function HomeScreen({ navigation, route }) {
           <CacheIndicator visible={aqiCached || weatherCached} updatedAt={lastUpdated !== '--' ? lastUpdated : null} />
           {!!refreshNote && <Text style={styles.refreshNote}>{refreshNote}</Text>}
 
-          {trial?.expired ? (
-            <GlassCard contentStyle={styles.trialEndedContent}>
-              <Text style={styles.trialEndedTitle}>Your 7-day trial has ended</Text>
-              <Text style={styles.trialEndedBody}>
-                You're now on the free plan. No payment is taken and no purchase is required. Core conditions stay free forever, while optional advanced details return to free-tier limits.
+          {!isPremium ? (
+            <GlassCard contentStyle={styles.subscribeContent}>
+              <Text style={styles.subscribeEyebrow}>PREMIUM</Text>
+              <Text style={styles.subscribeTitle}>Start your free trial with Apple</Text>
+              <Text style={styles.subscribeBody}>
+                Add a payment method and subscribe to start the free trial. Core weather, AQI, and travel advisories stay free if you do not subscribe.
+              </Text>
+              <View style={styles.subscribePlans}>
+                {(subscription?.plans || []).map((plan) => {
+                  const loadingPlan = subscription?.purchasingPlan === plan.key;
+                  return (
+                    <TouchableOpacity
+                      key={plan.key}
+                      activeOpacity={0.82}
+                      disabled={loadingPlan}
+                      style={[styles.subscribeButton, plan.key === 'yearly' && styles.subscribeButtonFeatured]}
+                      onPress={() => startSubscription(plan.key)}
+                    >
+                      <View style={styles.subscribeButtonTextWrap}>
+                        <Text style={styles.subscribeButtonTitle}>{plan.label}</Text>
+                        <Text style={styles.subscribeButtonSub}>{plan.trialLabel} · {plan.price}</Text>
+                      </View>
+                      <Text style={styles.subscribeButtonBadge}>{loadingPlan ? 'Opening...' : plan.badge}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {!!subscription?.error && <Text style={styles.subscribeError}>{subscription.error}</Text>}
+              <TouchableOpacity onPress={restoreSubscription} style={styles.restoreButton} activeOpacity={0.75}>
+                <Text style={styles.restoreButtonText}>Restore purchases</Text>
+              </TouchableOpacity>
+              <Text style={styles.subscribeFinePrint}>
+                Subscriptions renew automatically through Apple unless cancelled at least 24 hours before renewal. Manage or cancel in your Apple ID subscriptions.
               </Text>
             </GlassCard>
           ) : null}
@@ -495,9 +541,36 @@ const styles = StyleSheet.create({
   scroll:      { flex: 1 },
   content:     { padding: 16, gap: 16 },
   refreshNote: { fontSize: 12, color: dc.textMuted, textAlign: 'center', paddingVertical: 6 },
-  trialEndedContent: { padding: 16, gap: 6 },
-  trialEndedTitle: { fontSize: 14, fontWeight: '700', color: dc.textPrimary },
-  trialEndedBody: { fontSize: 13, lineHeight: 19, color: dc.textSecondary },
+  subscribeContent: { padding: 16, gap: 10 },
+  subscribeEyebrow: { fontSize: 10, fontWeight: '800', color: '#FCD34D', letterSpacing: 1.4 },
+  subscribeTitle: { fontSize: 17, fontWeight: '800', color: dc.textPrimary },
+  subscribeBody: { fontSize: 13, lineHeight: 19, color: dc.textSecondary },
+  subscribePlans: { gap: 8, marginTop: 2 },
+  subscribeButton: {
+    minHeight: 58,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: dc.cardStroke,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  subscribeButtonFeatured: {
+    borderColor: 'rgba(252,211,77,0.52)',
+    backgroundColor: 'rgba(252,211,77,0.10)',
+  },
+  subscribeButtonTextWrap: { flex: 1, minWidth: 0 },
+  subscribeButtonTitle: { fontSize: 14, fontWeight: '800', color: dc.textPrimary },
+  subscribeButtonSub: { fontSize: 12, color: dc.textSecondary, marginTop: 3 },
+  subscribeButtonBadge: { fontSize: 11, fontWeight: '800', color: dc.accentCyan },
+  subscribeError: { fontSize: 12, lineHeight: 17, color: dc.accentOrange },
+  restoreButton: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 10 },
+  restoreButtonText: { fontSize: 12, fontWeight: '700', color: dc.accentCyan },
+  subscribeFinePrint: { fontSize: 11, lineHeight: 16, color: dc.textMuted, textAlign: 'center' },
   footer:      { fontSize: 11, color: dc.textMuted, textAlign: 'center', marginTop: 8 },
   notificationSafe: { flex: 1, gap: 14 },
   notificationHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8 },

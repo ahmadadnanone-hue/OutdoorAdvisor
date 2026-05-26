@@ -1,25 +1,17 @@
 /**
- * Device-based 7-day free trial.
+ * Legacy device-based trial helper.
  *
- * On first launch we record `firstLaunchAt` in AsyncStorage. While
- * the trial is active, `isPremium` is auto-granted in AuthContext so
- * every gated feature (AI briefing, forecast, pollen, wind, details,
- * route closure alerts, etc.) is unlocked.
+ * Public premium trials are now Apple-managed introductory offers. A user must
+ * subscribe with a payment method before StoreKit starts the free-trial period.
+ * This helper is retained only as a dev/reset utility and for migration safety.
  *
- * When the trial expires the user settles permanently into the free
- * tier (per Apple's rules — no IAP needed because we never charge).
- *
- * Notes:
- *   • Reinstalling the app resets the trial. Acceptable for v1.0.
- *   • Device time manipulation is not defended against in v1.0.
- *   • The seed-on-first-read pattern means even users upgrading
- *     from a build that didn't have trial logic get a fresh 7 days.
+ * Do not use this to grant production premium access.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const TRIAL_KEY  = 'outdooradvisor_trial_v1';
 const DAY_MS     = 24 * 60 * 60 * 1000;
-export const TRIAL_DAYS_TOTAL = 7;
+export const TRIAL_DAYS_TOTAL = 15;
 const TRIAL_MS   = TRIAL_DAYS_TOTAL * DAY_MS;
 
 export async function getTrialState() {

@@ -1,14 +1,14 @@
 # OutdoorAdvisor App Store Submission Pack
 
-Last updated: 2026-04-28
+Last updated: 2026-05-26
 
 This file is the reusable paste-ready source for App Store Connect, TestFlight, review notes, screenshot planning, and later public-release polish.
 
 ## Current Release State
 
-- Latest checked iOS build: build version `19`
-- EAS build ID: `27f728ba-7ee4-4698-9d79-c8f6b59d5e77`
-- Status: `FINISHED`; uploaded to App Store Connect via EAS Submit `62d7eafa-f74c-4441-995e-49026e5c1f68`
+- Latest checked iOS build in App Review: build version `41`
+- EAS build ID: `97fbd02f-9fd6-4f9a-88ad-82b0b944b039`
+- Status: App Store Connect submission is `Waiting for Review` as of 2026-05-25 3:25 PM PKT
 - Distribution: `STORE`
 - Build profile: `testflight-preview`
 - Built from commit: `fa68022`
@@ -16,8 +16,8 @@ This file is the reusable paste-ready source for App Store Connect, TestFlight, 
 - Support URL: `https://outdooradvisor.app`
 - Marketing URL: `https://outdooradvisor.app`
 - WeatherKit: server-side Vercel proxy is live with Open-Meteo fallback; latest smoke check saw Apple upstream return HTML `502 Bad Gateway`, and the proxy now reports that cleanly instead of throwing a generic 500
-- Premium: build `19` grants premium to all signed-in users because `EXPO_PUBLIC_TESTFLIGHT_PREMIUM=true`; public StoreKit subscriptions are still not implemented
-- TestFlight submission note: build `19` was uploaded to App Store Connect on 2026-04-28 and is processing on Apple. Once processing finishes, add it to internal/external TestFlight groups and submit for Beta App Review if needed; do not keep rerunning EAS upload unless a new IPA is needed.
+- Premium: StoreKit subscription implementation is now in progress. A new native build is required before this can be submitted because `expo-iap` adds native purchase code.
+- TestFlight submission note: create App Store Connect subscription products before submitting the next StoreKit build.
 - EAS CLI note: setting `What To Test` through `--what-to-test` is Expo Enterprise-only. Paste the `TestFlight What To Test` section below manually in App Store Connect if needed.
 
 ## App Store Connect Fields
@@ -95,9 +95,13 @@ OutdoorAdvisor provides general weather, air-quality, pollen, and travel-advisor
 
 WeatherKit is accessed through a server-side Vercel proxy. The app also has Open-Meteo fallback behavior if WeatherKit is unavailable.
 
-OutdoorAdvisor Pakistan is free in this version. There are no paid features, no subscriptions, and no in-app purchases.
+OutdoorAdvisor Pakistan uses Apple In-App Purchase for premium subscriptions in this version.
 
-The 7-day trial is a free device-based feature preview. During the first 7 days, all optional advanced features are unlocked. After 7 days, the app automatically moves to the free tier: core weather, AQI, activity, and travel-advisory features remain available, while optional advanced features such as AI briefings, detailed pollen/wind/forecast cards, and experimental route planning return to the free-tier limits. The user is not charged, no purchase is offered, and no external payment is available.
+Premium is available through two auto-renewable subscriptions in App Store Connect:
+- Monthly: `com.ahmadadnanone.outdooradvisor.premium.monthly`
+- Yearly: `com.ahmadadnanone.outdooradvisor.premium.yearly`
+
+The monthly subscription should be priced at USD 0.99 internationally and PKR 99 in Pakistan. The yearly subscription should be priced as the best-value annual plan with one month free versus monthly pricing. Configure the monthly product with a 15-day introductory free trial. Configure the yearly product with a 1-month introductory free trial. Users must subscribe through Apple and have a payment method before the free trial starts. If a user does not subscribe, the app remains on the free tier: core weather, AQI, activity, and travel-advisory features stay available, while premium features such as AI briefings, detailed pollen/wind/forecast cards, experimental route planning, and advanced alerts remain locked.
 
 Account deletion is available in-app. Sign in with the demo account, open Settings, open About, then use the visible Account Management card near the top of the page and tap Delete account. The app asks for confirmation before permanently deleting the account. A small footer link remains as a backup, but the primary delete control is now a full-width Account Management button for iPhone and iPad accessibility.
 
@@ -109,7 +113,7 @@ Please test the core OutdoorAdvisor flow on iPhone:
 
 - Home screen weather, AQI, and outdoor decision guidance
 - AI / rule-based briefing card behavior
-- Signed-in TestFlight premium access
+- Apple In-App Purchase subscription flow and restore purchases
 - Splash/launch transition without old icon flash
 - Travel screen advisory cards and PMD/NHMP source links
 - Wind, rain, thunderstorm, and AQI notification preferences
@@ -117,7 +121,7 @@ Please test the core OutdoorAdvisor flow on iPhone:
 - Settings, notifications, About, privacy, and support/contact links
 - Health permission flow and Health & Outdoor Score display if you are comfortable granting Health access
 
-Known testing note: build `19` grants premium to all signed-in TestFlight users. Store subscriptions are not implemented yet.
+Known testing note: the next StoreKit build must be tested on a physical iOS device with sandbox subscriptions.
 
 ## TestFlight Build 19 Processing Steps
 
@@ -154,7 +158,7 @@ Use these answers unless the app content changes materially:
 - User Generated Content or Social Networking: No
 - Messaging and Chat: No
 - Advertising: No
-- In-App Purchases: No for the current allowlist/TestFlight build; change to Yes only when StoreKit/subscriptions are implemented.
+- In-App Purchases: Yes. OutdoorAdvisor Premium uses auto-renewable subscriptions through Apple In-App Purchase.
 - Location: Yes, app uses location for weather, AQI, pollen, and travel context.
 - Health or Fitness: Yes, optional Apple Health read access can support smart movement nudges.
 
@@ -201,7 +205,7 @@ Screenshot capture tips:
 
 - Use a real-looking Pakistan city/location, preferably Lahore or Islamabad.
 - Avoid showing impossible, broken, or empty states.
-- Avoid showing premium-locked UI as the primary screenshot until StoreKit is implemented.
+- Avoid showing premium-locked UI as the primary screenshot until the StoreKit products are created and attached to the app version.
 - Avoid screenshots with debug/dev messages.
 - Keep status bar and bottom safe area visually clean.
 
@@ -209,18 +213,17 @@ Screenshot capture tips:
 
 Current risk:
 
-Premium is still allowlist-based and StoreKit subscriptions are not implemented. If public App Review sees visible premium promises, locked paid features, or upgrade language without in-app purchases, Apple may ask for StoreKit or reject the binary.
+Premium is now intended to be backed by StoreKit. Do not submit the next binary until App Store Connect has the matching auto-renewable subscription products created, priced, localized, and selected for review.
 
 Recommended path for TestFlight:
 
-- Keep current allowlist behavior acceptable for internal/external TestFlight testing.
-- In review notes, say premium functionality is limited during TestFlight and reviewer access can be provided on request.
+- Test subscriptions through Apple sandbox/TestFlight. Internal allowlist access may remain only for developer/admin accounts.
 
 Recommended path before public App Store review:
 
-- Either hide/reframe premium surfaces as "Preview", "Experimental", or "Tester access" until StoreKit is ready, or implement StoreKit subscriptions before public submission.
-- Avoid language that implies users can purchase premium if no purchase flow exists.
-- Do not make premium screenshots part of the first App Store screenshot set until StoreKit is live.
+- Create and attach the StoreKit subscriptions before public review.
+- Use reviewer notes that state premium access is purchased only through Apple In-App Purchase.
+- Do not make premium screenshots part of the first App Store screenshot set until StoreKit products are live in App Store Connect.
 
 Preferred conservative choice:
 
