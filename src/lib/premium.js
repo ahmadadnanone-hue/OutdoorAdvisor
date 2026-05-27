@@ -1,3 +1,8 @@
+import {
+  getPremiumEmailAllowlist,
+  normalizePremiumEmail,
+} from '../config/premiumAllowlist';
+
 export const PREMIUM_FEATURES = {
   citySearch: 'Worldwide city search',
   aiBriefings: 'AI daily briefings',
@@ -16,28 +21,6 @@ export const PREMIUM_FEATURES = {
 };
 
 const ACTIVE_STATUSES = new Set(['active', 'premium', 'pro', 'paid', 'trialing', 'trial']);
-const SEEDED_PREMIUM_EMAILS = [
-  'ahmadadnanone@gmail.com',
-  'saqibmasoodcma@google.com',
-  'baburfaruq@gmail.com',
-  'tipu0002017@gmail.com',
-  'jameelayesha86@gmail.com',
-];
-
-function normalizeEmail(value) {
-  return String(value || '').trim().toLowerCase();
-}
-
-function parsePremiumEmailAllowlist(input) {
-  return String(input || '')
-    .split(',')
-    .map((value) => normalizeEmail(value))
-    .filter(Boolean);
-}
-
-function getPremiumEmailAllowlist(input) {
-  return [...new Set([...SEEDED_PREMIUM_EMAILS.map((value) => normalizeEmail(value)), ...parsePremiumEmailAllowlist(input)])];
-}
 
 function isTruthyPremium(value) {
   if (value === true) return true;
@@ -54,7 +37,7 @@ export function derivePremiumState(user) {
 export function _derivePremiumStateFull(user) {
   const appMeta = user?.app_metadata || {};
   const userMeta = user?.user_metadata || {};
-  const email = normalizeEmail(user?.email);
+  const email = normalizePremiumEmail(user?.email);
   const allowlistedEmails = getPremiumEmailAllowlist(process.env.EXPO_PUBLIC_PREMIUM_EMAILS);
   const entitlementList = [
     appMeta.plan,
