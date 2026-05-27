@@ -115,7 +115,7 @@ export default function HomeScreen({ navigation, route }) {
     lon:          location.lon,
     locationName: locationDisplay.primary,
     pollenLabel:  pollenCategory !== '--' ? pollenCategory : null,
-    enabled:      location.lat != null && location.lon != null,
+    enabled:      isPremium && location.lat != null && location.lon != null,
   });
 
   // ── UI state ──────────────────────────────────────────────────────────────

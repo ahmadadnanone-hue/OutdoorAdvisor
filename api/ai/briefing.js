@@ -507,9 +507,8 @@ export default async function handler(req, res) {
     const signals = await fetchSynthesisData(Number(lat), Number(lon), googleKey);
     const fallback = synthesisFallback(signals, locationName, pollenLabel);
 
-    // Synthesis is gated by GEMINI_API_KEY on the server — no token check needed.
-    // Free/premium distinction is handled in the app UI (refresh limits, badge).
-    if (!geminiKey) return sendJson(res, 200, fallback);
+    const premiumState = await getRequestPremiumState(req);
+    if (!geminiKey || !premiumState.isPremium) return sendJson(res, 200, fallback);
 
     try {
       const prompt = buildSynthesisPrompt(signals, locationName, pollenLabel);

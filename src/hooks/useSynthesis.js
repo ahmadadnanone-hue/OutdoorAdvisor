@@ -48,7 +48,12 @@ export default function useSynthesis({ lat, lon, locationName, pollenLabel, enab
   const doFetch = useCallback(async ({ force = false } = {}) => {
     const curLat = latRef.current;
     const curLon = lonRef.current;
-    if (!enabled || curLat == null || curLon == null) return;
+    if (!enabled || curLat == null || curLon == null) {
+      setSynthesis(null);
+      setLoading(false);
+      setFetchedAt(null);
+      return null;
+    }
     if (fetchingRef.current) return;
 
     const key = cacheKey(curLat, curLon);

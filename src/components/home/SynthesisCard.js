@@ -5,8 +5,8 @@
  * Shows a single, authoritative read pulling from every data source:
  * weather, AQI, CAP alerts, pollen, and tomorrow's forecast.
  *
- * Free users see a rule-based brief (same card layout, no AI).
- * Premium users see the Gemini-synthesized brief.
+ * Free users see a local rule-based brief with no AI call or AI badge.
+ * Premium users can see the Gemini-synthesized brief.
  */
 import React, { useState, useCallback } from 'react';
 import {
@@ -93,12 +93,37 @@ export default function SynthesisCard({
   const status = severityToStatus(severity);
   const s      = statusColor(status);
   const icon   = severityIcon(severity);
+  const isAI   = isPremium && synthesis?.provider === 'gemini';
+
+  const localCopy = (() => {
+    if (isPremium) return null;
+    if (severity === 'danger') {
+      return {
+        headline: decision?.label || 'Limit outdoor exposure right now.',
+        summary: decision?.body || decision?.tone || 'Check the live condition cards before going outside.',
+        actions: ['Keep outdoor time short', 'Review AQI and weather below'],
+      };
+    }
+    if (severity === 'caution') {
+      return {
+        headline: decision?.label || 'Use some caution before heading out.',
+        summary: decision?.body || decision?.tone || 'Conditions may still work for shorter outdoor plans.',
+        actions: ['Choose shorter outings', 'Recheck conditions before leaving'],
+      };
+    }
+    return {
+      headline: decision?.label || 'Conditions look workable for most outdoor plans.',
+      summary: decision?.body || decision?.tone || 'Use the live cards below to pick the best time and activity.',
+      actions: ['Use the live cards below', 'Prefer cooler or cleaner-air windows'],
+    };
+  })();
 
   // If we had to clamp up, the synthesis headline is misleading — replace it.
   // We also replace summary / actions / window because Gemini wrote them for
   // the original (lower) severity and they contradict the clamped headline
   // (e.g. red "Difficult conditions" + green "Go for a walk" actions).
   const headline = (() => {
+    if (localCopy?.headline) return localCopy.headline;
     if (!synthesis?.headline) return loading ? null : 'Gathering live conditions…';
     if (clamped) {
       return severity === 'danger'
@@ -141,16 +166,15 @@ export default function SynthesisCard({
     };
   })();
 
-  const rawSummary = synthesis?.summary ?? null;
-  const rawActions = synthesis?.actions ?? [];
-  const rawWindow  = synthesis?.window  ?? null;
+  const rawSummary = localCopy?.summary ?? synthesis?.summary ?? null;
+  const rawActions = localCopy?.actions ?? synthesis?.actions ?? [];
+  const rawWindow  = localCopy ? null : synthesis?.window ?? null;
 
   const summary = clampedCopy ? clampedCopy.summary : rawSummary;
   const actions = clampedCopy ? clampedCopy.actions : rawActions;
   const window  = clampedCopy
     ? clampedCopy.window
     : isStaleWindow(rawWindow) ? null : rawWindow;
-  const isAI     = synthesis?.provider === 'gemini';
   const age      = ageLabel(fetchedAt);
 
   return (
@@ -167,11 +191,12 @@ export default function SynthesisCard({
       >
         <View style={styles.eyebrowRow}>
           <Text style={styles.eyebrow}>OUTDOOR BRIEF</Text>
-          {/* AI badge — always visible: cyan for Gemini, muted for rule-based */}
-          <View style={[styles.aiBadge, !isAI && styles.aiBadgeMuted]}>
-            <Icon name="sparkles" size={9} color={isAI ? dc.accentCyan : dc.textMuted} />
-            <Text style={[styles.aiBadgeText, !isAI && styles.aiBadgeTextMuted]}>AI</Text>
-          </View>
+          {isAI && (
+            <View style={styles.aiBadge}>
+              <Icon name="sparkles" size={9} color={dc.accentCyan} />
+              <Text style={styles.aiBadgeText}>AI</Text>
+            </View>
+          )}
           {!!age && <Text style={styles.ageText}>{age}</Text>}
         </View>
         <Icon
@@ -228,23 +253,25 @@ export default function SynthesisCard({
             <View style={styles.upgradeRow}>
               <Icon name="lock-closed-outline" size={11} color={dc.textMuted} />
               <Text style={styles.upgradeText}>
-                AI synthesis unlocked with Premium — focuses on local weather, air, pollen, and timing.
+                Premium unlocks AI synthesis for local weather, air, pollen, and timing.
               </Text>
             </View>
           )}
 
           {/* Refresh link */}
-          <TouchableOpacity
-            style={styles.refreshRow}
-            onPress={onRefresh}
-            disabled={loading}
-            activeOpacity={0.7}
-          >
-            <Icon name="refresh-outline" size={12} color={dc.textMuted} />
-            <Text style={[styles.refreshText, loading && { opacity: 0.4 }]}>
-              {loading ? 'Refreshing…' : 'Refresh now'}
-            </Text>
-          </TouchableOpacity>
+          {isPremium && (
+            <TouchableOpacity
+              style={styles.refreshRow}
+              onPress={onRefresh}
+              disabled={loading}
+              activeOpacity={0.7}
+            >
+              <Icon name="refresh-outline" size={12} color={dc.textMuted} />
+              <Text style={[styles.refreshText, loading && { opacity: 0.4 }]}>
+                {loading ? 'Refreshing…' : 'Refresh now'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </GlassCard>
@@ -283,17 +310,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 2,
   },
-  aiBadgeMuted: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
   aiBadgeText: {
     fontSize: 9,
     fontWeight: '800',
     color: dc.accentCyan,
     letterSpacing: 0.5,
-  },
-  aiBadgeTextMuted: {
-    color: dc.textMuted,
   },
   ageText: {
     fontSize: 10,
