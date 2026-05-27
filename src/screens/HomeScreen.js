@@ -307,19 +307,27 @@ export default function HomeScreen({ navigation, route }) {
               <View style={styles.subscribePlans}>
                 {(subscription?.plans || []).map((plan) => {
                   const loadingPlan = subscription?.purchasingPlan === plan.key;
+                  const planUnavailable = subscription?.supported && !plan.available;
+                  const buttonDisabled = loadingPlan || planUnavailable;
                   return (
                     <TouchableOpacity
                       key={plan.key}
                       activeOpacity={0.82}
-                      disabled={loadingPlan}
-                      style={[styles.subscribeButton, plan.key === 'yearly' && styles.subscribeButtonFeatured]}
+                      disabled={buttonDisabled}
+                      style={[
+                        styles.subscribeButton,
+                        plan.key === 'yearly' && styles.subscribeButtonFeatured,
+                        planUnavailable && styles.subscribeButtonDisabled,
+                      ]}
                       onPress={() => startSubscription(plan.key)}
                     >
                       <View style={styles.subscribeButtonTextWrap}>
                         <Text style={styles.subscribeButtonTitle}>{plan.label}</Text>
-                        <Text style={styles.subscribeButtonSub}>{plan.trialLabel} · {plan.price}</Text>
+                        <Text style={styles.subscribeButtonSub}>
+                          {planUnavailable ? 'Waiting for Apple product setup' : `${plan.trialLabel} · ${plan.price}`}
+                        </Text>
                       </View>
-                      <Text style={styles.subscribeButtonBadge}>{loadingPlan ? 'Opening...' : plan.badge}</Text>
+                      <Text style={styles.subscribeButtonBadge}>{loadingPlan ? 'Opening...' : planUnavailable ? 'Pending' : plan.badge}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -562,6 +570,9 @@ const styles = StyleSheet.create({
   subscribeButtonFeatured: {
     borderColor: 'rgba(252,211,77,0.52)',
     backgroundColor: 'rgba(252,211,77,0.10)',
+  },
+  subscribeButtonDisabled: {
+    opacity: 0.62,
   },
   subscribeButtonTextWrap: { flex: 1, minWidth: 0 },
   subscribeButtonTitle: { fontSize: 14, fontWeight: '800', color: dc.textPrimary },

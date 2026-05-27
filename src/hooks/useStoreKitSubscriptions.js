@@ -26,6 +26,9 @@ function isActivePurchase(purchase) {
 function normalizeError(error) {
   if (!error) return null;
   if (error.code === ErrorCode.UserCancelled) return null;
+  if (/sku not found/i.test(error.message || '')) {
+    return 'Apple has not made this subscription product available to this build yet. Please try again after App Store Connect finishes processing the subscription metadata.';
+  }
   return error.message || 'Subscription is unavailable right now.';
 }
 
@@ -142,6 +145,11 @@ export default function useStoreKitSubscriptions() {
         await reconnect();
       }
 
+      if (!productsById.has(plan.productId)) {
+        await fetchProducts({ skus: [plan.productId], type: 'subs' });
+        throw new Error('Apple has not returned this subscription product yet. Please wait for App Store Connect processing, then reopen TestFlight and try again.');
+      }
+
       await requestPurchase({
         request: {
           apple: { sku: plan.productId },
@@ -155,7 +163,7 @@ export default function useStoreKitSubscriptions() {
       if (message) setError(message);
       throw nextError;
     }
-  }, [connected, nativeStoreSupported, reconnect, requestPurchase]);
+  }, [connected, fetchProducts, nativeStoreSupported, productsById, reconnect, requestPurchase]);
 
   const restoreSubscriptions = useCallback(async () => {
     if (!nativeStoreSupported) throw new Error('Subscriptions are available in the iOS app.');
