@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Email Confirmed — OutdoorAdvisor</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(160deg, #2A3343 0%, #3B4E68 50%, #58739A 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+      color: #F5F8FA;
+      padding: 20px;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.11);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      border-radius: 24px;
+      padding: 48px 40px;
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    }
+
+    .logo {
+      width: 72px;
+      height: 72px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(155, 200, 255, 0.3) 0%, rgba(155, 200, 255, 0.1) 100%);
+      border: 1px solid rgba(155, 200, 255, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+      font-size: 36px;
+    }
+
+    .icon-circle {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+      font-size: 36px;
+    }
+
+    .icon-circle.success {
+      background: rgba(52, 199, 89, 0.2);
+      border: 1px solid rgba(52, 199, 89, 0.5);
+    }
+
+    .icon-circle.error {
+      background: rgba(255, 59, 48, 0.2);
+      border: 1px solid rgba(255, 59, 48, 0.5);
+    }
+
+    .icon-circle.loading {
+      background: rgba(155, 200, 255, 0.2);
+      border: 1px solid rgba(155, 200, 255, 0.4);
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid rgba(155, 200, 255, 0.3);
+      border-top-color: #9BC8FF;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .app-name {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(155, 200, 255, 0.9);
+      margin-bottom: 8px;
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 700;
+      color: #F5F8FA;
+      margin-bottom: 12px;
+      letter-spacing: -0.3px;
+    }
+
+    p {
+      font-size: 15px;
+      color: rgba(245, 248, 250, 0.72);
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+
+    .email-badge {
+      display: inline-block;
+      background: rgba(155, 200, 255, 0.18);
+      border: 1px solid rgba(155, 200, 255, 0.35);
+      color: #9BC8FF;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin: 12px 0 24px;
+      word-break: break-all;
+    }
+
+    .divider {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.12);
+      margin: 24px 0;
+    }
+
+    .open-app-btn {
+      display: inline-block;
+      background: linear-gradient(135deg, rgba(155, 200, 255, 0.35) 0%, rgba(155, 200, 255, 0.2) 100%);
+      border: 1px solid rgba(155, 200, 255, 0.5);
+      color: #F5F8FA;
+      font-size: 16px;
+      font-weight: 600;
+      padding: 14px 32px;
+      border-radius: 14px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: block;
+      margin-bottom: 12px;
+    }
+
+    .open-app-btn:hover {
+      background: linear-gradient(135deg, rgba(155, 200, 255, 0.45) 0%, rgba(155, 200, 255, 0.3) 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(155, 200, 255, 0.2);
+    }
+
+    .secondary-link {
+      font-size: 14px;
+      color: rgba(245, 248, 250, 0.5);
+      text-decoration: none;
+    }
+
+    .secondary-link:hover {
+      color: rgba(245, 248, 250, 0.8);
+    }
+
+    .steps {
+      text-align: left;
+      margin: 20px 0;
+    }
+
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 0;
+    }
+
+    .step + .step {
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .step-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: rgba(155, 200, 255, 0.2);
+      border: 1px solid rgba(155, 200, 255, 0.4);
+      color: #9BC8FF;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .step-text {
+      font-size: 14px;
+      color: rgba(245, 248, 250, 0.72);
+      line-height: 1.5;
+    }
+
+    /* State screens — hidden by default */
+    #state-loading, #state-success, #state-error {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+
+    <!-- LOADING -->
+    <div id="state-loading">
+      <div class="icon-circle loading">
+        <div class="spinner"></div>
+      </div>
+      <div class="app-name">OutdoorAdvisor</div>
+      <h1>Verifying…</h1>
+      <p>Confirming your email address, just a moment.</p>
+    </div>
+
+    <!-- SUCCESS -->
+    <div id="state-success">
+      <div class="icon-circle success">✓</div>
+      <div class="app-name">OutdoorAdvisor</div>
+      <h1>Email Confirmed!</h1>
+      <p>Your account is now active.</p>
+      <div id="email-badge-wrap"></div>
+      <p style="margin-top:4px;">Open the OutdoorAdvisor app on your iPhone to sign in and start exploring Pakistan's outdoors.</p>
+      <div class="divider"></div>
+      <a href="outdooradvisor://" class="open-app-btn">Open OutdoorAdvisor App</a>
+      <a href="https://apps.apple.com/app/id6746860460" class="secondary-link">Download on the App Store</a>
+    </div>
+
+    <!-- ERROR -->
+    <div id="state-error">
+      <div class="icon-circle error">✕</div>
+      <div class="app-name">OutdoorAdvisor</div>
+      <h1>Link Expired</h1>
+      <p id="error-message">This confirmation link has expired or is invalid. Confirmation links are valid for 24 hours.</p>
+      <div class="divider"></div>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-text">Open the OutdoorAdvisor app on your iPhone</div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-text">Tap <strong style="color:#F5F8FA">Sign In</strong> → enter your email</div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-text">Tap <strong style="color:#F5F8FA">Resend confirmation email</strong> to get a fresh link</div>
+        </div>
+      </div>
+      <a href="outdooradvisor://" class="open-app-btn" style="margin-top:8px;">Open App</a>
+    </div>
+
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://qhygkrwekdacvpaqhkcf.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_5vqnpbEgWmjbmrhAeitDcA_Hn7P47KK';
+
+    function show(state) {
+      document.getElementById('state-loading').style.display = 'none';
+      document.getElementById('state-success').style.display = 'none';
+      document.getElementById('state-error').style.display  = 'none';
+      document.getElementById('state-' + state).style.display = 'block';
+    }
+
+    function showSuccess(email) {
+      if (email) {
+        document.getElementById('email-badge-wrap').innerHTML =
+          '<div class="email-badge">' + email + '</div>';
+      }
+      show('success');
+    }
+
+    function showError(msg) {
+      if (msg) document.getElementById('error-message').textContent = msg;
+      show('error');
+    }
+
+    async function handleConfirmation() {
+      show('loading');
+
+      try {
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Parse both hash and query params
+        const hash   = window.location.hash.substring(1);
+        const search = window.location.search.substring(1);
+        const params = new URLSearchParams(hash || search);
+
+        const accessToken  = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
+        const type         = params.get('type');
+        const errorCode    = params.get('error_code') || params.get('error');
+        const errorDesc    = params.get('error_description');
+        const tokenHash    = params.get('token_hash');
+        const code         = params.get('code');
+
+        // Handle explicit error from Supabase
+        if (errorCode || errorDesc) {
+          showError(errorDesc ? decodeURIComponent(errorDesc.replace(/\+/g, ' ')) : undefined);
+          return;
+        }
+
+        // Flow 1: token in URL fragment (implicit flow)
+        if (accessToken && refreshToken) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token:  accessToken,
+            refresh_token: refreshToken,
+          });
+          if (error) { showError(error.message); return; }
+          showSuccess(data?.user?.email);
+          return;
+        }
+
+        // Flow 2: PKCE code exchange
+        if (code) {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) { showError(error.message); return; }
+          showSuccess(data?.user?.email);
+          return;
+        }
+
+        // Flow 3: OTP token_hash (newer Supabase)
+        if (tokenHash && type) {
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: type,
+          });
+          if (error) { showError(error.message); return; }
+          showSuccess(data?.user?.email);
+          return;
+        }
+
+        // No recognized params — check if already signed in
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session?.user) {
+          showSuccess(sessionData.session.user.email);
+          return;
+        }
+
+        showError('No confirmation token found in this link. Please use the link directly from your email.');
+      } catch (err) {
+        showError('Something went wrong: ' + err.message);
+      }
+    }
+
+    handleConfirmation();
+  </script>
+</body>
+</html>
