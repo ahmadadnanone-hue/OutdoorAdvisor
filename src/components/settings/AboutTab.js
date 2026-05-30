@@ -208,7 +208,7 @@ export default function AboutTab() {
           <Text style={styles.heroName}>OutdoorAdvisor</Text>
           <Text style={styles.heroVersion}>Version {APP_VERSION} · Build {BUILD}</Text>
           <Text style={styles.heroTagline}>
-            Your calm, practical guide to outdoor conditions across Pakistan.
+            Your practical guide to outdoor conditions across Pakistan.
           </Text>
           <View style={styles.heroBadgeRow}>
             <View style={styles.heroBadge}>
@@ -230,7 +230,7 @@ export default function AboutTab() {
         <GlassCard style={styles.card} contentStyle={styles.cardContent}>
           <SectionHeader icon="information-circle-outline" title="About" />
           <Text style={styles.body}>
-            OutdoorAdvisor gives you a clear, calm read on the conditions outside — whether you're planning a morning run, checking if it's safe to drive the M2, or deciding whether to take the kids to Murree this weekend.
+            OutdoorAdvisor gives you a clear read on the conditions outside — whether you're planning a morning run, checking if it's safe to drive the M2, or deciding whether to take the kids to Murree this weekend.
           </Text>
           <Text style={[styles.body, { marginTop: 10 }]}>
             Built in Pakistan for Pakistan, with a strong focus on practical local context: air quality, pollen, road advisories, and weather — all in one place.
@@ -364,33 +364,6 @@ export default function AboutTab() {
             label="Data sold to third parties"
             value="Never"
           />
-        </GlassCard>
-
-        {/* ── Open Source ───────────────────────────────────────────── */}
-        <GlassCard style={styles.card} contentStyle={styles.cardContent}>
-          <SectionHeader icon="code-slash-outline" title="Open Source" />
-          <Text style={[styles.body, { marginBottom: 12 }]}>
-            OutdoorAdvisor is built on the shoulders of these excellent open-source projects:
-          </Text>
-          {[
-            { name: 'React Native',            url: 'https://reactnative.dev' },
-            { name: 'Expo',                    url: 'https://expo.dev' },
-            { name: 'React Navigation',        url: 'https://reactnavigation.org' },
-            { name: 'React Native Reanimated', url: 'https://docs.swmansion.com/react-native-reanimated/' },
-            { name: 'expo-blur',               url: 'https://docs.expo.dev/versions/latest/sdk/blur-view/' },
-            { name: '@noble/curves',           url: 'https://github.com/paulmillr/noble-curves' },
-            { name: 'Supabase',                url: 'https://supabase.com' },
-          ].map(({ name, url }) => (
-            <TouchableOpacity
-              key={name}
-              style={styles.ossRow}
-              onPress={() => Linking.openURL(url)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.ossName}>{name}</Text>
-              <Icon name="open-outline" size={13} color={dc.textMuted} />
-            </TouchableOpacity>
-          ))}
         </GlassCard>
 
         {/* ── Contact & Feedback ────────────────────────────────────── */}
@@ -545,10 +518,6 @@ const styles = StyleSheet.create({
   sourceDot:   { width: 8, height: 8, borderRadius: 4 },
   sourceName:  { fontSize: 13, fontWeight: '700' },
   sourceDesc:  { fontSize: 12, color: dc.textMuted, marginTop: 1 },
-
-  // OSS
-  ossRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: dc.cardStrokeSoft },
-  ossName: { fontSize: 14, color: dc.textPrimary },
 
   // Legal modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
