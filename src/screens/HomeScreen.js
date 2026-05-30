@@ -57,7 +57,7 @@ const ACTIVITY_IDS             = ['running', 'cycling', 'walking', 'swimming', '
 export default function HomeScreen({ navigation, route }) {
   const { colors } = useTheme();
   const settings = useSettings();
-  const { isPremium, entitlementPremium, trial, user, subscription } = useAuth();
+  const { isPremium, entitlementPremium, trial, user, isSignedIn, subscription } = useAuth();
   const insets = useSafeAreaInsets();
   const health = useHealthData({ prompt: false });
 
@@ -226,22 +226,46 @@ export default function HomeScreen({ navigation, route }) {
   }, [refreshNotificationInbox]);
 
   const startSubscription = useCallback(async (planKey) => {
+    if (!isSignedIn) {
+      Alert.alert(
+        'Sign in to start premium',
+        'Create or sign in to your OutdoorAdvisor account first, then subscribe with Apple so premium can be restored cleanly later.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Sign in', onPress: () => navigation?.navigate?.('Settings') },
+        ]
+      );
+      return;
+    }
+
     try {
       await subscription?.subscribeToPlan?.(planKey);
     } catch (error) {
       if (error?.code === 'user-cancelled') return;
       Alert.alert('Subscription unavailable', error?.message || 'Please try again in a moment.');
     }
-  }, [subscription]);
+  }, [isSignedIn, navigation, subscription]);
 
   const restoreSubscription = useCallback(async () => {
+    if (!isSignedIn) {
+      Alert.alert(
+        'Sign in to restore premium',
+        'Sign in first, then restore your Apple purchase so the active subscription is attached to your OutdoorAdvisor session.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Sign in', onPress: () => navigation?.navigate?.('Settings') },
+        ]
+      );
+      return;
+    }
+
     try {
       await subscription?.restoreSubscriptions?.();
       Alert.alert('Restore complete', 'If an active subscription exists for this Apple ID, premium will unlock automatically.');
     } catch (error) {
       Alert.alert('Restore unavailable', error?.message || 'Please try again in a moment.');
     }
-  }, [subscription]);
+  }, [isSignedIn, navigation, subscription]);
 
   const markAllNotificationsRead = useCallback(async () => {
     const next = await markInboxSeen();
@@ -302,13 +326,22 @@ export default function HomeScreen({ navigation, route }) {
               <Text style={styles.subscribeEyebrow}>PREMIUM</Text>
               <Text style={styles.subscribeTitle}>Start your free trial with Apple</Text>
               <Text style={styles.subscribeBody}>
-                Add a payment method and subscribe to start the free trial. Core weather, AQI, and travel advisories stay free if you do not subscribe.
+                Sign in to your OutdoorAdvisor account, then subscribe with Apple to start the free trial. Core weather, AQI, and travel advisories stay free if you do not subscribe.
               </Text>
+              {!isSignedIn ? (
+                <TouchableOpacity
+                  onPress={() => navigation?.navigate?.('Settings')}
+                  style={styles.signInPremiumButton}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.signInPremiumButtonText}>Sign in before premium</Text>
+                </TouchableOpacity>
+              ) : null}
               <View style={styles.subscribePlans}>
                 {(subscription?.plans || []).map((plan) => {
                   const loadingPlan = subscription?.purchasingPlan === plan.key;
                   const planUnavailable = subscription?.supported && !plan.available;
-                  const buttonDisabled = loadingPlan || planUnavailable;
+                  const buttonDisabled = loadingPlan || planUnavailable || !isSignedIn;
                   return (
                     <TouchableOpacity
                       key={plan.key}
@@ -318,6 +351,7 @@ export default function HomeScreen({ navigation, route }) {
                         styles.subscribeButton,
                         plan.key === 'yearly' && styles.subscribeButtonFeatured,
                         planUnavailable && styles.subscribeButtonDisabled,
+                        !isSignedIn && styles.subscribeButtonDisabled,
                       ]}
                       onPress={() => startSubscription(plan.key)}
                     >
@@ -327,7 +361,7 @@ export default function HomeScreen({ navigation, route }) {
                           {planUnavailable ? 'Waiting for Apple product setup' : `${plan.trialLabel} · ${plan.price}`}
                         </Text>
                       </View>
-                      <Text style={styles.subscribeButtonBadge}>{loadingPlan ? 'Opening...' : planUnavailable ? 'Pending' : plan.badge}</Text>
+                      <Text style={styles.subscribeButtonBadge}>{!isSignedIn ? 'Sign in' : loadingPlan ? 'Opening...' : planUnavailable ? 'Pending' : plan.badge}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -553,6 +587,14 @@ const styles = StyleSheet.create({
   subscribeEyebrow: { fontSize: 10, fontWeight: '800', color: '#FCD34D', letterSpacing: 1.4 },
   subscribeTitle: { fontSize: 17, fontWeight: '800', color: dc.textPrimary },
   subscribeBody: { fontSize: 13, lineHeight: 19, color: dc.textSecondary },
+  signInPremiumButton: {
+    alignItems: 'center',
+    borderRadius: 14,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    backgroundColor: dc.accentCyan,
+  },
+  signInPremiumButtonText: { fontSize: 13, fontWeight: '800', color: dc.bgTop },
   subscribePlans: { gap: 8, marginTop: 2 },
   subscribeButton: {
     minHeight: 58,

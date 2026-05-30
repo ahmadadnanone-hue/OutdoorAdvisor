@@ -29,6 +29,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const subscription = useStoreKitSubscriptions();
+  const refreshStoreKitSubscriptions = subscription?.refreshSubscriptions;
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
@@ -67,6 +68,11 @@ export function AuthProvider({ children }) {
       setSupabaseAutoRefresh(false);
     };
   }, []);
+
+  useEffect(() => {
+    if (!user || !refreshStoreKitSubscriptions) return;
+    refreshStoreKitSubscriptions().catch(() => {});
+  }, [user, refreshStoreKitSubscriptions]);
 
   const signIn = useCallback(async ({ email, password }) => {
     if (!supabase) {
