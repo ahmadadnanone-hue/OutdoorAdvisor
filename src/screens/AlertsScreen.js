@@ -342,7 +342,7 @@ export default function AlertsScreen() {
     ];
     const items = [
       { key: 'severeAqiWarnings',   label: 'Severe AQI Warnings',     desc: 'Important alerts when air quality becomes unhealthy enough to change outdoor plans.' },
-      { key: 'dailySummary',        label: 'Daily Outdoor Summary',    desc: 'Receive a calm morning read on air, weather, and the outdoor mood in your city.' },
+      { key: 'dailySummary',        label: 'Daily Outdoor Summary',    desc: 'Receive a practical morning read on air, weather, and the outdoor mood in your city.' },
       { key: 'smartWalkNudges',     label: 'Smart Movement Nudges',    desc: 'Use your steps, weather, and AQI to spot a good time for a walk or suggest a better alternative.' },
       { key: 'smogAlerts',          label: 'Smog Season Alerts',       desc: 'Get notified when smog season conditions are detected.' },
       { key: 'rainAlerts',          label: 'Rain Alerts',              desc: 'Get notified when active rain could affect outdoor plans or driving.' },

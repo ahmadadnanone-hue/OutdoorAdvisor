@@ -34,7 +34,7 @@ Character count: 30 / 30
 
 ### Promotional Text
 
-Plan your day outside with a calm read on weather, air quality, pollen, and Pakistan travel advisories.
+Plan your day outside with a practical read on weather, air quality, pollen, and Pakistan travel advisories.
 
 Character count: 105 / 170
 
@@ -55,7 +55,7 @@ Features:
 - Optional Health-powered smart movement nudges on iPhone
 - Privacy-first design with no advertising identifiers
 
-OutdoorAdvisor is not a generic weather app. It is designed to help you make calmer, more practical outdoor decisions.
+OutdoorAdvisor is not a generic weather app. It is designed to help you make clearer, more practical outdoor decisions.
 
 Important: Weather, air quality, pollen, and road-condition data is provided for general information only. Do not use OutdoorAdvisor for emergency, aviation, mountaineering, evacuation, flood, landslide, or other safety-critical decisions. Always consult official government and emergency sources for high-risk situations.
 
@@ -182,7 +182,7 @@ Recommended order:
    Capture: Home screen showing live conditions, AQI, and the outdoor decision card.
 
 2. AI / What Today Means
-   Caption: A calmer read on weather and air
+   Caption: A practical read on weather and air
    Capture: Home screen with the AI or rule-based briefing card visible.
 
 3. Activities

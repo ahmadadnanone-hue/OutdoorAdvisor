@@ -6,17 +6,17 @@ import { colors, typography, statusColor } from '../../design';
 
 /**
  * TravelSnapshotCard — high-density snapshot of road/road-advisory state.
- * Takes on a warning tint when things are not calm.
+ * Takes on a warning tint when things need attention.
  *
  * Props:
- *   - level:      'calm' | 'elevated' | 'high'
+ *   - level:      'normal' | 'elevated' | 'high'
  *   - title:      headline ("High travel caution")
  *   - body:       rationale paragraph
  *   - stats:      array of { label, value } shown as stat pills
  *   - onStatPress(stat) — optional tap handler per pill
  */
 export default function TravelSnapshotCard({
-  level = 'calm',
+  level = 'normal',
   title,
   body,
   stats = [],
@@ -30,8 +30,8 @@ export default function TravelSnapshotCard({
 
   return (
     <GlassCard
-      tintColor={level === 'calm' ? colors.cardGlass : s.tint}
-      borderColor={level === 'calm' ? colors.cardStroke : s.stroke}
+      tintColor={level === 'normal' ? colors.cardGlass : s.tint}
+      borderColor={level === 'normal' ? colors.cardStroke : s.stroke}
       contentStyle={styles.content}
     >
       <Text style={styles.eyebrow}>TRAVEL SNAPSHOT</Text>

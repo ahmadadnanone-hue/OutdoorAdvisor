@@ -2,7 +2,7 @@
  * AboutTab — full App Store-compliant About section.
  *
  * Covers: app info, mission, data sources, weather disclaimer,
- * privacy summary, terms of use, open-source attributions, contact.
+ * privacy summary, terms of use, account management, contact.
  */
 import React, { useState, useCallback } from 'react';
 import {

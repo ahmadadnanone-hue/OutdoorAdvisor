@@ -5,7 +5,7 @@ import Icon, { ICON } from '../Icon';
 import { colors, typography, statusColor } from '../../design';
 
 /**
- * OutdoorDecisionCard — status-tinted glass card with a calm, honest
+ * OutdoorDecisionCard — status-tinted glass card with a clear, honest
  * verdict on outdoor plans. Used on Home below the LiveConditionsCard.
  *
  * Safety copy rule: never say "safe". Use "Go with care", "High caution",

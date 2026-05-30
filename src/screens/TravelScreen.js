@@ -121,7 +121,7 @@ function getTravelRiskSummary({ nhmpData, pmdAlerts }) {
   }
 
   return {
-    level: 'calm',
+    level: 'normal',
     label: 'Routes mostly clear',
     body: 'No major closure or fog alert in official feeds. Check a specific corridor below before you leave.',
     stats: [
