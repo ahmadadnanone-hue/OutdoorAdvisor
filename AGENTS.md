@@ -79,12 +79,13 @@ Current platform posture:
 - do not remove or abandon the web project just because iOS is the current priority
 - treat the repo as a shared codebase with an active web surface and an active iOS push
 
-**iOS App Store status (2026-05-11):**
+**iOS App Store status — 🟢 LIVE (verified 2026-05-31):**
 - App name: **OutdoorAdvisor Pakistan** (App Store Connect app ID `6763982833`)
-- Build 31 (v1.0.0) submitted for App Store review — status: **Waiting for Review**
-- Submission ID: `785fa048-fdd4-4d36-8d9b-5e90f012bdf4`
+- **The app is LIVE on the public App Store.** Version 1.0 / build **44** (v1.0.3) — App Store Connect status **Ready for Distribution**.
+- Public listing: `https://apps.apple.com/us/app/outdooradvisor-pakistan/id6763982833` — Free · In-App Purchases · Age 4+ · Category Weather · 43.1 MB · iPhone/iPad · Developer "Ahmed Adnan"
 - Apple Team: `X6TA54T858`, EAS project: `0b8b92b0-0722-4ab1-b4c4-34df3ba8e956`
-- Do NOT push code changes to master that are not ready to ship until Apple review is resolved
+- The app went through earlier review rounds (build 31 → rejected/resubmitted → build 41 → build 44) before being approved and released. Submission ID history: `785fa048-fdd4-4d36-8d9b-5e90f012bdf4`.
+- **Now that 1.0 is live, master is the public production line.** Any change merged to master that triggers an OTA `eas update --branch production` ships to real users immediately. Treat master as production: only merge ship-ready work, and use a new build number for native changes.
 
 iOS launch direction:
 - primary near-term goal is launching on iOS first — **build 31 now in Apple review**
@@ -356,11 +357,13 @@ Use this section as the cross-platform handoff checklist for both Claude and Cod
 - `outdooradvisor.app` live on Vercel — treat as primary brand domain
 - Premium gating: StoreKit subscription state plus email/Supabase allowlist bridge in place (`src/lib/premium.js`, `src/hooks/useStoreKitSubscriptions.js`)
 
-### ✅ Submitted for App Store Review (2026-05-11)
-- Build 31 (v1.0.0) is **Waiting for Review** — submission ID `785fa048-fdd4-4d36-8d9b-5e90f012bdf4`
+### 🟢 LIVE on the App Store (verified 2026-05-31)
+- **Approved and released** — version 1.0 / build **44** (v1.0.3), App Store Connect status **Ready for Distribution**.
+- Public listing live: `https://apps.apple.com/us/app/outdooradvisor-pakistan/id6763982833`
 - Privacy Policy URL set: `https://gist.github.com/ahmadadnanone-hue/51b5f2db7f89bce2724dc57bdfd1f2c2`
-- StoreKit subscription work is replacing the older device-based trial approach; next public submission should use Apple IAP products and reviewer notes.
-- App name changed to **OutdoorAdvisor Pakistan** (original "OutdoorAdvisor" was taken on the App Store)
+- StoreKit auto-renewable subscriptions replaced the old device-based trial; the live build ships with the real StoreKit/free-tier path and an internal premium allowlist.
+- App name is **OutdoorAdvisor Pakistan** (original "OutdoorAdvisor" was taken on the App Store)
+- Post-launch posture: ship JS-only fixes via OTA (`eas update --branch production`); reserve new EAS builds + App Store review for native/config changes.
 
 ### ⚠️ Known gaps (won't block build #10 TestFlight, will matter for build #11 / full review)
 - StoreKit client wiring exists, but App Store Connect subscription products/offers still need to be created and attached before the next review submission.
@@ -393,6 +396,7 @@ Use this section as the cross-platform handoff checklist for both Claude and Cod
 - update it when a new major route, AI behavior, or notification rule is added
 
 ## Recent Changes
+- 2026-05-31 — **Post-launch audit + repo cleanup (app is now LIVE on the App Store).** Verified in App Store Connect that version 1.0 / build 44 (v1.0.3) is **Ready for Distribution** and the public listing `https://apps.apple.com/us/app/outdooradvisor-pakistan/id6763982833` is live (Free · IAP · Age 4+ · Weather · 43.1 MB · Developer "Ahmed Adnan"). Git: working tree clean and in sync with origin/master. Cleanup performed: (1) removed `node.pkg` — a stray 69MB Node.js macOS installer that was the single largest tracked file (commit `83c0fd0`); added `node.pkg` + `*.pkg` to `.gitignore` (was already in `.easignore`/`.vercelignore`, so it never shipped to builds). (2) Deleted 3 fully-merged stale local branches (`claude/recursing-keller`, `claude/relaxed-solomon`, `claude/vigorous-grothendieck`); kept `RouteAdvisor` (separate project, 22 commits ahead) and active worktree branches. Expo health: `expo-doctor` reports 17/19 passing; the 2 failures are (a) a **false-positive Metro-config warning** — no `metro.config.js` exists anywhere in the repo, an expo-doctor quirk in `expo@~55.0.18`, harmless, and (b) 14 patch-level package mismatches (e.g. `expo 55.0.18` vs expected `~55.0.26`) — minor, did not block the live build; align with `npx expo install --check` on the next native build. Worktree note: `/Users/ahmedadnan/OutdoorAdvisor-main` is a git worktree of `/Users/ahmedadnan/OutdoorAdvisor/.git`, where `RouteAdvisor` is checked out at the root.
 - 2026-05-30 — Removed the remaining visible "calm" wording from notification settings (`src/screens/AlertsScreen.js`), removed stale open-source wording from the About tab file header, cleaned matching wording in the App Store metadata source pack, and renamed the internal Travel snapshot neutral state from `calm` to `normal`. JS/docs-only; ship with EAS Update, not a native EAS build.
 - 2026-05-30 — Tightened premium purchase flow after live App Store testing showed a subscription could be purchased while signed out. Home paywall now requires a signed-in OutdoorAdvisor account before Apple subscribe/restore actions, shows a sign-in CTA that navigates to Settings, disables plan buttons while signed out, and refreshes StoreKit entitlement after Supabase sign-in so existing Apple purchases can unlock premium once the user logs in. JS-only; ship with EAS Update, not a native EAS build.
 - 2026-05-29 — Updated the in-app About tab copy without running an EAS build. Removed the word "calm" from the About hero/tagline copy and removed the full Open Source card/banner from `src/components/settings/AboutTab.js`. This is JS-only and should ship by OTA/EAS Update only after explicit user approval.

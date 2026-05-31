@@ -22,7 +22,7 @@ A **premium iOS-only app** that gives people in Pakistan a calm, practical read 
 - **Branch:** `master`
 - **Local path:** `/Users/ahmedadnan/OutdoorAdvisor-main/`
 - **Distribution:** Apple App Store via EAS Build / Xcode
-- **Current status (2026-05-11):** v1.0.0 (build 31) submitted for App Store review. Status: **Waiting for Review**. App name: **OutdoorAdvisor Pakistan**. Submission ID: `785fa048-fdd4-4d36-8d9b-5e90f012bdf4`
+- **Current status (2026-05-31): 🟢 LIVE on the App Store.** Version 1.0 / build **44** (v1.0.3), App Store Connect status **Ready for Distribution**. App name: **OutdoorAdvisor Pakistan**. Public listing: `https://apps.apple.com/us/app/outdooradvisor-pakistan/id6763982833`. (Earlier review rounds: build 31 → 41 → 44.)
 - **App Store Connect app ID:** `6763982833`
 - **EAS project ID:** `0b8b92b0-0722-4ab1-b4c4-34df3ba8e956`
 - **Apple Team ID:** `X6TA54T858` (Ahmed Adnan, Individual)
