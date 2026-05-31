@@ -6,37 +6,37 @@ This file is the reusable paste-ready source for App Store Connect, TestFlight, 
 
 ## Current Release State
 
-- Latest checked iOS build in App Review: build version `41`
-- EAS build ID: `97fbd02f-9fd6-4f9a-88ad-82b0b944b039`
-- Status: App Store Connect submission is `Waiting for Review` as of 2026-05-25 3:25 PM PKT
-- Distribution: `STORE`
-- Build profile: `testflight-preview`
-- Built from commit: `fa68022`
-- Privacy URL live: `https://outdooradvisor.app/privacy`
-- Support URL: `https://outdooradvisor.app`
-- Marketing URL: `https://outdooradvisor.app`
-- WeatherKit: server-side Vercel proxy is live with Open-Meteo fallback; latest smoke check saw Apple upstream return HTML `502 Bad Gateway`, and the proxy now reports that cleanly instead of throwing a generic 500
-- Premium: StoreKit subscription implementation is now in progress. A new native build is required before this can be submitted because `expo-iap` adds native purchase code.
-- TestFlight submission note: create App Store Connect subscription products before submitting the next StoreKit build.
-- EAS CLI note: setting `What To Test` through `--what-to-test` is Expo Enterprise-only. Paste the `TestFlight What To Test` section below manually in App Store Connect if needed.
+- 🟢 **LIVE on the App Store** — version 1.0 / build `44` (v1.0.3), status `Ready for Distribution`. App ID `6763982833`. Public listing: `https://apps.apple.com/us/app/outdooradvisor-pakistan/id6763982833`.
+- **In progress — ASO version 1.0.4 (2026-05-31):** carries the optimized App Name / Subtitle / Keywords / screenshot captions below through Apple review. Requires a new EAS build (metadata-only changes can't be edited on the live build 44). Promotional Text was updated on the live listing separately (no review needed).
+- Privacy URL live: `https://outdooradvisor.app/privacy` · Support/Marketing URL: `https://outdooradvisor.app`
+- WeatherKit: server-side Vercel proxy live with Open-Meteo fallback.
+- Premium: StoreKit auto-renewable subscriptions shipped in the live build; App Store Connect subscription products/offers depend on Apple processing.
+- EAS CLI note: `What To Test` via `--what-to-test` is Expo Enterprise-only — paste the `TestFlight What To Test` section manually if needed. Build from a fresh clone (not the git worktree) per AGENTS.md.
 
 ## App Store Connect Fields
 
 ### App Name
 
-OutdoorAdvisor
+OutdoorAdvisor: AQI & Smog
+
+Character count: 26 / 30
+
+> ASO note (2026-05-31): keyword-led title. Leads with brand `OutdoorAdvisor`, then the two highest-volume Pakistan search terms (`AQI`, `smog`) in the highest-weighted field. The display name in the App Store Connect app record may still read "OutdoorAdvisor Pakistan" (the original registered name); the **localizable App Name** on the version is what gets indexed and is set to the above. Geo term `Pakistan` is carried by the subtitle.
+> Alternative (keep current): `OutdoorAdvisor Pakistan` — brand + geo, no extra keyword.
 
 ### Subtitle
 
-Weather, AQI and road guidance
+Pakistan Weather & Travel
 
-Character count: 30 / 30
+Character count: 25 / 30
 
 ### Promotional Text
 
-Plan your day outside with a practical read on weather, air quality, pollen, and Pakistan travel advisories.
+Smog or heatwave today? Check air quality, weather, pollen, UV and live Pakistan motorway advisories — and find the best window for a walk, run, or road trip.
 
-Character count: 105 / 170
+Character count: 160 / 170
+
+> Promotional Text is editable on the live listing anytime with NO review. Refresh it seasonally (smog season ~Oct–Feb, heatwave ~Apr–Jun).
 
 ### Description
 
@@ -61,9 +61,11 @@ Important: Weather, air quality, pollen, and road-condition data is provided for
 
 ### Keywords
 
-weather,AQI,smog,Pakistan,Lahore,Islamabad,Karachi,Murree,travel,motorway,PMD,NHMP,pollen
+air,quality,pollen,allergy,forecast,UV,Lahore,Islamabad,Karachi,Murree,motorway,fog,traffic,heat
 
-Character count: 89 / 100
+Character count: 96 / 100
+
+> ASO note (2026-05-31): rewritten to remove words already covered by the title (`outdoor`, `advisor`, `aqi`, `smog`), subtitle (`pakistan`, `weather`, `travel`), and the Weather category — Apple forms compound queries across all fields, so duplicated words are wasted. Singular forms only (Apple auto-matches plurals). Dropped low-volume branded acronyms `PMD`/`NHMP` in favor of higher-volume `air`/`quality`/`allergy`/`forecast`/`UV`/`fog`/`traffic`/`heat`. Total unique indexed terms across title+subtitle+keywords: 21.
 
 ### Categories
 
@@ -175,30 +177,30 @@ Required sizes:
 - 6.7-inch iPhone screenshots
 - 5.5-inch iPhone screenshots if App Store Connect requests them
 
-Recommended order:
+Recommended order (captions are OCR-indexed by Apple in 2026 — keep them keyword-rich but natural):
 
 1. Home / Outdoor Decision
-   Caption: Know what outside means today
+   Caption: Air quality & weather — know what outside means today
    Capture: Home screen showing live conditions, AQI, and the outdoor decision card.
 
 2. AI / What Today Means
-   Caption: A practical read on weather and air
+   Caption: What today's smog, heat & AQI mean for your plans
    Capture: Home screen with the AI or rule-based briefing card visible.
 
 3. Activities
-   Caption: Pick the right activity window
+   Caption: The best window to walk, run, or cycle
    Capture: Activities screen showing ranked activity scores.
 
 4. Travel
-   Caption: Check road and weather context
+   Caption: Pakistan motorway & road weather advisories
    Capture: Travel screen showing Road Intelligence, NHMP/PMD source cards, or route cards.
 
-5. Quick Action Button
-   Caption: Keep your fastest actions close
-   Capture: Settings → Customize → Quick Action Button section.
+5. Forecast & Details
+   Caption: 7-day forecast with pollen, UV & wind
+   Capture: Home forecast strip / detail grid (avoid premium-locked empty states).
 
 6. Privacy / About
-   Caption: Built with privacy in mind
+   Caption: Private by design — no ad tracking
    Capture: About screen showing privacy/support/contact surfaces.
 
 Screenshot capture tips:

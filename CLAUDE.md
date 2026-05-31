@@ -351,28 +351,20 @@ GOOGLE_MAPS_API_KEY                   Google Maps (TravelScreen map tiles)
 
 ---
 
-## Premium & 7-Day Trial
+## Premium & StoreKit Subscriptions
 
-The app uses a **device-based 7-day free trial** for premium features. No IAP — after the trial the user permanently settles into a free tier (allowed by Apple since we never charge).
+Premium is backed by **Apple auto-renewable subscriptions** (the old device 7-day trial no longer grants production premium). Public trials are Apple-managed introductory offers.
 
 **How it works:**
-1. On first launch, `src/utils/trialState.js` writes `{ firstLaunchAt: <now> }` to AsyncStorage (key `outdooradvisor_trial_v1`)
-2. `AuthContext` syncs trial state on mount + on AppState foreground, exposes `trial: { inTrial, daysRemaining, totalDays, expiresAt, expired }`
-3. `isPremium = entitlementPremium || trial.inTrial` — composed in `AuthContext`'s `useMemo`
-4. `entitlementPremium` comes from `derivePremiumState(user)` in `src/lib/premium.js` — true when:
-   - User's email is in `SEEDED_PREMIUM_EMAILS` or `EXPO_PUBLIC_PREMIUM_EMAILS`
-   - User has subscription metadata in Supabase (`app_metadata.plan = 'premium'`, etc.)
-5. After trial expires + no entitlement → `isPremium = false`, all `PREMIUM_SECTIONS` ('pollen', 'wind', 'details', 'forecast') are hidden on Home
+1. Product IDs in `src/config/subscriptions.js`: monthly `com.ahmadadnanone.outdooradvisor.premium.monthly` (15-day intro trial), yearly `com.ahmadadnanone.outdooradvisor.premium.yearly` (1-month intro).
+2. `src/hooks/useStoreKitSubscriptions.js` (via `expo-iap`) exposes active subscription state + restore-purchases.
+3. `AuthContext` composes `isPremium` from StoreKit subscription state **plus** internal entitlement (no longer from `trial.inTrial`).
+4. `entitlementPremium` = `derivePremiumState(user)` in `src/lib/premium.js` — true when email is in `src/config/premiumAllowlist.js` / `EXPO_PUBLIC_PREMIUM_EMAILS`, or Supabase metadata has `plan/tier/subscription_status = premium/active`.
+5. Free users keep core weather/AQI/activities/travel; AI/detail/weather-depth/route-planner features are premium-gated. All Gemini/AI is premium-only — `/api/ai/briefing` checks premium before calling Gemini.
 
-**UI:**
-- `HomeHeader` badge: `PREMIUM` (gold) / `TRIAL · N DAYS LEFT` (cyan) / `FREE` (muted)
-- `HomeScreen`: shows a "Your 7-day trial has ended" glass card when `trial.expired === true`
+**UI:** `HomeScreen` shows a StoreKit subscribe card (monthly/yearly + restore) for free users.
 
-**Caveats (acceptable for v1.0):**
-- Reinstalling the app resets the trial
-- No defense against device time manipulation
-
-**Internal testing override:** `EXPO_PUBLIC_TESTFLIGHT_PREMIUM=true` in `eas.json` `preview` and `testflight-preview` profiles gives every signed-in user premium during internal builds. Production profile does NOT set this.
+**Notes:** `expo-iap` is a native module — requires a full EAS build, not OTA. `EXPO_PUBLIC_TESTFLIGHT_PREMIUM` was removed from EAS profiles (2026-05-26) so TestFlight/review builds exercise the real StoreKit/free path. App Store Connect subscription products/offers/prices still depend on Apple processing.
 
 ---
 
