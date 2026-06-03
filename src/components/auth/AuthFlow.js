@@ -23,6 +23,9 @@ try {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const RESEND_COOLDOWN = 45; // seconds
+// Sign in with Apple is hidden until the Supabase Apple provider is configured.
+// Flip to true once the Apple Services ID + provider are set up (and ship a native build).
+const APPLE_SIGNIN_ENABLED = false;
 
 /**
  * Self-contained email/password + 6-digit-code auth flow.
@@ -214,7 +217,7 @@ export default function AuthFlow() {
   );
 
   const appleBlock = () => {
-    if (Platform.OS !== 'ios' || !appleAuthAvailable) return null;
+    if (!APPLE_SIGNIN_ENABLED || Platform.OS !== 'ios' || !appleAuthAvailable) return null;
     return (
       <>
         <View style={styles.dividerRow}>

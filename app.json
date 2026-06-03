@@ -2,7 +2,7 @@
   "expo": {
     "name": "OutdoorAdvisor",
     "slug": "OutdoorAdvisor",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -20,8 +20,7 @@
         "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.ahmadadnanone.OutdoorAdvisor",
-      "runtimeVersion": "1.0.0",
-      "usesAppleSignIn": true
+      "runtimeVersion": "1.0.0"
     },
     "android": {
       "adaptiveIcon": {
