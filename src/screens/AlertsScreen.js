@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings, ALL_FAB_ACTION_IDS } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
+import AuthFlow from '../components/auth/AuthFlow';
 import { getPremiumFeatureCopy } from '../lib/premium';
 // Web push is not used on iOS — stubs keep Platform.OS === 'web' branches safe
 const isWebPushSupported = () => false;
@@ -126,7 +127,7 @@ export default function AlertsScreen() {
   const insets = useSafeAreaInsets();
   const themeCtx = useTheme();
   const settings = useSettings();
-  const { configured, isSignedIn, isPremium, plan, loading: authLoading, signIn, signOut, signUp, user } = useAuth();
+  const { configured, isSignedIn, isPremium, plan, loading: authLoading, signOut, user } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
 
   const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
@@ -138,11 +139,7 @@ export default function AlertsScreen() {
     title: 'Checking alert delivery',
     body: 'We are checking whether this device can receive alerts directly or save them locally for later.',
   });
-  const [authMode, setAuthMode] = useState('signin');
-  const [authEmail, setAuthEmail] = useState('');
-  const [authPassword, setAuthPassword] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
-  const [authMessage, setAuthMessage] = useState('');
   const [authError, setAuthError] = useState('');
 
   useEffect(() => {
@@ -158,39 +155,11 @@ export default function AlertsScreen() {
     })();
   }, []);
 
-  const handleAuthSubmit = useCallback(async () => {
-    if (!authEmail.trim() || !authPassword.trim()) {
-      setAuthError('Enter both email and password.');
-      return;
-    }
-    setAuthBusy(true);
-    setAuthError('');
-    setAuthMessage('');
-    try {
-      if (authMode === 'signup') {
-        const result = await signUp({ email: authEmail.trim(), password: authPassword });
-        setAuthMessage(result?.message || 'Account created.');
-        if (!result?.needsEmailConfirmation) setAuthPassword('');
-      } else {
-        await signIn({ email: authEmail.trim(), password: authPassword });
-        setAuthMessage('Signed in successfully.');
-        setAuthPassword('');
-      }
-    } catch (error) {
-      setAuthError(error.message || 'Could not complete sign-in.');
-    } finally {
-      setAuthBusy(false);
-    }
-  }, [authEmail, authMode, authPassword, signIn, signUp]);
-
   const handleAuthSignOut = useCallback(async () => {
     setAuthBusy(true);
     setAuthError('');
-    setAuthMessage('');
     try {
       await signOut();
-      setAuthPassword('');
-      setAuthMessage('Signed out.');
     } catch (error) {
       setAuthError(error.message || 'Could not sign out.');
     } finally {
@@ -647,58 +616,11 @@ export default function AlertsScreen() {
             </View>
           ) : (
             <View style={styles.accountPanel}>
-              <View style={styles.accountHeaderRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.accountTitle}>Optional account</Text>
-                  <Text style={styles.accountBody}>Create an account to sync preferences across devices later. The app can still be used without signing in.</Text>
-                </View>
-                <View style={styles.authModeSwitch}>
-                  {[{ key: 'signin', label: 'Sign in' }, { key: 'signup', label: 'Create' }].map((item) => {
-                    const active = authMode === item.key;
-                    return (
-                      <TouchableOpacity
-                        key={item.key}
-                        style={[styles.authModeBtn, active && styles.authModeBtnActive]}
-                        onPress={() => { setAuthMode(item.key); setAuthError(''); setAuthMessage(''); }}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={[styles.authModeBtnText, active && { color: dc.accentCyan }]}>{item.label}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+              <View style={{ marginBottom: 12 }}>
+                <Text style={styles.accountTitle}>Account</Text>
+                <Text style={styles.accountBody}>Sign in to sync preferences and manage premium. The app still works without an account.</Text>
               </View>
-              <TextInput
-                value={authEmail}
-                onChangeText={setAuthEmail}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                placeholder="Email"
-                placeholderTextColor={dc.textMuted}
-                style={styles.authInput}
-              />
-              <TextInput
-                value={authPassword}
-                onChangeText={setAuthPassword}
-                secureTextEntry
-                autoCapitalize="none"
-                placeholder="Password"
-                placeholderTextColor={dc.textMuted}
-                style={styles.authInput}
-              />
-              {!!authError && <Text style={styles.authError}>{authError}</Text>}
-              {!!authMessage && <Text style={styles.authMessage}>{authMessage}</Text>}
-              <TouchableOpacity
-                style={[styles.accountBtn, styles.authSubmitBtn, { backgroundColor: dc.accentCyan }]}
-                onPress={handleAuthSubmit}
-                activeOpacity={0.85}
-                disabled={authBusy || authLoading}
-              >
-                {authBusy
-                  ? <ActivityIndicator size="small" color={dc.bgTop} />
-                  : <Text style={[styles.accountBtnText, { color: dc.bgTop }]}>{authMode === 'signup' ? 'Create account' : 'Sign in'}</Text>}
-              </TouchableOpacity>
+              <AuthFlow />
             </View>
           )}
         </GlassCard>

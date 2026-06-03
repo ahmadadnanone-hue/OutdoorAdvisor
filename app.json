@@ -20,7 +20,8 @@
         "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.ahmadadnanone.OutdoorAdvisor",
-      "runtimeVersion": "1.0.0"
+      "runtimeVersion": "1.0.0",
+      "usesAppleSignIn": true
     },
     "android": {
       "adaptiveIcon": {
@@ -53,6 +54,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-apple-authentication",
       "expo-notifications",
       "expo-background-task",
       [

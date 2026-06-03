@@ -19,6 +19,7 @@
     "@supabase/supabase-js": "^2.102.1",
     "@vercel/analytics": "^2.0.1",
     "expo": "~55.0.18",
+    "expo-apple-authentication": "~55.0.13",
     "expo-background-task": "~55.0.17",
     "expo-blur": "~55.0.14",
     "expo-dev-client": "~55.0.28",

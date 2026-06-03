@@ -7,14 +7,42 @@ import useStoreKitSubscriptions from '../hooks/useStoreKitSubscriptions';
 import { buildApiUrl } from '../config/api';
 
 const AuthContext = createContext();
-const DEFAULT_WEB_AUTH_REDIRECT = 'https://outdooradvisor.vercel.app';
 
-function getEmailRedirectTo() {
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin;
+/**
+ * Map raw Supabase / network auth errors to short, user-friendly messages.
+ * Falls back to the original message so we never hide unexpected failures.
+ */
+export function mapAuthError(error) {
+  const raw = (error?.message || '').toLowerCase();
+
+  if (!raw) return 'Something went wrong. Please try again.';
+  if (raw.includes('invalid login credentials')) return 'Incorrect email or password.';
+  if (raw.includes('email not confirmed')) return 'Please verify your email first — enter the 6-digit code we sent you.';
+  if (raw.includes('user already registered') || raw.includes('already been registered')) {
+    return 'An account with this email already exists. Try signing in instead.';
   }
-
-  return process.env.EXPO_PUBLIC_SITE_URL?.trim() || DEFAULT_WEB_AUTH_REDIRECT;
+  if (raw.includes('token has expired') || raw.includes('invalid') && raw.includes('token')) {
+    return 'That code is expired or incorrect. Tap “Resend code” to get a new one.';
+  }
+  if (raw.includes('otp') && (raw.includes('expired') || raw.includes('invalid'))) {
+    return 'That code is expired or incorrect. Tap “Resend code” to get a new one.';
+  }
+  if (raw.includes('for security purposes') || raw.includes('rate limit') || raw.includes('only request this after')) {
+    return 'Please wait a few seconds before requesting another code.';
+  }
+  if (raw.includes('password should be at least') || raw.includes('weak password')) {
+    return 'Password must be at least 6 characters.';
+  }
+  if (raw.includes('unable to validate email') || raw.includes('invalid email')) {
+    return 'Please enter a valid email address.';
+  }
+  if (raw.includes('network') || raw.includes('failed to fetch') || raw.includes('timeout')) {
+    return 'Network error. Check your connection and try again.';
+  }
+  if (raw.includes('canceled') || raw.includes('cancelled') || raw.includes('au_canceled')) {
+    return 'Sign-in was cancelled.';
+  }
+  return error?.message || 'Something went wrong. Please try again.';
 }
 
 const DEFAULT_TRIAL_STATE = {
@@ -75,37 +103,109 @@ export function AuthProvider({ children }) {
   }, [user, refreshStoreKitSubscriptions]);
 
   const signIn = useCallback(async ({ email, password }) => {
-    if (!supabase) {
-      throw new Error('Sign-in is not configured yet.');
-    }
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    if (!supabase) throw new Error('Authentication is not configured yet.');
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+    if (error) throw new Error(mapAuthError(error));
   }, []);
 
+  /**
+   * Create an account. With Supabase "Confirm email" ON and the email template
+   * configured to send {{ .Token }}, this emails a 6-digit code instead of a
+   * magic link. The UI then collects the code and calls verifyCode().
+   */
   const signUp = useCallback(async ({ email, password }) => {
-    if (!supabase) {
-      throw new Error('Sign-in is not configured yet.');
-    }
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: getEmailRedirectTo(),
-      },
-    });
-    if (error) throw error;
+    if (!supabase) throw new Error('Authentication is not configured yet.');
+    const cleanEmail = email.trim().toLowerCase();
+    const { data, error } = await supabase.auth.signUp({ email: cleanEmail, password });
+    if (error) throw new Error(mapAuthError(error));
 
-    if (!data.session) {
-      return {
-        needsEmailConfirmation: true,
-        message: 'Account created. Check your email to confirm before signing in.',
-      };
-    }
-
+    // No session => email confirmation required (a 6-digit code was sent).
     return {
-      needsEmailConfirmation: false,
-      message: 'Account created and signed in.',
+      needsVerification: !data.session,
+      email: cleanEmail,
     };
+  }, []);
+
+  /** Verify the 6-digit sign-up code from email. On success the user is signed in. */
+  const verifyCode = useCallback(async ({ email, token }) => {
+    if (!supabase) throw new Error('Authentication is not configured yet.');
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim().toLowerCase(),
+      token: token.trim(),
+      type: 'signup',
+    });
+    if (error) throw new Error(mapAuthError(error));
+  }, []);
+
+  /** Resend a sign-up confirmation code. */
+  const resendCode = useCallback(async ({ email }) => {
+    if (!supabase) throw new Error('Authentication is not configured yet.');
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim().toLowerCase(),
+    });
+    if (error) throw new Error(mapAuthError(error));
+  }, []);
+
+  /** Step 1 of password reset: email a 6-digit recovery code. */
+  const requestPasswordReset = useCallback(async ({ email }) => {
+    if (!supabase) throw new Error('Authentication is not configured yet.');
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase());
+    if (error) throw new Error(mapAuthError(error));
+  }, []);
+
+  /** Step 2 of password reset: verify the recovery code, then set a new password. */
+  const confirmPasswordReset = useCallback(async ({ email, token, newPassword }) => {
+    if (!supabase) throw new Error('Authentication is not configured yet.');
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      email: email.trim().toLowerCase(),
+      token: token.trim(),
+      type: 'recovery',
+    });
+    if (verifyError) throw new Error(mapAuthError(verifyError));
+
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+    if (updateError) throw new Error(mapAuthError(updateError));
+  }, []);
+
+  /** One-tap Sign in with Apple (iOS only). */
+  const signInWithApple = useCallback(async () => {
+    if (!supabase) throw new Error('Authentication is not configured yet.');
+    if (Platform.OS !== 'ios') throw new Error('Sign in with Apple is available on iPhone.');
+
+    // Lazy require so non-iOS / Expo Go builds without the native module don't crash on import.
+    let AppleAuthentication;
+    try {
+      AppleAuthentication = require('expo-apple-authentication');
+    } catch {
+      throw new Error('Sign in with Apple is not available in this build.');
+    }
+
+    let credential;
+    try {
+      credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+    } catch (err) {
+      if (err?.code === 'ERR_REQUEST_CANCELED') throw new Error('Sign-in was cancelled.');
+      throw new Error(mapAuthError(err));
+    }
+
+    if (!credential?.identityToken) {
+      throw new Error('Apple did not return a sign-in token. Please try again.');
+    }
+
+    const { error } = await supabase.auth.signInWithIdToken({
+      provider: 'apple',
+      token: credential.identityToken,
+    });
+    if (error) throw new Error(mapAuthError(error));
   }, []);
 
   const signOut = useCallback(async () => {
@@ -189,11 +289,22 @@ export function AuthProvider({ children }) {
         subscription,
         signIn,
         signUp,
+        verifyCode,
+        resendCode,
+        requestPasswordReset,
+        confirmPasswordReset,
+        signInWithApple,
+        appleAuthAvailable: Platform.OS === 'ios',
         signOut,
         deleteAccount,
       };
     },
-    [loading, session, user, subscription, signIn, signUp, signOut, deleteAccount]
+    [
+      loading, session, user, subscription,
+      signIn, signUp, verifyCode, resendCode,
+      requestPasswordReset, confirmPasswordReset, signInWithApple,
+      signOut, deleteAccount,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
