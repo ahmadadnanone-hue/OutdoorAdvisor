@@ -1,13 +1,17 @@
 # OutdoorAdvisor App Store Submission Pack
 
-Last updated: 2026-05-26
+Last updated: 2026-06-03
 
 This file is the reusable paste-ready source for App Store Connect, TestFlight, review notes, screenshot planning, and later public-release polish.
 
 ## Current Release State
 
-- 🟢 **LIVE on the App Store** — version 1.0 / build `44` (v1.0.3), status `Ready for Distribution`. App ID `6763982833`. Public listing: `https://apps.apple.com/us/app/outdooradvisor-pakistan/id6763982833`.
-- **In progress — ASO version 1.0.4 (2026-05-31):** carries the optimized App Name / Subtitle / Keywords / screenshot captions below through Apple review. Requires a new EAS build (metadata-only changes can't be edited on the live build 44). Promotional Text was updated on the live listing separately (no review needed).
+- 🟢 **LIVE on the App Store** — version **1.0.4 / build `46`**, status `Ready for Distribution` (released 2026-06-03). App ID `6763982833`. Public listing: `https://apps.apple.com/us/app/id6763982833`.
+- **ASO 1.0.4 shipped:** the optimized App Name / Subtitle / Keywords / Promotional Text / Description / What's New below are all **live**. EAS build `56ee5414` (1.0.4 / 46) was built from commit `b68afdf`, auto-submitted, attached to the version, and released through Apple review.
+  - App Name: `OutdoorAdvisor: AQI & Smog` (was "OutdoorAdvisor Pakistan")
+  - Subtitle: `Pakistan Weather & Travel` (was "Weather & Air for Pakistan")
+  - Keywords: `air,quality,pollen,allergy,forecast,UV,Lahore,Islamabad,Karachi,Murree,motorway,fog,traffic,heat`
+  - ⚠️ Build-version gotcha: a native `ios/` dir is present, so EAS reads `ios/OutdoorAdvisor/Info.plist` `CFBundleShortVersionString` (NOT `app.json`) for the marketing version — the first 1.0.4 build came out as 1.0.3 until the plist was bumped. Bump **both** `app.json` and the plist for the next release.
 - Privacy URL live: `https://outdooradvisor.app/privacy` · Support/Marketing URL: `https://outdooradvisor.app`
 - WeatherKit: server-side Vercel proxy live with Open-Meteo fallback.
 - Premium: StoreKit auto-renewable subscriptions shipped in the live build; App Store Connect subscription products/offers depend on Apple processing.
