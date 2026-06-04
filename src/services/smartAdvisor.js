@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getTodayHealthSnapshot } from '../hooks/useHealthData';
 import { fetchAqiForLocation } from '../hooks/useAQI';
 import { fetchWeatherForLocation } from '../hooks/useWeather';
-import { loadStoredNotifications } from '../utils/alertPreferences';
+import { loadStoredNotifications, loadStoredThresholds } from '../utils/alertPreferences';
 import { loadLocationSnapshot } from '../utils/locationSnapshot';
 import { sendSmartNotification } from './notificationService';
 import { getNotificationDeliveryState } from './notificationService';
@@ -15,6 +15,8 @@ const MORNING_SUMMARY_HOUR_START = 6;
 const MORNING_SUMMARY_HOUR_END   = 10;
 const DAILY_STEP_GOAL            = 5000;
 const CAP_ALERT_COOLDOWN_MS      = 6 * 60 * 60 * 1000; // only once per alert title per 6h
+const HAZARD_ALERT_COOLDOWN_MS   = 3 * 60 * 60 * 1000; // wind/thunderstorm alert: once per hazard per 3h
+const THUNDERSTORM_CODES         = [95, 96, 99];       // WMO thunderstorm weather codes
 
 // ─── CAP alert push trigger ───────────────────────────────────────────────────
 
@@ -77,6 +79,55 @@ async function maybeSendCapAlert({ state, prefs }) {
     if (sent) {
       sentTitles[key] = now;
       return { sentTitles };
+    }
+  }
+  return false;
+}
+
+// ─── Sudden weather hazard alerts (thunderstorm + strong wind / dust storm) ─────
+//
+// The CAP feed only catches what PMD publishes; this fires directly off the live
+// weather data so abrupt wind storms ("andhi") and thunderstorms aren't missed.
+// Wind values are km/h for both the WeatherKit proxy and the Open-Meteo fallback.
+async function maybeSendWeatherHazardAlert({ state, prefs, thresholds, weather, locationLabel }) {
+  const current = weather?.current;
+  if (!current) return false;
+
+  const now = Date.now();
+  const sentHazards = { ...(state.sentHazards || {}) };
+  const gustThreshold = thresholds?.windAlert ?? 40;
+  const code = current.weatherCode;
+  // Prefer gusts (the spike that defines a sudden wind storm); fall back to sustained wind.
+  const effectiveGust = current.windGusts != null ? current.windGusts : current.windSpeed;
+
+  const hazards = [];
+
+  if (prefs.thunderstormAlerts !== false && code != null && THUNDERSTORM_CODES.includes(code)) {
+    hazards.push({
+      key: 'thunderstorm',
+      title: `Thunderstorm near ${locationLabel}`,
+      body: 'Thunderstorm conditions are active. Avoid open and exposed areas, secure loose items, and hold off on outdoor or road plans until it passes.',
+    });
+  }
+
+  if (prefs.windAlerts !== false && effectiveGust != null && effectiveGust >= gustThreshold) {
+    hazards.push({
+      key: 'wind',
+      title: `Strong wind alert — ${locationLabel}`,
+      body: `Winds are gusting around ${Math.round(effectiveGust)} km/h. Secure loose objects, expect blowing dust and reduced visibility, and take care on exposed roads and motorways.`,
+    });
+  }
+
+  for (const hazard of hazards) {
+    if (now - (sentHazards[hazard.key] || 0) < HAZARD_ALERT_COOLDOWN_MS) continue;
+    const ok = await sendSmartNotification(hazard.title, hazard.body, {
+      category: 'Alert',
+      tag: `hazard-${hazard.key}`,
+      promptForPermission: false,
+    });
+    if (ok) {
+      sentHazards[hazard.key] = now;
+      return { sentHazards };
     }
   }
   return false;
@@ -311,11 +362,23 @@ async function _runSmartAdvisorCheck({ reason = 'manual', promptForHealth = fals
     now,
     promptForPermission: reason !== 'background',
   });
+  if (summarySent) state.lastDailySummaryDay = dateKey(now);
 
   // Tier 3: fire push immediately for Extreme/Severe CAP alerts
   const capResult = await maybeSendCapAlert({ state, prefs });
-  if (capResult?.sentTitles) {
-    await saveSmartState({ ...state, sentCapAlerts: capResult.sentTitles });
+  if (capResult?.sentTitles) state.sentCapAlerts = capResult.sentTitles;
+
+  // Tier 3b: sudden weather hazards (thunderstorm + strong wind / dust storm)
+  // read straight from live weather, so they aren't missed when PMD has no CAP bulletin.
+  const thresholds = await loadStoredThresholds();
+  const hazardResult = await maybeSendWeatherHazardAlert({
+    state, prefs, thresholds, weather, locationLabel,
+  });
+  if (hazardResult?.sentHazards) state.sentHazards = hazardResult.sentHazards;
+
+  // Persist the accumulated alert state once (avoids the earlier per-tier clobber).
+  if (summarySent || capResult?.sentTitles || hazardResult?.sentHazards) {
+    await saveSmartState(state);
   }
 
   const smartWalkEnabled = prefs.smartWalkNudges !== false;

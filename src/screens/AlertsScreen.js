@@ -284,6 +284,7 @@ export default function AlertsScreen() {
         { key: 'pm25Alert', label: 'PM2.5 Alert Level',  range: '10 - 500', min: 10,  max: 500, step: 5,  trackColor: dc.accentOrange },
         { key: 'heatAlert', label: 'Heat Alert (°C)',     range: '30 - 55',  min: 30,  max: 55,  step: 1,  trackColor: dc.accentYellow },
         { key: 'coldAlert', label: 'Cold Alert (°C)',     range: '-10 - 15', min: -10, max: 15,  step: 1,  trackColor: dc.accentCyan },
+        { key: 'windAlert', label: 'Wind Gust Alert (km/h)', range: '25 - 90', min: 25, max: 90, step: 5, trackColor: dc.accentBlue },
       ].map(({ key, label, range, min, max, step, trackColor }) => (
         <GlassCard key={key} style={styles.sliderCard} contentStyle={styles.sliderContent}>
           <View style={styles.sliderHeader}>

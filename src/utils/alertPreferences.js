@@ -21,6 +21,7 @@ export const DEFAULT_THRESHOLDS = {
   pm25Alert: 75,
   heatAlert: 42,
   coldAlert: 5,
+  windAlert: 40, // wind gust speed (km/h) that triggers a sudden wind/dust-storm alert
 };
 
 export const DEFAULT_NOTIFICATIONS = {
