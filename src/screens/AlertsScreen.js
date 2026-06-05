@@ -15,6 +15,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useSettings, ALL_FAB_ACTION_IDS } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import AuthFlow from '../components/auth/AuthFlow';
+import PremiumCard from '../components/PremiumCard';
 import { getPremiumFeatureCopy } from '../lib/premium';
 // Web push is not used on iOS — stubs keep Platform.OS === 'web' branches safe
 const isWebPushSupported = () => false;
@@ -625,6 +626,8 @@ export default function AlertsScreen() {
             </View>
           )}
         </GlassCard>
+
+        <PremiumCard style={styles.accountCard} />
 
         {renderTabBar()}
         <View style={{ flex: 1 }}>
