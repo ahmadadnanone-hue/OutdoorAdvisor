@@ -46,6 +46,18 @@ The following UI elements are **approved and final** as of build 41 (2026-05-15)
 
 ---
 
+## 🔴 Security — exposed secrets (action required, 2026-06-05)
+
+**The GitHub repo `ahmadadnanone-hue/OutdoorAdvisor` is PUBLIC** (verified 2026-06-05). Secrets have leaked into it. Treat all of the below as compromised until rotated:
+
+- **Google Maps Platform API key** (`AIzaSy…`) — was hardcoded in `src/config/googleApi.js`, `api/google/*.js`, `api/poi/nearby.js`. Removed from the working tree (commit `4a8e518`) — those files now read `GOOGLE_MAPS_API_KEY` (server / Vercel env) or `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` (client). **Still in git history + repo is public → ROTATE + RESTRICT it** in Google Cloud Console (bundle ID `com.ahmadadnanone.OutdoorAdvisor` + referrer + API restrictions). ⚠️ Because the hardcoded fallback is gone, **`GOOGLE_MAPS_API_KEY` must be set in the Vercel env** or the `api/google/*` + `api/poi/nearby` endpoints break on the next deploy.
+- **Resend API key** (`re_P8R2…`) — in git history (redacted in current tree). Rotate in Resend, update Supabase SMTP password.
+- **Safe / not secret:** the Supabase `anon`/publishable key (designed to be public, RLS-protected) and the WeatherKit `.p8` block in CLAUDE.md (placeholder only). Real WeatherKit `.p8` lives in gitignored `src/config/weatherkit.js`.
+
+**Recommended:** make the repo **private** (commercial app, no open-source intent), then rotate the two keys above. Going private alone is insufficient — public repos get scraped, so rotation is mandatory regardless.
+
+---
+
 ## Project
 
 OutdoorAdvisor is a Pakistan-focused outdoor decision app built with Expo / React Native and deployed on Vercel.
@@ -381,6 +393,7 @@ The path to launch (builds #10 → #44, TestFlight, App Review, two rejections f
 - update it when a new major route, AI behavior, or notification rule is added
 
 ## Recent Changes
+- 2026-06-05 — **🔴 Security: public repo + leaked keys (see the "Security — exposed secrets" section up top).** Confirmed the GitHub repo is **public** (`HTTP 200`). Removed the hardcoded **Google Maps API key** (`AIzaSy…`) from 6 tracked files (`src/config/googleApi.js`, `api/google/{aqi,geocode,pollen,weather}.js`, `api/poi/nearby.js`) — now env-only (`GOOGLE_MAPS_API_KEY` server / `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` client); commit `4a8e518`. ⚠️ The Google key + the **Resend key** (`re_P8R2…`, history) are still exposed in git history while the repo is public → **must rotate both** (Google: also add bundle-ID/referrer/API restrictions; set `GOOGLE_MAPS_API_KEY` in Vercel env before the next deploy or the Google endpoints break). Recommend flipping the repo to **private**. Also set `eas.json` production profile `channel: "production"` for deterministic OTA (commit `38f6633`).
 - 2026-06-05 — **Auth system rebuilt + Sign in with Apple + wind-storm alerts; shipped to prod OTA + TestFlight.** Big multi-part session (branch `auth-system-rebuild`, fast-forward merged to `master`, commits `d42bba2`→`84a81aa`).
   - **Auth rebuild (the "account creation / no confirmation email" fix).** Root cause was NOT email delivery — Resend logs showed confirmation emails were `Delivered` all along. The breakage was (a) the confirmation email used a **magic link** pointing at the dead `outdooradvisor.vercel.app` redirect with no deep link back into the app, and (b) there was **no password reset and no resend**. Rebuilt on Supabase with **6-digit email codes** (no deep-linking): `AuthContext` gained `verifyCode` (signup OTP), `resendCode`, `requestPasswordReset` + `confirmPasswordReset` (recovery OTP → `updateUser`), `signInWithApple`, and `mapAuthError`; removed the broken `emailRedirectTo` path. New self-contained `src/components/auth/AuthFlow.js` (sign in / sign up / verify / forgot / reset + Apple button, validation, resend cooldown) replaced the cramped inline form in `AlertsScreen`. Helper views render as **inline function calls, not nested components** (RN focus-loss pitfall).
   - **Supabase email templates → 6-digit codes.** Confirm-signup + Reset-password templates rewritten to send `{{ .Token }}` instead of `{{ .ConfirmationURL }}`. ⚠️ **Email OTP Length was set to 8** in Supabase (Auth → Providers → Email) — the app's code box hard-caps input at 6, so 8-digit codes were unenterable. **Fixed to 6** (server-side, no rebuild). If the app's code input is ever made variable-length this can change.
