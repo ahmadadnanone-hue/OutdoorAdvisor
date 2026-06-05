@@ -10,7 +10,7 @@ import { fetchApiJson } from './api';
 //     * Places API (New) / Places API
 //     * Air Quality API
 //     * Geocoding API
-export const GOOGLE_MAPS_API_KEY = 'AIzaSyBXdDfjWp3RomuSpGtjPhOOitdIN5cVlYg';
+export const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
 // Libraries to load with the Maps JS API
 export const GOOGLE_MAPS_LIBRARIES = ['places', 'marker'];

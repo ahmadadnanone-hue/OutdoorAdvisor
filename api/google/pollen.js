@@ -1,5 +1,5 @@
 const GOOGLE_MAPS_API_KEY =
-  process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY || 'AIzaSyBXdDfjWp3RomuSpGtjPhOOitdIN5cVlYg';
+  process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY || '';
 
 function sendJson(res, status, payload) {
   res.status(status).json(payload);
