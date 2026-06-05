@@ -217,7 +217,11 @@ export default function AuthFlow() {
   );
 
   const appleBlock = () => {
-    if (!APPLE_SIGNIN_ENABLED || Platform.OS !== 'ios' || !appleAuthAvailable) return null;
+    // Require the native module to actually be present in this build. This keeps a
+    // production OTA (pushed to an older build without expo-apple-authentication)
+    // from rendering a non-functional Apple button to live users.
+    if (!APPLE_SIGNIN_ENABLED || Platform.OS !== 'ios' || !appleAuthAvailable
+        || !AppleAuthentication?.AppleAuthenticationButton) return null;
     return (
       <>
         <View style={styles.dividerRow}>
