@@ -23,15 +23,15 @@ const SEVERITY = {
   Severe: {
     bg:     'rgba(234,88,12,0.15)',
     border: 'rgba(234,88,12,0.40)',
-    icon:   '#FB923C',
-    dot:    '#F97316',
+    icon:   dc.accentOrange,
+    dot:    dc.accentOrange,
     label:  'SEVERE',
   },
   Moderate: {
     bg:     'rgba(202,138,4,0.13)',
     border: 'rgba(202,138,4,0.35)',
-    icon:   '#FCD34D',
-    dot:    '#EAB308',
+    icon:   dc.accentYellow,
+    dot:    dc.accentYellow,
     label:  'ADVISORY',
   },
   Minor: {

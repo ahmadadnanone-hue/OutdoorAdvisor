@@ -65,6 +65,11 @@ export const colors = {
   accentYellow: adaptive('#9A6A00', '#FFD874'),
   accentOrange: adaptive('#B65A18', '#FFAF66'),
   accentRed: adaptive('#D8354A', '#FF7A86'),
+  premiumGold: adaptive('#835D00', '#FCD34D'),
+  premiumGoldShadow: adaptive('rgba(131, 93, 0, 0.18)', 'rgba(251,191,36,0.55)'),
+  tempWarm: adaptive('#B65A18', '#FFD60A'),
+  tempHot: adaptive('#C2410C', '#FF9500'),
+  tempExtreme: adaptive('#D8354A', '#FF3B30'),
 
   // Semantic glass tints (translucent card fills)
   dangerGlass: 'rgba(255, 122, 134, 0.16)',

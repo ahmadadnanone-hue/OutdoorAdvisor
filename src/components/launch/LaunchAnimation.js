@@ -10,11 +10,13 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { colors as dc, gradient } from '../../design/colors';
+import { useTheme } from '../../context/ThemeContext';
 
 const AnimatedImage = Animated.createAnimatedComponent(Image);
 const ICON_SOURCE = require('../../../assets/icon.png');
 
 export default function LaunchAnimation({ onComplete }) {
+  const { isDark } = useTheme();
   const bgIcon = useSharedValue(0);
   const logo   = useSharedValue(0);
   const word   = useSharedValue(0);
@@ -95,12 +97,12 @@ export default function LaunchAnimation({ onComplete }) {
     <Animated.View style={[StyleSheet.absoluteFill, styles.container, containerStyle]}>
       {/* Background gradient */}
       <LinearGradient
-        colors={gradient.screen}
-        start={gradient.screenStart}
-        end={gradient.screenEnd}
+        colors={isDark ? gradient.screen : gradient.lightScreen}
+        start={isDark ? gradient.screenStart : gradient.lightScreenStart}
+        end={isDark ? gradient.screenEnd : gradient.lightScreenEnd}
         style={StyleSheet.absoluteFill}
       />
-      <View style={styles.scrim} />
+      <View style={[styles.scrim, { backgroundColor: isDark ? 'rgba(8,12,20,0.22)' : 'rgba(255,255,255,0.18)' }]} />
 
       {/* Large faint background icon — decorative */}
       <AnimatedImage

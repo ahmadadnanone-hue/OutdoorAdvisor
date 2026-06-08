@@ -11,10 +11,10 @@ import { colors, typography, spacing, radius } from '../../design';
 function getTempColor(temp, code) {
   if (temp == null) return colors.textPrimary;
   const isSunny = code === 0 || code === 1;
-  if (temp >= 38 && isSunny) return '#FF3B30';   // blazing red
-  if (temp >= 38) return '#FF6B35';              // deep orange-red
-  if (temp >= 34) return '#FF9500';              // amber orange
-  if (temp >= 30) return '#FFD60A';              // warm yellow
+  if (temp >= 38 && isSunny) return colors.tempExtreme;
+  if (temp >= 38) return colors.tempExtreme;
+  if (temp >= 34) return colors.tempHot;
+  if (temp >= 30) return colors.tempWarm;
   if (temp >= 20) return colors.textPrimary;     // neutral white
   if (temp >= 15) return '#BAE6FD';              // light cool blue
   if (temp >= 5)  return '#60A5FA';              // blue (cold)
