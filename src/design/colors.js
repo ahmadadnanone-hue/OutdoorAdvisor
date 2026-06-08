@@ -61,12 +61,12 @@ export const colors = {
 };
 
 export const gradient = {
-  screen: [colors.bgTop, colors.bgMid, colors.bgBottom],
-  screenStart: { x: 0.15, y: 0 },
-  screenEnd: { x: 0.82, y: 1 },
-  lightScreen: ['#7A93B2', '#4A6484', '#162742'],
-  lightScreenStart: { x: 0.35, y: 0.05 },
-  lightScreenEnd: { x: 0.8, y: 1 },
+  screen: ['#8ED0FF', '#E7F7FF', '#FFFFFF'],
+  screenStart: { x: 0.5, y: 0 },
+  screenEnd: { x: 0.5, y: 1 },
+  lightScreen: ['#8ED0FF', '#E7F7FF', '#FFFFFF'],
+  lightScreenStart: { x: 0.5, y: 0 },
+  lightScreenEnd: { x: 0.5, y: 1 },
 };
 
 /**
