@@ -144,7 +144,7 @@ function AppNavigator() {
 
   return (
     <>
-      <StatusBar style="light" translucent backgroundColor="transparent" />
+      <StatusBar style={isDark ? 'light' : 'dark'} translucent backgroundColor="transparent" />
       <NavigationContainer
         theme={{
           dark: isDark,

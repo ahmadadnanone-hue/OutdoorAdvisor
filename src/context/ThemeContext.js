@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useColorScheme } from 'react-native';
+import { Appearance, Platform, useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors as dc } from '../design';
 
@@ -8,13 +8,8 @@ const STORAGE_KEY = 'outdooradvisor_theme_mode';
 const ThemeContext = createContext();
 
 /**
- * iOS-only app is always dark. ThemeContext still exists so:
- *   1. AlertsScreen can let users pick Dark / Light / Auto appearance preference
- *      (stored, respected by system).
- *   2. NavigationContainer gets a stable theme object.
- *
- * All screen colors should come from src/design/colors.js (dc.*), NOT from
- * the `colors` object here.
+ * ThemeContext controls the app-level Light / Dark / Auto preference and asks
+ * iOS to resolve DynamicColorIOS design tokens against that choice.
  */
 export function ThemeProvider({ children }) {
   const systemScheme = useColorScheme();
@@ -29,6 +24,11 @@ export function ThemeProvider({ children }) {
   }, []);
 
   const isDark = mode === 'auto' ? systemScheme !== 'light' : mode === 'dark';
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || typeof Appearance.setColorScheme !== 'function') return;
+    Appearance.setColorScheme(mode === 'auto' ? null : mode);
+  }, [mode]);
 
   const setThemeMode = async (newMode) => {
     setMode(newMode);

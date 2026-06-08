@@ -431,7 +431,7 @@ export default function AlertsScreen() {
                 value={isLocked ? false : notifications[item.key]}
                 onValueChange={(v) => { if (!isLocked) updateNotification(item.key, v); }}
                 disabled={isLocked}
-                trackColor={{ false: dc.cardStrokeSoft, true: dc.accentCyan + '88' }}
+                trackColor={{ false: dc.cardStrokeSoft, true: dc.accentCyanTrack }}
                 thumbColor={isLocked ? dc.textMuted : notifications[item.key] ? dc.accentCyan : dc.textMuted}
               />
             </GlassCard>
@@ -476,7 +476,7 @@ export default function AlertsScreen() {
                 <Switch
                   value={!!motorwaySubs[route.id]}
                   onValueChange={(v) => updateMotorwaySub(route.id, v)}
-                  trackColor={{ false: dc.cardStrokeSoft, true: dc.accentCyan + '88' }}
+                  trackColor={{ false: dc.cardStrokeSoft, true: dc.accentCyanTrack }}
                   thumbColor={motorwaySubs[route.id] ? dc.accentCyan : dc.textMuted}
                 />
               </View>
