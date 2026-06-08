@@ -152,7 +152,7 @@ function TabItem({ item, active, onPress }) {
             style={[
               styles.label,
               {
-                color: active ? colors.accentCyan : colors.textSecondary,
+                color: active ? colors.tabBarAccent : colors.tabBarText,
                 fontWeight: active ? '800' : '600',
               },
             ]}

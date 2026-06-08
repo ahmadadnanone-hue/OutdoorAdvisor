@@ -40,14 +40,20 @@ export const colors = {
   cardHighlight: adaptive('rgba(255, 255, 255, 0.64)', 'rgba(255, 255, 255, 0.18)'),
   pressedHighlight: adaptive('rgba(45, 88, 132, 0.10)', 'rgba(255, 255, 255, 0.12)'),
 
+  // The floating tab bar stays dark in both modes, so its labels/icons use
+  // fixed light colors instead of page-adaptive text tokens.
+  tabBarText: 'rgba(245, 248, 250, 0.72)',
+  tabBarTextMuted: 'rgba(245, 248, 250, 0.56)',
+  tabBarAccent: '#9BC8FF',
+
   // Text
   textPrimary: adaptive('#24364B', '#F5F8FA'),
   textSecondary: adaptive('rgba(36, 54, 75, 0.76)', 'rgba(245, 248, 250, 0.72)'),
   textMuted: adaptive('rgba(36, 54, 75, 0.58)', 'rgba(245, 248, 250, 0.56)'),
 
   // Accents
-  accentBlue: '#7FB2FF',
-  accentBlueGlow: 'rgba(127, 178, 255, 0.38)',
+  accentBlue: adaptive('#2268B7', '#7FB2FF'),
+  accentBlueGlow: adaptive('rgba(34, 104, 183, 0.30)', 'rgba(127, 178, 255, 0.38)'),
   accentBlueBg: 'rgba(127, 178, 255, 0.18)',
   accentCyan: adaptive('#2268B7', '#9BC8FF'),
   accentCyanGlow: adaptive('rgba(34, 104, 183, 0.30)', 'rgba(155, 200, 255, 0.42)'),
@@ -55,10 +61,10 @@ export const colors = {
   accentCyanSoftBg: adaptive('rgba(34, 104, 183, 0.12)', 'rgba(155, 200, 255, 0.13)'),
   accentCyanSoftStroke: adaptive('rgba(34, 104, 183, 0.26)', 'rgba(155, 200, 255, 0.27)'),
   accentCyanTrack: adaptive('rgba(34, 104, 183, 0.50)', 'rgba(155, 200, 255, 0.53)'),
-  accentGreen: '#8FF0B7',
-  accentYellow: '#FFD874',
-  accentOrange: '#FFAF66',
-  accentRed: '#FF7A86',
+  accentGreen: adaptive('#167A4A', '#8FF0B7'),
+  accentYellow: adaptive('#9A6A00', '#FFD874'),
+  accentOrange: adaptive('#B65A18', '#FFAF66'),
+  accentRed: adaptive('#D8354A', '#FF7A86'),
 
   // Semantic glass tints (translucent card fills)
   dangerGlass: 'rgba(255, 122, 134, 0.16)',

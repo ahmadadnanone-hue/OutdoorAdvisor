@@ -78,7 +78,7 @@ function GlassNavBar({ state, navigation, onRouteChange }) {
       <Icon
         name={icon}
         size={20}
-        color={key === activeKey ? dc.accentCyan : dc.textSecondary}
+        color={key === activeKey ? dc.tabBarAccent : dc.tabBarText}
       />
     ),
   }));
