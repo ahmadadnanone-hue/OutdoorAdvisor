@@ -832,31 +832,33 @@ export default function TravelScreen({ route }) {
     (async () => {
       let pmdPageBlocked = false;
       try {
-        const json = await fetchApiJson('/api/pmd');
-        if (!nhmpCancelRef.current && json.success) {
-          setPmdAlerts(json.alerts || []);
-          if (!json.alerts?.length && !json.cities?.length) pmdPageBlocked = true;
-        } else if (!nhmpCancelRef.current) {
-          pmdPageBlocked = true;
-        }
-      } catch {
-        pmdPageBlocked = true;
-      }
-
-      if (!nhmpCancelRef.current && pmdPageBlocked) {
         try {
-          const alertJson = await fetchApiJson('/api/alerts');
-          if (!nhmpCancelRef.current && alertJson.success) {
-            setPmdAlerts(Array.isArray(alertJson.alerts) ? alertJson.alerts : []);
-            setPmdBlocked(false);
+          const json = await fetchApiJson('/api/pmd');
+          if (!nhmpCancelRef.current && json.success) {
+            setPmdAlerts(json.alerts || []);
+            if (!json.alerts?.length && !json.cities?.length) pmdPageBlocked = true;
           } else if (!nhmpCancelRef.current) {
-            setPmdBlocked(true);
+            pmdPageBlocked = true;
           }
         } catch {
-          if (!nhmpCancelRef.current) setPmdBlocked(true);
+          pmdPageBlocked = true;
         }
-      } else if (!nhmpCancelRef.current) {
-        setPmdBlocked(false);
+
+        if (!nhmpCancelRef.current && pmdPageBlocked) {
+          try {
+            const alertJson = await fetchApiJson('/api/alerts');
+            if (!nhmpCancelRef.current && alertJson.success) {
+              setPmdAlerts(Array.isArray(alertJson.alerts) ? alertJson.alerts : []);
+              setPmdBlocked(false);
+            } else if (!nhmpCancelRef.current) {
+              setPmdBlocked(true);
+            }
+          } catch {
+            if (!nhmpCancelRef.current) setPmdBlocked(true);
+          }
+        } else if (!nhmpCancelRef.current) {
+          setPmdBlocked(false);
+        }
       } finally {
         if (!nhmpCancelRef.current) setPmdLoading(false);
       }
