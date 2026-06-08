@@ -518,6 +518,43 @@ function stationPriority(entry) {
   return toneScore + (entry.advisories.count * 20) + (pmdForecastRisk(entry.forecast) * 10);
 }
 
+function shortHazardText(text) {
+  const value = String(text || '').toLowerCase();
+  if (/(glof|glacial lake)/.test(value)) return 'GLOF risk';
+  if (/(flash flood|flood)/.test(value)) return 'Flood risk';
+  if (/(landslide|debris flow)/.test(value)) return 'Landslide risk';
+  if (/(heavy rain|excessive rain|rain-wind|rain wind|thunderstorm|storm)/.test(value)) return 'Heavy rain alert';
+  if (/(heatwave|heat wave|heat dome|extreme heat|hot and dry)/.test(value)) return 'Heatwave alert';
+  if (/(fog|visibility)/.test(value)) return 'Fog alert';
+  if (/(snow|avalanche)/.test(value)) return 'Snow risk';
+  if (/(wind|dust)/.test(value)) return 'Wind alert';
+  return null;
+}
+
+function getStationAdvisorySummary({ ndma = [], pmd = [], nhmp = [] }) {
+  const ndmaItem = ndma.find((item) => ndmaTone(item) === 'danger') || ndma[0];
+  if (ndmaItem) {
+    const text = `${ndmaItem.hazard || ''} ${ndmaItem.title || ''} ${ndmaItem.summary || ''}`;
+    const hazard = shortHazardText(text) || ndmaItem.hazard || 'NDMA advisory';
+    return ndmaTone(ndmaItem) === 'danger' ? `${hazard}: avoid risky travel` : hazard;
+  }
+
+  const pmdText = pmdAlertText(pmd[0]);
+  if (pmdText) {
+    return shortHazardText(pmdText) || pmdText.replace(/\s+/g, ' ').trim().slice(0, 42);
+  }
+
+  const nhmpItem = nhmp[0];
+  if (nhmpItem) {
+    if (nhmpItem.severity === 'closed') return 'Road closure alert';
+    if (nhmpItem.severity === 'fog') return 'Fog on route';
+    if (nhmpItem.severity === 'rain') return 'Rain on route';
+    return shortHazardText(nhmpItem.status) || 'Route advisory';
+  }
+
+  return 'Advisory active';
+}
+
 const TRAVEL_SECTION_META = {
   sources: {
     label: 'Official Sources',
@@ -657,11 +694,7 @@ function TouristStationsCard({ pmdAlerts = [], ndmaAdvisories = [], nhmpData = [
                     ? { borderColor: dc.warningStroke, backgroundColor: dc.warningGlass }
                     : null;
               const advisoryColor = stationAdvisories.tone === 'danger' ? dc.accentRed : dc.accentYellow;
-              const advisoryLabel =
-                stationAdvisories.ndma.length > 0 ? 'NDMA'
-                : stationAdvisories.pmd.length > 0 ? 'PMD'
-                : stationAdvisories.nhmp.length > 0 ? 'NHMP'
-                : null;
+              const advisorySummary = getStationAdvisorySummary(stationAdvisories);
 
               return (
                 <TouchableOpacity
@@ -724,7 +757,7 @@ function TouristStationsCard({ pmdAlerts = [], ndmaAdvisories = [], nhmpData = [
                     <View style={styles.touristAdvisoryRow}>
                       <Icon name="alert-circle-outline" size={12} color={advisoryColor} />
                       <Text style={[styles.touristAdvisoryText, { color: advisoryColor }]} numberOfLines={1}>
-                        {advisoryLabel} advisory matched this station
+                        {advisorySummary}
                       </Text>
                     </View>
                   )}

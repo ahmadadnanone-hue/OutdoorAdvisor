@@ -276,9 +276,47 @@ export default function AlertsScreen() {
     </View>
   );
 
+  const renderAccountSection = () => (
+    <>
+      <GlassCard style={styles.accountCard} contentStyle={styles.accountCardContent}>
+        {isSignedIn ? (
+          <View style={styles.accountSignedInRow}>
+            <View style={styles.accountInfo}>
+              <Text style={styles.accountTitle}>Signed in</Text>
+              <Text style={styles.accountBody} numberOfLines={1}>
+                {user?.email || 'Your account is connected on this device.'}
+              </Text>
+              <Text style={styles.accountPlan}>{isPremium ? 'Premium' : `Plan: ${plan || 'free'}`}</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.accountBtn, { backgroundColor: dc.dangerGlass }]}
+              onPress={handleAuthSignOut}
+              activeOpacity={0.8}
+              disabled={authBusy || authLoading}
+            >
+              {authBusy
+                ? <ActivityIndicator size="small" color={dc.accentRed} />
+                : <Text style={[styles.accountBtnText, { color: dc.accentRed }]}>Sign out</Text>}
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.accountPanel}>
+            <View style={{ marginBottom: 12 }}>
+              <Text style={styles.accountTitle}>Account</Text>
+              <Text style={styles.accountBody}>Sign in to sync preferences and manage premium. The app still works without an account.</Text>
+            </View>
+            <AuthFlow />
+          </View>
+        )}
+      </GlassCard>
+      <PremiumCard style={styles.accountCard} />
+    </>
+  );
+
   /* ---------- Thresholds Tab ---------- */
   const renderThresholds = () => (
     <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]} showsVerticalScrollIndicator={false}>
+      {renderAccountSection()}
       <Text style={styles.sectionDesc}>Set the levels at which you want to receive alerts. Values are saved automatically.</Text>
       {[
         { key: 'aqiAlert',  label: 'AQI Alert Level',   range: '50 - 500', min: 50,  max: 500, step: 10, trackColor: dc.accentRed },
@@ -328,6 +366,7 @@ export default function AlertsScreen() {
 
     return (
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]} showsVerticalScrollIndicator={false}>
+        {renderAccountSection()}
         {!isPremium && (
           <GlassCard tintColor={dc.infoGlass} borderColor={dc.infoStroke} style={styles.premiumBanner} contentStyle={styles.premiumBannerContent}>
             <Text style={styles.premiumBannerTitle}>Premium unlocks higher-value alerts</Text>
@@ -458,6 +497,7 @@ export default function AlertsScreen() {
 
     return (
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]} showsVerticalScrollIndicator={false}>
+        {renderAccountSection()}
         <Text style={styles.groupLabel}>Measurement Units</Text>
         <Text style={styles.sectionDesc}>Choose how temperature and precipitation are shown across the app.</Text>
         <GlassCard contentStyle={styles.themePickerContent}>
@@ -596,39 +636,6 @@ export default function AlertsScreen() {
       <View style={[styles.container, { paddingTop: Math.max(insets.top, 12) }]}>
         <Text style={styles.screenTitle}>Settings</Text>
 
-        {/* Account card */}
-        <GlassCard style={styles.accountCard} contentStyle={styles.accountCardContent}>
-          {isSignedIn ? (
-            <View style={styles.accountSignedInRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.accountTitle}>Signed in</Text>
-                <Text style={styles.accountBody}>{user?.email || 'Your account is connected on this device.'}</Text>
-                <Text style={styles.accountPlan}>{isPremium ? 'Premium' : `Plan: ${plan || 'free'}`}</Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.accountBtn, { backgroundColor: dc.dangerGlass }]}
-                onPress={handleAuthSignOut}
-                activeOpacity={0.8}
-                disabled={authBusy || authLoading}
-              >
-                {authBusy
-                  ? <ActivityIndicator size="small" color={dc.accentRed} />
-                  : <Text style={[styles.accountBtnText, { color: dc.accentRed }]}>Sign out</Text>}
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.accountPanel}>
-              <View style={{ marginBottom: 12 }}>
-                <Text style={styles.accountTitle}>Account</Text>
-                <Text style={styles.accountBody}>Sign in to sync preferences and manage premium. The app still works without an account.</Text>
-              </View>
-              <AuthFlow />
-            </View>
-          )}
-        </GlassCard>
-
-        <PremiumCard style={styles.accountCard} />
-
         {renderTabBar()}
         <View style={{ flex: 1 }}>
           {tabContent[activeTab]()}
@@ -646,9 +653,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.8, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 10,
   },
 
-  accountCard: { marginHorizontal: 20, marginBottom: 8 },
+  accountCard: { marginBottom: 10 },
   accountCardContent: { padding: 16 },
   accountSignedInRow: { flexDirection: 'row', alignItems: 'center', gap: 12, width: '100%' },
+  accountInfo: { flex: 1, minWidth: 0 },
   accountPanel: { width: '100%' },
   accountHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
   accountTitle: { fontSize: 15, fontWeight: '700', color: dc.textPrimary, marginBottom: 4 },
