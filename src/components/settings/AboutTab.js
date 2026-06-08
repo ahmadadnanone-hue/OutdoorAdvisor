@@ -34,7 +34,7 @@ WHAT WE DO NOT COLLECT
 • We do not sell data. Ever.
 
 THIRD-PARTY SERVICES
-Weather data is fetched from Apple WeatherKit and Open-Meteo — both are governed by their own privacy policies. Air quality data is sourced from AQICN. Road advisories are sourced from NHMP and PMD public feeds. None of these services receive your precise GPS coordinates through our app beyond what is necessary to serve local data.
+Weather data is fetched from Apple WeatherKit and Open-Meteo — both are governed by their own privacy policies. Air quality data is sourced from AQICN. Road and hazard advisories are sourced from NHMP, PMD, and NDMA public feeds. None of these services receive your precise GPS coordinates through our app beyond what is necessary to serve local data.
 
 CHILDREN
 OutdoorAdvisor is not directed at children under 13 and does not knowingly collect information from them.
@@ -53,7 +53,7 @@ By downloading or using OutdoorAdvisor you agree to these terms. If you do not a
 OutdoorAdvisor grants you a personal, non-transferable, non-exclusive licence to use the app on Apple devices you own or control, subject to the Apple Media Services Terms and Conditions.
 
 3. WEATHER DATA — IMPORTANT DISCLAIMER
-All weather, air quality, pollen, and road-condition data displayed in OutdoorAdvisor is provided for general informational purposes only. It is sourced from third-party providers (Apple WeatherKit, Open-Meteo, AQICN, NHMP, PMD) and may be delayed, inaccurate, or unavailable without notice.
+All weather, air quality, pollen, and road-condition data displayed in OutdoorAdvisor is provided for general informational purposes only. It is sourced from third-party providers (Apple WeatherKit, Open-Meteo, AQICN, NHMP, PMD, NDMA) and may be delayed, inaccurate, or unavailable without notice.
 
 DO NOT use OutdoorAdvisor to make safety-critical decisions — including but not limited to: emergency evacuations, mountaineering, aviation, flood or landslide risk assessment, or any situation where an error could result in personal injury or death. Always consult official government emergency services and meteorological authorities for such decisions.
 
@@ -330,6 +330,12 @@ export default function AboutTab() {
             desc="Official Pakistan weather forecasts and severe weather advisories"
             url="https://pmd.gov.pk"
             accent={dc.accentYellow}
+          />
+          <SourceBadge
+            name="NDMA — National Disaster Management Authority"
+            desc="National disaster and hazard advisories (floods, heatwave, GLOF, landslides)"
+            url="https://www.ndma.gov.pk"
+            accent={dc.accentRed}
           />
         </GlassCard>
 

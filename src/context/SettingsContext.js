@@ -24,6 +24,13 @@ const PREVIOUS_DEFAULT_HOME_SECTIONS = [
   'wind',
 ];
 
+const PREVIOUS_COMPACT_HOME_SECTIONS = [
+  'decision',
+  'aqi',
+  'activities',
+  'travel',
+];
+
 const DEFAULT_HOME_SECTIONS = [
   'aqi',
   'decision',
@@ -78,6 +85,12 @@ function normalizeHomeSections(homeSections) {
   if (
     incoming.length === PREVIOUS_DEFAULT_HOME_SECTIONS.length &&
     incoming.every((key, index) => key === PREVIOUS_DEFAULT_HOME_SECTIONS[index])
+  ) {
+    return DEFAULT_HOME_SECTIONS;
+  }
+  if (
+    incoming.length === PREVIOUS_COMPACT_HOME_SECTIONS.length &&
+    incoming.every((key, index) => key === PREVIOUS_COMPACT_HOME_SECTIONS[index])
   ) {
     return DEFAULT_HOME_SECTIONS;
   }

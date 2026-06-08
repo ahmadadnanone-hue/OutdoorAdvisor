@@ -59,7 +59,7 @@ function formatAge(isoDate) {
 }
 
 // ─── Single alert row ─────────────────────────────────────────────────────────
-function AlertRow({ alert, onDismiss }) {
+function AlertRow({ alert }) {
   const [expanded, setExpanded] = useState(false);
   const s = SEVERITY[alert.severity] || SEVERITY.Minor;
 
@@ -127,25 +127,14 @@ function AlertRow({ alert, onDismiss }) {
           </View>
         )}
       </View>
-
-      {/* Dismiss */}
-      <TouchableOpacity style={styles.dismissBtn} onPress={onDismiss} hitSlop={10}>
-        <Icon name="close" size={14} color={dc.textMuted} />
-      </TouchableOpacity>
     </View>
   );
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function AlertBanner({ alerts = [] }) {
-  const [dismissed, setDismissed] = useState(new Set());
-
-  const dismiss = useCallback((id) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setDismissed((prev) => new Set([...prev, id]));
-  }, []);
-
-  const visible = alerts.filter((a) => !dismissed.has(a.id));
+  // Pinned/rigid: the banner always shows active advisories — no dismiss.
+  const visible = alerts;
   if (!visible.length) return null;
 
   // Show top 3 alerts max to avoid overwhelming the screen
@@ -161,11 +150,7 @@ export default function AlertBanner({ alerts = [] }) {
         )}
       </View>
       {shown.map((alert) => (
-        <AlertRow
-          key={alert.id}
-          alert={alert}
-          onDismiss={() => dismiss(alert.id)}
-        />
+        <AlertRow key={alert.id} alert={alert} />
       ))}
     </View>
   );
@@ -288,10 +273,4 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  // Dismiss
-  dismissBtn: {
-    paddingHorizontal: 10,
-    paddingTop: 11,
-    alignSelf: 'flex-start',
-  },
 });

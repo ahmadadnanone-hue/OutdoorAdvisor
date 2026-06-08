@@ -87,7 +87,7 @@ function getTravelRiskSummary({ nhmpData, pmdAlerts }) {
   const fog = nhmpData.filter((item) => item.severity === 'fog');
   const warnings = nhmpData.filter((item) => item.severity === 'warning' || item.severity === 'rain');
   const northernAlerts = pmdAlerts.filter((alert) =>
-    /(murree|naran|kaghan|swat|gilgit|hazara|karakoram|abbottabad|mansehra)/i.test(String(alert))
+    /(murree|naran|kaghan|swat|gilgit|hazara|karakoram|abbottabad|mansehra)/i.test(pmdAlertText(alert))
   );
 
   if (closures.length > 0) {
@@ -149,13 +149,25 @@ function findRelevantPmdAlerts(route, alerts) {
   const dynamicKeywords = route.stops.map((stop) => stop.name.toLowerCase());
   const keywords = [...new Set([...staticKeywords, ...dynamicKeywords, route.name.toLowerCase()])];
   return alerts.filter((alert) => {
-    const text = String(alert || '').toLowerCase();
+    const text = pmdAlertText(alert).toLowerCase();
     return keywords.some((keyword) => text.includes(keyword));
   });
 }
 
 function normalizeText(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function pmdAlertText(alert) {
+  if (typeof alert === 'string') return alert;
+  if (!alert || typeof alert !== 'object') return '';
+  return [
+    alert.event,
+    alert.title,
+    alert.description,
+    alert.instruction,
+    ...(alert.regions || []),
+  ].filter(Boolean).join(' ');
 }
 
 function isNdmaImportant(advisory) {
@@ -207,7 +219,7 @@ function textMatchesStation(text, station) {
 }
 
 function findStationAdvisories(station, { pmdAlerts = [], ndmaAdvisories = [], nhmpData = [] } = {}) {
-  const pmd = pmdAlerts.filter((alert) => textMatchesStation(alert, station));
+  const pmd = pmdAlerts.filter((alert) => textMatchesStation(pmdAlertText(alert), station));
   const nhmp = nhmpData.filter((advisory) =>
     textMatchesStation(`${advisory.route || ''} ${advisory.sector || ''} ${advisory.status || ''}`, station)
   );
@@ -408,9 +420,9 @@ function StopRow({ stop, formatTempShort }) {
 }
 
 /* ===== PMD Tourist Stations ===== */
-// PMD's nwfc.pmd.gov.pk blocks server-side (Vercel) requests.
-// Live weather is fetched from WeatherKit/Open-Meteo for each station.
-// Tapping a station opens the official PMD page in-app.
+// PMD's nwfc.pmd.gov.pk blocks server-side (Vercel) requests, but native
+// iOS clients can usually fetch the tourist pages directly. WeatherKit keeps
+// the live conditions fresh; PMD rows add official 3-day context when reachable.
 const TOURIST_STATIONS = [
   { id: '41573', name: 'Murree',        region: 'Punjab',            icon: 'partly-sunny-outline', lat: 33.9073, lon: 73.3943, aliases: ['Bhurban', 'Patriata', 'Kohala'] },
   { id: '41516', name: 'Gilgit',        region: 'Gilgit-Baltistan',  icon: 'snow-outline',         lat: 35.9219, lon: 74.3085, aliases: ['GB', 'Gilgit Baltistan'] },
@@ -426,6 +438,85 @@ const TOURIST_STATIONS = [
 ];
 
 const PMD_BASE = 'https://nwfc.pmd.gov.pk/new/tourist.php?station=';
+const PMD_TOURIST_TIMEOUT_MS = 9000;
+
+function decodeHtml(value) {
+  return String(value || '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&deg;/gi, '°')
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parsePmdTouristForecast(html) {
+  const source = String(html || '');
+  const forecastHtml = source.split(/Next\s*3\s*Days\s*Forecast/i)[1] || source;
+  const days = [];
+  const dayRegex = /<th[^>]*class=["']table_headings["'][^>]*>([\s\S]*?)<\/th>/gi;
+  let dayMatch;
+  while ((dayMatch = dayRegex.exec(forecastHtml)) && days.length < 3) {
+    const label = decodeHtml(dayMatch[1]);
+    if (label) days.push({ day: label });
+  }
+
+  const cells = [];
+  const cellRegex = /<td[^>]*align=["']center["'][^>]*>([\s\S]*?)<\/td>/gi;
+  let cellMatch;
+  while ((cellMatch = cellRegex.exec(forecastHtml)) && cells.length < 3) {
+    const cell = cellMatch[1];
+    const condition = decodeHtml(cell.match(/title=["']([^"']+)["']/i)?.[1]);
+    const range = decodeHtml(cell.match(/<h5[^>]*>([\s\S]*?)<\/h5>/i)?.[1]);
+    if (condition || range) cells.push({ condition, range });
+  }
+
+  const lastUpdated = decodeHtml(source.match(/Last Updated:\s*([^<)]+)/i)?.[1]);
+  const combined = days.map((entry, index) => ({
+    day: entry.day,
+    condition: cells[index]?.condition || 'Forecast',
+    range: cells[index]?.range || '',
+  })).filter((entry) => entry.day || entry.condition || entry.range);
+
+  return {
+    days: combined,
+    lastUpdated: lastUpdated || null,
+  };
+}
+
+async function fetchPmdTouristForecast(stationId) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PMD_TOURIST_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${PMD_BASE}${stationId}`, {
+      signal: controller.signal,
+      headers: {
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'User-Agent': 'Mozilla/5.0 OutdoorAdvisor iOS',
+      },
+    });
+    if (!response.ok) throw new Error(`PMD returned ${response.status}`);
+    const html = await response.text();
+    const forecast = parsePmdTouristForecast(html);
+    return forecast.days.length ? forecast : null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function pmdForecastRisk(forecast) {
+  const text = (forecast?.days || []).map((day) => day.condition).join(' ').toLowerCase();
+  if (/(thunder|storm|heavy|snow|landslide|flood)/.test(text)) return 2;
+  if (/(rain|shower|wind|fog)/.test(text)) return 1;
+  return 0;
+}
+
+function stationPriority(entry) {
+  const toneScore = entry.advisories.tone === 'danger' ? 300 : entry.advisories.tone === 'caution' ? 200 : 0;
+  return toneScore + (entry.advisories.count * 20) + (pmdForecastRisk(entry.forecast) * 10);
+}
 
 const TRAVEL_SECTION_META = {
   sources: {
@@ -462,6 +553,9 @@ function TouristStationsCard({ pmdAlerts = [], ndmaAdvisories = [], nhmpData = [
   const [expanded, setExpanded] = useState(false);
   const [weather, setWeather] = useState({});
   const [loadingWx, setLoadingWx] = useState(true);
+  const [pmdForecasts, setPmdForecasts] = useState({});
+  const [loadingPmdForecasts, setLoadingPmdForecasts] = useState(false);
+  const pmdForecastRequestedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -481,6 +575,43 @@ function TouristStationsCard({ pmdAlerts = [], ndmaAdvisories = [], nhmpData = [
     })();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (!expanded || pmdForecastRequestedRef.current) return;
+    pmdForecastRequestedRef.current = true;
+    (async () => {
+      setLoadingPmdForecasts(true);
+      const results = await Promise.allSettled(
+        TOURIST_STATIONS.map((station) => fetchPmdTouristForecast(station.id))
+      );
+      const map = {};
+      TOURIST_STATIONS.forEach((station, index) => {
+        const result = results[index];
+        if (result.status === 'fulfilled' && result.value?.days?.length) {
+          map[station.id] = result.value;
+        }
+      });
+      setPmdForecasts(map);
+      setLoadingPmdForecasts(false);
+    })().catch(() => {
+      setLoadingPmdForecasts(false);
+    });
+  }, [expanded]);
+
+  const rankedStations = useMemo(() => {
+    return TOURIST_STATIONS
+      .map((station, index) => ({
+        station,
+        index,
+        forecast: pmdForecasts[station.id] || null,
+        advisories: findStationAdvisories(station, { pmdAlerts, ndmaAdvisories, nhmpData }),
+      }))
+      .sort((a, b) =>
+        stationPriority(b) - stationPriority(a) ||
+        b.advisories.count - a.advisories.count ||
+        a.index - b.index
+      );
+  }, [pmdAlerts, ndmaAdvisories, nhmpData, pmdForecasts]);
 
   return (
     <GlassCard style={styles.sectionCard} contentStyle={styles.sectionContent}>
@@ -507,19 +638,18 @@ function TouristStationsCard({ pmdAlerts = [], ndmaAdvisories = [], nhmpData = [
           <View style={styles.touristNotice}>
             <Icon name="information-circle-outline" size={13} color={dc.accentCyan} style={{ marginTop: 1 }} />
             <Text style={styles.touristNoticeText}>
-              Live conditions via WeatherKit. Tap any station for PMD&apos;s official 3-day forecast.
+              Important stations appear first. PMD 3-day details load directly when reachable; tap any station for the official page.
             </Text>
           </View>
 
           <View style={styles.touristGrid}>
-            {TOURIST_STATIONS.map((s) => {
+            {rankedStations.map(({ station: s, advisories: stationAdvisories, forecast: pmdForecast }) => {
               const wx = weather[s.id];
-              const stationAdvisories = findStationAdvisories(s, { pmdAlerts, ndmaAdvisories, nhmpData });
               const { description: cond } = wx ? getWeatherDescription(wx.weatherCode) : { description: '—' };
               const temp = wx?.temp != null ? `${Math.round(wx.temp)}°` : null;
               const wind = wx?.windSpeed != null ? `${Math.round(wx.windSpeed)} km/h` : null;
               const humidity = wx?.humidity != null ? `${wx.humidity}%` : null;
-              const daily = null; // future: attach daily forecast when needed
+              const daily = pmdForecast?.days?.slice(0, 3) || [];
               const advisoryTint =
                 stationAdvisories.tone === 'danger'
                   ? { borderColor: dc.dangerStroke, backgroundColor: dc.dangerGlass }
@@ -576,6 +706,20 @@ function TouristStationsCard({ pmdAlerts = [], ndmaAdvisories = [], nhmpData = [
                       <Icon name="open-outline" size={10} color={dc.textMuted} style={{ marginLeft: 'auto' }} />
                     </View>
                   )}
+                  {daily.length > 0 && (
+                    <View style={styles.touristForecast}>
+                      <View style={styles.touristForecastDivider} />
+                      {daily.map((day, index) => (
+                        <View key={`${s.id}-${day.day}-${index}`} style={styles.touristForecastRow}>
+                          <Text style={styles.touristForecastDay} numberOfLines={1}>{day.day}</Text>
+                          <Text style={styles.touristForecastCondition} numberOfLines={1}>
+                            {day.condition}
+                          </Text>
+                          {!!day.range && <Text style={styles.touristForecastRange}>{day.range}°</Text>}
+                        </View>
+                      ))}
+                    </View>
+                  )}
                   {stationAdvisories.count > 0 && (
                     <View style={styles.touristAdvisoryRow}>
                       <Icon name="alert-circle-outline" size={12} color={advisoryColor} />
@@ -588,6 +732,10 @@ function TouristStationsCard({ pmdAlerts = [], ndmaAdvisories = [], nhmpData = [
               );
             })}
           </View>
+
+          {loadingPmdForecasts && (
+            <Text style={styles.touristLoadingText}>Loading PMD official station details…</Text>
+          )}
 
           <TouchableOpacity
             style={styles.touristViewAll}
@@ -682,16 +830,33 @@ export default function TravelScreen({ route }) {
     const nhmpInterval = setInterval(() => loadNhmp({ silent: true }), NHMP_REFRESH_MS);
 
     (async () => {
+      let pmdPageBlocked = false;
       try {
         const json = await fetchApiJson('/api/pmd');
         if (!nhmpCancelRef.current && json.success) {
           setPmdAlerts(json.alerts || []);
-          if (!json.alerts?.length && !json.cities?.length) setPmdBlocked(true);
+          if (!json.alerts?.length && !json.cities?.length) pmdPageBlocked = true;
         } else if (!nhmpCancelRef.current) {
-          setPmdBlocked(true);
+          pmdPageBlocked = true;
         }
       } catch {
-        if (!nhmpCancelRef.current) setPmdBlocked(true);
+        pmdPageBlocked = true;
+      }
+
+      if (!nhmpCancelRef.current && pmdPageBlocked) {
+        try {
+          const alertJson = await fetchApiJson('/api/alerts');
+          if (!nhmpCancelRef.current && alertJson.success) {
+            setPmdAlerts(Array.isArray(alertJson.alerts) ? alertJson.alerts : []);
+            setPmdBlocked(false);
+          } else if (!nhmpCancelRef.current) {
+            setPmdBlocked(true);
+          }
+        } catch {
+          if (!nhmpCancelRef.current) setPmdBlocked(true);
+        }
+      } else if (!nhmpCancelRef.current) {
+        setPmdBlocked(false);
       } finally {
         if (!nhmpCancelRef.current) setPmdLoading(false);
       }
@@ -805,7 +970,7 @@ export default function TravelScreen({ route }) {
     advisoryCount: activeAlerts.length,
     clearRouteCount: clearRoutes.length,
     pmdAlertCount: pmdAlerts.length,
-    pmdAlerts: pmdAlerts.slice(0, 3),
+    pmdAlerts: pmdAlerts.slice(0, 3).map(pmdAlertText),
     ndmaAdvisoryCount: importantNdma.length,
     ndmaLocalAdvisories: localNdma.slice(0, 2).map((item) => ({
       title: item.title, level: item.level, hazard: item.hazard, regions: item.regions,
@@ -823,7 +988,7 @@ export default function TravelScreen({ route }) {
     travelSummary.label,
     activeAlerts.map((item) => `${item.severity}:${item.route || item.status}`).join('|'),
     clearRoutes.length,
-    pmdAlerts.slice(0, 3).join('|'),
+    pmdAlerts.slice(0, 3).map(pmdAlertText).join('|'),
     importantNdma.slice(0, 3).map((item) => `${item.key}:${item.level}`).join('|'),
     focusRoute?.id || 'all',
     focusRouteStops.map((stop) => `${stop.name}:${stop.temp}:${stop.aqi}:${stop.weatherCode}`).join('|'),
@@ -1068,7 +1233,7 @@ export default function TravelScreen({ route }) {
               activeOpacity={0.8}
             >
               {pmdAlerts.slice(0, 5).map((alert, i) => (
-                <Text key={i} style={styles.pmdAlertItem}>{alert}</Text>
+                <Text key={i} style={styles.pmdAlertItem}>{pmdAlertText(alert)}</Text>
               ))}
               <Text style={styles.advisoryHint}>Tap for official PMD alert details</Text>
             </TouchableOpacity>
@@ -1932,6 +2097,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: dc.accentCyan,
+  },
+  touristLoadingText: {
+    marginTop: 8,
+    fontSize: 11,
+    color: dc.textMuted,
+    textAlign: 'center',
   },
 
   // Tourist stations
