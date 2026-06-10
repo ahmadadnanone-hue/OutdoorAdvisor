@@ -40,7 +40,11 @@ export async function saveNativeDevice(payload) {
     preferences: payload.preferences || existing?.preferences || {},
     thresholds: payload.thresholds || existing?.thresholds || {},
     motorwaySubscriptions: payload.motorwaySubscriptions || existing?.motorwaySubscriptions || {},
-    premium: !!payload.premium,
+    premium: typeof payload.premium === 'boolean' ? payload.premium : !!existing?.premium,
+    // "Mute alerts today" — non-critical pushes are skipped until this passes.
+    muteUntil: 'muteUntil' in payload
+      ? (Number(payload.muteUntil) || null)
+      : existing?.muteUntil ?? null,
     createdAt: existing?.createdAt || Date.now(),
     updatedAt: Date.now(),
     lastSeenAt: Date.now(),
@@ -75,6 +79,10 @@ export async function sendNativePush(records, payload) {
       priority: payload.priority || 'high',
       title: payload.title,
       body: payload.body,
+      // iOS: criticals break through Focus as time-sensitive; the category
+      // identifier attaches the "Mute alerts today" action registered on-device.
+      ...(payload.interruptionLevel ? { interruptionLevel: payload.interruptionLevel } : {}),
+      ...(payload.categoryId ? { categoryId: payload.categoryId } : {}),
       data: {
         notificationId,
         category: payload.category || 'Alert',
@@ -90,6 +98,7 @@ export async function sendNativePush(records, payload) {
   }
 
   const tickets = [];
+  const ticketTokens = [];
   for (const chunk of chunks) {
     const response = await fetch(EXPO_PUSH_SEND_URL, {
       method: 'POST',
@@ -104,10 +113,16 @@ export async function sendNativePush(records, payload) {
     if (!response.ok || json.errors) {
       throw new Error(json.errors?.[0]?.message || `Expo push send failed (${response.status})`);
     }
-    tickets.push(...(json.data || []));
+    // Expo returns one ticket per message, in order — keep the token alongside
+    // so receipt errors (DeviceNotRegistered) can unregister the dead device.
+    const chunkTickets = json.data || [];
+    tickets.push(...chunkTickets);
+    chunkTickets.forEach((ticket, index) => {
+      ticketTokens.push(chunk[index]?.to || null);
+    });
   }
 
-  await storeReceiptIds(tickets);
+  await storeReceiptIds(tickets, ticketTokens);
 
   return {
     attempted: messages.length,
@@ -140,23 +155,35 @@ export async function checkStoredReceipts(limit = 300) {
 
   let ok = 0;
   let errors = 0;
+  let removed = 0;
+  const recordById = new Map(records.map((record) => [record.id, record]));
   await Promise.all(keys.map(async (key) => {
     const id = key.replace('push:receipt:', '');
     const receipt = json.data?.[id];
     if (!receipt) return;
     await kvDel(key);
     if (receipt.status === 'ok') ok += 1;
-    if (receipt.status === 'error') errors += 1;
+    if (receipt.status === 'error') {
+      errors += 1;
+      // APNs says this token is permanently gone — drop the device record so
+      // the engine stops fetching weather/AQI for it on every cron run.
+      const token = recordById.get(id)?.token;
+      if (token && receipt.details?.error === 'DeviceNotRegistered') {
+        await removeNativeDevice(token);
+        removed += 1;
+      }
+    }
   }));
 
-  return { checked: ids.length, ok, errors };
+  return { checked: ids.length, ok, errors, removed };
 }
 
-async function storeReceiptIds(tickets) {
+async function storeReceiptIds(tickets, ticketTokens = []) {
   const now = Date.now();
   const writes = tickets
-    .filter((ticket) => ticket?.status === 'ok' && ticket.id)
-    .map((ticket) => kvSetJson(getReceiptKey(ticket.id), { id: ticket.id, createdAt: now }));
+    .map((ticket, index) => ({ ticket, token: ticketTokens[index] || null }))
+    .filter(({ ticket }) => ticket?.status === 'ok' && ticket.id)
+    .map(({ ticket, token }) => kvSetJson(getReceiptKey(ticket.id), { id: ticket.id, token, createdAt: now }));
   await Promise.all(writes);
 }
 

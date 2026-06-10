@@ -9,7 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { SettingsProvider } from './src/context/SettingsContext';
-import { AuthProvider } from './src/context/AuthContext';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { LocationProvider } from './src/context/LocationContext';
 
 const WEB_FONT_STACK =
@@ -49,6 +49,7 @@ import { getTodayHealthSnapshot, initializeHealthPermissions } from './src/hooks
 import { registerOutdoorAdvisorBackgroundTask } from './src/services/backgroundTask';
 import { runSmartAdvisorCheck } from './src/services/smartAdvisor';
 import { registerNativePushToken, syncNativePushRegistration } from './src/services/pushRegistration';
+import { registerNotificationActionCategories } from './src/services/notificationService';
 import { startNativeNotificationInboxSync, syncLastNotificationResponseToInbox } from './src/services/nativeNotificationInbox';
 import LaunchAnimation from './src/components/launch/LaunchAnimation';
 
@@ -110,6 +111,7 @@ function GlassNavBar({ state, navigation, onRouteChange }) {
 
 function AppNavigator() {
   const { isDark, colors } = useTheme();
+  const { isPremium } = useAuth();
   const [activeRouteName, setActiveRouteName] = useState('Home');
 
   useEffect(() => {
@@ -117,6 +119,7 @@ function AppNavigator() {
 
     const boot = async () => {
       await ensureLocalNotificationPermission({ prompt: true }).catch(() => {});
+      await registerNotificationActionCategories().catch(() => {});
       await syncLastNotificationResponseToInbox().catch(() => {});
       await registerNativePushToken({ prompt: false }).catch(() => {});
       await initializeHealthPermissions({ prompt: Platform.OS === 'ios' }).catch(() => {});
@@ -141,6 +144,10 @@ function AppNavigator() {
       subscription.remove();
     };
   }, []);
+
+  useEffect(() => {
+    registerNativePushToken({ prompt: false, premiumOverride: isPremium }).catch(() => {});
+  }, [isPremium]);
 
   return (
     <>

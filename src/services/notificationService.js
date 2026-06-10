@@ -34,6 +34,30 @@ export async function requestNotificationPermission({ prompt = true } = {}) {
   return ensureLocalNotificationPermission({ prompt });
 }
 
+// Action identifiers shared with the server alert engine (`categoryId: 'oa-alert'`)
+// and the response handler in nativeNotificationInbox.js.
+export const ALERT_CATEGORY_ID = 'oa-alert';
+export const ALERT_ACTION_VIEW = 'oa-view';
+export const ALERT_ACTION_MUTE_TODAY = 'oa-mute-today';
+
+// Registers the actionable category so non-critical server pushes get
+// long-press buttons: open the app, or silence non-critical alerts for the day.
+export async function registerNotificationActionCategories() {
+  if (Platform.OS === 'web') return;
+  await Notifications.setNotificationCategoryAsync(ALERT_CATEGORY_ID, [
+    {
+      identifier: ALERT_ACTION_VIEW,
+      buttonTitle: 'Open OutdoorAdvisor',
+      options: { opensAppToForeground: true },
+    },
+    {
+      identifier: ALERT_ACTION_MUTE_TODAY,
+      buttonTitle: 'Mute alerts today',
+      options: { opensAppToForeground: false },
+    },
+  ]);
+}
+
 export async function getNotificationDeliveryState() {
   const permission = await ensureLocalNotificationPermission({ prompt: false });
   return {

@@ -25,8 +25,12 @@ export const DEFAULT_THRESHOLDS = {
 };
 
 export const DEFAULT_NOTIFICATIONS = {
+  officialAdvisories: true,
   severeAqiWarnings: true,
   dailySummary: true,
+  eveningPlanner: true,
+  goodWindowAlerts: true,
+  coldAlerts: true,
   smartWalkNudges: true,
   smogAlerts: true,
   rainAlerts: true,

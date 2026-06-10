@@ -231,8 +231,8 @@ export default function AlertsScreen() {
     const updated = { ...thresholds, [key]: value };
     setThresholds(updated);
     saveStoredThresholds(updated).catch(() => {});
-    registerNativePushToken({ prompt: false, thresholdsOverride: updated }).catch(() => {});
-  }, [thresholds]);
+    registerNativePushToken({ prompt: false, thresholdsOverride: updated, premiumOverride: isPremium }).catch(() => {});
+  }, [isPremium, thresholds]);
 
   const updateNotification = useCallback(async (key, value) => {
     const updated = { ...notifications, [key]: value };
@@ -240,9 +240,9 @@ export default function AlertsScreen() {
     saveStoredNotifications(updated).catch(() => {});
     if (value) {
       ensureLocalNotificationPermission({ prompt: true }).catch(() => {});
-      registerNativePushToken({ prompt: true, preferencesOverride: updated }).catch(() => {});
+      registerNativePushToken({ prompt: true, preferencesOverride: updated, premiumOverride: isPremium }).catch(() => {});
     } else {
-      registerNativePushToken({ prompt: false, preferencesOverride: updated }).catch(() => {});
+      registerNativePushToken({ prompt: false, preferencesOverride: updated, premiumOverride: isPremium }).catch(() => {});
     }
     if (Platform.OS === 'web' && isWebPushSupported() && isPremium) {
       if (value) ensureWebPush(updated, { prompt: true }).catch(() => {});
@@ -254,8 +254,8 @@ export default function AlertsScreen() {
     const updated = { ...motorwaySubs, [routeId]: value };
     setMotorwaySubs(updated);
     saveStoredMotorwaySubscriptions(updated).catch(() => {});
-    registerNativePushToken({ prompt: false, motorwaySubscriptionsOverride: updated }).catch(() => {});
-  }, [motorwaySubs]);
+    registerNativePushToken({ prompt: false, motorwaySubscriptionsOverride: updated, premiumOverride: isPremium }).catch(() => {});
+  }, [isPremium, motorwaySubs]);
 
   /* ---------- Tab Bar ---------- */
   const renderTabBar = () => (
@@ -350,8 +350,11 @@ export default function AlertsScreen() {
       { key: 'dark',  icon: '🌙', label: 'Dark',  desc: 'Always dark' },
     ];
     const items = [
+      { key: 'officialAdvisories',   label: 'Official PMD & NDMA Warnings', desc: 'Receive important official warnings matched to your area and include them in the Pakistan morning brief.' },
       { key: 'severeAqiWarnings',   label: 'Severe AQI Warnings',     desc: 'Important alerts when air quality becomes unhealthy enough to change outdoor plans.' },
-      { key: 'dailySummary',        label: 'Daily Outdoor Summary',    desc: 'Receive a practical morning read on air, weather, and the outdoor mood in your city.' },
+      { key: 'dailySummary',        label: 'Pakistan Morning Outdoor Brief', desc: 'One morning notification combining your local air and weather with the most important PMD and NDMA warnings across Pakistan.' },
+      { key: 'eveningPlanner',      label: 'Evening Planner',          desc: 'One evening notification with tomorrow’s outlook so you can plan outdoor time before the day starts.' },
+      { key: 'goodWindowAlerts',    label: 'Good Outdoor Windows',     desc: 'A heads-up when conditions clear after a rough stretch and a good outdoor window opens.' },
       { key: 'smartWalkNudges',     label: 'Smart Movement Nudges',    desc: 'Use your steps, weather, and AQI to spot a good time for a walk or suggest a better alternative.' },
       { key: 'smogAlerts',          label: 'Smog Season Alerts',       desc: 'Get notified when smog season conditions are detected.' },
       { key: 'rainAlerts',          label: 'Rain Alerts',              desc: 'Get notified when active rain could affect outdoor plans or driving.' },
@@ -359,6 +362,7 @@ export default function AlertsScreen() {
       { key: 'windAlerts',          label: 'Wind Alerts',              desc: 'Alerts when gusty conditions can disrupt outdoor activity or travel.' },
       { key: 'pollenAlerts',        label: 'High Pollen Alerts',       desc: 'Warnings for allergy-heavy days with elevated pollen levels.' },
       { key: 'heatAlerts',          label: 'Extreme Heat Alerts',      desc: 'Warnings when feels-like heat becomes unsafe for longer exposure.' },
+      { key: 'coldAlerts',          label: 'Cold Snap Alerts',         desc: 'Warnings when feels-like cold drops below your threshold.' },
       { key: 'fogWarnings',         label: 'Motorway Fog Warnings',    desc: 'Warnings for dangerous fog conditions on motorways.' },
       { key: 'routeClosureAlerts',  label: 'Major Route Closures',     desc: 'Important alerts for serious motorway and corridor closures.' },
       { key: 'motorwayAlerts',      label: 'Motorway Route Alerts',    desc: 'Server-monitored NHMP alerts for specific motorways you choose. Select routes below.' },

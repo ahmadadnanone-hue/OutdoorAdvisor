@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { runAlertEngine } from './_lib/alertEngine.js';
+import { getAlertEngineStatus, runAlertEngine } from './_lib/alertEngine.js';
 import {
   checkStoredReceipts,
   listNativeDevices,
@@ -44,6 +44,7 @@ export default async function handler(req, res) {
     if (action === 'unregister') return handleUnregister(req, res);
     if (action === 'test') return handleTest(req, res);
     if (action === 'cron') return handleCron(req, res);
+    if (action === 'status') return handleStatus(req, res);
     if (action === 'delete-account') return handleDeleteAccount(req, res);
     return sendJson(res, 400, { error: 'Valid action query parameter is required.' });
   } catch (error) {
@@ -109,6 +110,16 @@ async function handleCron(req, res) {
     alerts: alertResult,
     receipts: receiptResult,
   });
+}
+
+// action=status — lightweight delivery dashboard: active devices, last cron
+// run, feed check times, and the most recent sends. Secret-protected because
+// it exposes operational state.
+async function handleStatus(req, res) {
+  if (req.method !== 'GET') return sendJson(res, 405, { error: 'Method not allowed.' });
+  if (!isTestAuthorized(req)) return sendJson(res, 401, { error: 'Unauthorized.' });
+  const status = await getAlertEngineStatus();
+  return sendJson(res, 200, { success: true, ...status });
 }
 
 function parseBody(req) {

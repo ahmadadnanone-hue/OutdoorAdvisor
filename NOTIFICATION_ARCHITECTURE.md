@@ -1,26 +1,38 @@
 # OutdoorAdvisor Notification Architecture
 
-Last updated: 2026-05-01
+Last updated: 2026-06-10
 
 ## Goal
 
 OutdoorAdvisor must deliver high-value outdoor, weather, AQI, and travel alerts even when the iOS app is closed. Local notifications and iOS background tasks are useful backups, but they are not reliable enough to be the primary delivery path for timely alerts.
 
+## Decision-First Design (2026-06 overhaul)
+
+Every server push is built for decision-making, not just information:
+
+- Each notification carries a **decision verdict** — `avoid`, `caution`, `go`, or `plan` — both as a body prefix ("Avoid outdoors — …", "Plan ahead — …") and in `data.decision` for client logic.
+- Each notification carries a **severity tier** — `critical`, `important`, `helpful` — in `data.severity`. Criticals send as iOS **time-sensitive** interruptions; everything else is `active`.
+- Non-critical pushes use the actionable category `oa-alert`, giving a long-press **"Mute alerts today"** button. The mute is stored on-device, synced to the server (`muteUntil` on the device record), and the engine skips non-critical sends until it expires. Criticals always break through.
+- **Quiet hours (22:00–06:00 device-local)** suppress all non-critical pushes; criticals bypass.
+- The dispatcher sends at most **one non-critical alert per cron run** per device (briefs exempt) so users never get stacked pushes from a single check.
+
 ## Current Notification Types
 
-- Local Outdoor Summaries: three daily advisory pushes (morning, afternoon, evening) based on the user's saved pin, AQI, WeatherKit-first weather, rain risk, heat, and wind.
-- Smart Movement Nudges: Apple Health steps plus AQI/weather to suggest a walk or safer indoor alternative.
-- PMD Severe/Extreme Alerts: official CAP/RSS weather warnings.
-- NDMA National Advisories: official national hazard advisories for GLOF, flash flood, heatwave, storm, and related disaster-risk alerts.
-- Severe AQI Warnings: unhealthy air-quality threshold alerts.
-- Smog Season Alerts: seasonal/high-risk smog conditions.
-- Rain Alerts: active rain or near-term rain risk affecting plans and driving.
-- Thunderstorm Alerts: lightning/severe storm risk.
-- Wind Alerts: gusty conditions affecting activity or travel.
-- High Pollen Alerts: allergy-heavy days.
-- Extreme Heat Alerts: unsafe feels-like heat.
-- Motorway Fog Warnings: corridor visibility risk.
-- Major Route Closures: NHMP/motorway closures and serious route advisories.
+- Pakistan Morning Outdoor Brief (helpful, 06:00–10:00): saved-pin weather/AQI, a sampled national outlook, and the highest-priority PMD/NDMA warnings, ending in a verdict for the day.
+- Evening Planner (helpful, 19:00–22:00): tomorrow's outlook (max temp, rain probability, UV, lingering AQI) with a plan-ahead verdict for the next day.
+- Good Outdoor Window (helpful): after a rough stretch earlier the same day, a "conditions cleared — go now" push when AQI, temperature, rain, and wind all recover during daytime.
+- Smart Movement Nudges (on-device only): Apple Health steps plus AQI/weather to suggest a walk or safer indoor alternative.
+- PMD Severe/Extreme Alerts (critical): official CAP/RSS weather warnings.
+- NDMA National Advisories (critical): official hazard advisories for GLOF, flash flood, heatwave, storm, and related disaster-risk alerts.
+- Severe AQI Warnings (critical at hazardous, important otherwise): threshold-based air-quality alerts.
+- Rain Alerts (heavy = critical, light = important) and Rain-Soon heads-up (helpful).
+- Thunderstorm Alerts (critical): lightning/severe storm risk; supersedes rain pushes.
+- Wind Alerts (severe = critical, threshold = important).
+- Extreme Heat Alerts (critical well past threshold, else important) — now server-implemented.
+- Cold Snap Alerts (important) — new, uses the existing `coldAlert` threshold.
+- Local Fog Alerts (important) — new, visibility hazard at the user's pin.
+- Major Route Closures / Motorway Route Alerts (closure = critical; fog/rain/reopen = important/go) — premium, per-route subscription.
+- Smog Season & High Pollen Alerts: still pending dedicated server rules (covered today via PMD/NDMA matching in the morning brief).
 - Notification Inbox: in-app history of local alerts and remote Expo pushes received/tapped on this device.
 
 ## Delivery Model
@@ -46,11 +58,11 @@ Important iOS caveat: server pushes can be delivered while the app is closed bec
 
 Local notifications remain for:
 
-- immediate in-app alerts,
 - app-open smart advisor checks,
 - Apple Health smart-walk nudges,
-- fallback behavior if server push is unavailable,
 - keeping the in-app inbox useful.
+
+Weather, AQI, PMD, NDMA, rain, wind, and route alerts are server-owned so opening the app does not create a duplicate local warning after a remote push.
 
 ### Tertiary: Background Task
 
@@ -90,7 +102,7 @@ Default behavior: once per day unless user explicitly asks for more.
 
 - `src/services/pushRegistration.js`
   - registers Expo native push tokens,
-  - sends token, preferences, location, platform, timezone, and device id to Vercel,
+  - sends token, preferences, location, platform, timezone, device id, and premium entitlement to Vercel,
   - syncs registration at startup/foreground.
 
 - `api/push.js`
@@ -100,18 +112,18 @@ Default behavior: once per day unless user explicitly asks for more.
   - active GitHub Actions scheduler path. It runs every 15 minutes and calls the authenticated production cron route.
 
 - `api/_lib/nativePush.js`
-  - Expo Push API sender,
-  - token storage helpers,
-  - receipt-id storage and receipt checking.
+  - Expo Push API sender with iOS `interruptionLevel` (time-sensitive for criticals) and `categoryId` (actionable "Mute alerts today"),
+  - token storage helpers including the per-device `muteUntil` field,
+  - receipt-id storage keyed to tokens; `DeviceNotRegistered` receipts automatically remove the dead device record.
 
-- `api/_lib/alertEngine.js`
-  - initial PMD critical alert sender,
-  - daily morning NDMA advisory monitor with official-source dedupe and location targeting,
-  - severe AQI threshold sender,
-  - WeatherKit-first wind, thunderstorm, and rain checks with Open-Meteo fallback,
-  - WeatherKit/Open-Meteo near-term rain-risk checks,
-  - morning, afternoon, and evening local outdoor summary sender,
-  - dedupe and daily non-critical cap state.
+- `api/_lib/alertEngine.js` — rewritten 2026-06-10 as a snapshot → rules → dispatcher pipeline:
+  - shared feeds fetched once per run (PMD CAP every run; NDMA hourly; NHMP every ~30 min and only when someone is subscribed; national overview only when a morning brief is due),
+  - ONE weather snapshot + ONE AQI snapshot per device per run, shared across devices pinned to the same rounded coordinates (previously each alert type re-fetched weather per device — up to 5x duplicate fetches),
+  - 14 rules emit candidates tagged with severity + decision: PMD, NDMA, motorway, thunderstorm, heavy/light rain, extreme heat, cold snap, wind, fog, rain-soon, severe AQI, good-window, morning brief, evening planner,
+  - dispatcher applies quiet hours (22:00–06:00 local), server-side mute-today, unified per-type cooldowns, the 2-per-day non-critical cap, max 3 criticals + 1 non-critical per run, then sends,
+  - legacy dedupe state (PMD/NDMA/brief send records) is migrated on first run so a deploy never re-sends alerts users already received,
+  - state is pruned every run (cooldowns >14 days, stale day counters) so KV records stay bounded,
+  - `getAlertEngineStatus()` powers the `/api/push?action=status` delivery dashboard (devices, last run, feed check times, last 25 sends).
 
 - `src/context/LocationContext.js`
   - refreshes the native push registration after device-location refreshes and manual pin changes so the server uses the latest exact lat/lon for closed-app pushes.
@@ -145,13 +157,14 @@ Default behavior: once per day unless user explicitly asks for more.
 7. Confirm the GitHub Actions scheduler runs `/api/push?action=cron` and does not require the app to open.
 8. Tap a remote push and confirm it appears in the Home Notification Center after the app opens.
 
-Latest production check on 2026-05-01: authenticated `/api/push?action=cron&mode=codex-three-summary-check` returned `success: true`, `devices: 10`, `sent: 9`, with result `{ type: "outdoor-summary", sent: 9 }`.
+Do not manually trigger the production cron merely to test summary copy: it can send real alerts. Verify copy builders locally, then observe the scheduled morning delivery.
 
 ## Next Hardening Steps
 
 1. Improve NDMA attachment parsing so PDF/DOCX advisory bodies can enrich district targeting beyond title-based/default hazard regions.
-2. Add heat, pollen, smog season, and motorway-fog checks to the server alert engine.
-3. Add a delivery dashboard: active tokens, sends, failures, last cron run, last summary window sent, last PMD/NDMA alert key.
+2. Add dedicated pollen and smog-season rules to the server engine (heat, cold, and local fog landed 2026-06-10; official PMD/NDMA smog/pollen warnings already surface via matching).
+3. ~~Delivery dashboard~~ — done: `/api/push?action=status` (test-secret protected).
 4. Add server-side notification inbox events for cross-device history.
-5. Add receipt-based automatic token cleanup for permanent Expo/APNs failures.
+5. ~~Receipt-based automatic token cleanup~~ — done: `DeviceNotRegistered` receipts now remove the device record.
 6. Decide whether critical travel alerts should be free while premium keeps advanced/custom alerts.
+7. Consider the iOS Time Sensitive Notifications capability (`com.apple.developer.usernotifications.time-sensitive`) on the next native build so the `time-sensitive` interruption level actually breaks through Focus; without it APNs downgrades it to `active` (current pushes still deliver normally).

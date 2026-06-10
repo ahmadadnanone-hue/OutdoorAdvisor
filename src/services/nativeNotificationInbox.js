@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { appendInboxNotification } from '../utils/notificationInbox';
+import { muteAlertsForToday } from './pushRegistration';
+import { ALERT_ACTION_MUTE_TODAY } from './notificationService';
 
 function notificationToInboxPayload(notification, eventType = 'received') {
   const content = notification?.request?.content || {};
@@ -47,6 +49,12 @@ export function startNativeNotificationInboxSync() {
   });
 
   const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
+    // "Mute alerts today" action — store the mute locally and sync it to the
+    // server so non-critical pushes stop until tomorrow.
+    if (response?.actionIdentifier === ALERT_ACTION_MUTE_TODAY) {
+      muteAlertsForToday().catch(() => {});
+      return;
+    }
     persistNotification(response.notification, 'tap').catch(() => {});
   });
 

@@ -10,6 +10,31 @@ import { ensureLocalNotificationPermission } from '../utils/alertNotifications';
 const EXPO_PROJECT_ID = '0b8b92b0-0722-4ab1-b4c4-34df3ba8e956';
 const DEVICE_ID_KEY = 'outdooradvisor_native_push_device_id_v1';
 const TOKEN_KEY = 'outdooradvisor_expo_push_token_v1';
+const MUTE_UNTIL_KEY = 'outdooradvisor_alert_mute_until_v1';
+
+// "Mute alerts today" notification action: the server skips non-critical
+// pushes for this device until the stored timestamp passes.
+export async function loadMuteUntil() {
+  try {
+    const raw = await AsyncStorage.getItem(MUTE_UNTIL_KEY);
+    const value = raw ? Number(raw) : 0;
+    return Number.isFinite(value) && value > Date.now() ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function muteAlertsForToday() {
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+  await AsyncStorage.setItem(MUTE_UNTIL_KEY, String(endOfDay.getTime()));
+  return syncNativePushRegistration();
+}
+
+export async function clearAlertMute() {
+  await AsyncStorage.removeItem(MUTE_UNTIL_KEY);
+  return syncNativePushRegistration();
+}
 
 function makeDeviceId() {
   return `oa-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -29,6 +54,7 @@ export async function registerNativePushToken({
   thresholdsOverride = null,
   locationOverride = null,
   motorwaySubscriptionsOverride = null,
+  premiumOverride = null,
 } = {}) {
   if (Platform.OS === 'web' || !Device.isDevice) {
     return { registered: false, reason: 'unsupported-platform' };
@@ -45,12 +71,13 @@ export async function registerNativePushToken({
   const expoPushToken = tokenResponse?.data;
   if (!expoPushToken) return { registered: false, reason: 'missing-token' };
 
-  const [deviceId, preferences, thresholds, location, motorwaySubscriptions] = await Promise.all([
+  const [deviceId, preferences, thresholds, location, motorwaySubscriptions, muteUntil] = await Promise.all([
     getDeviceId(),
     preferencesOverride ? Promise.resolve(preferencesOverride) : loadStoredNotifications(),
     thresholdsOverride ? Promise.resolve(thresholdsOverride) : loadStoredThresholds(),
     locationOverride ? Promise.resolve(locationOverride) : loadLocationSnapshot(),
     motorwaySubscriptionsOverride ? Promise.resolve(motorwaySubscriptionsOverride) : loadStoredMotorwaySubscriptions(),
+    loadMuteUntil(),
   ]);
 
   await fetchApiJson('/api/push?action=register', {
@@ -66,6 +93,8 @@ export async function registerNativePushToken({
       thresholds,
       location,
       motorwaySubscriptions,
+      muteUntil,
+      ...(typeof premiumOverride === 'boolean' ? { premium: premiumOverride } : {}),
     }),
   });
 
