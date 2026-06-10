@@ -59,7 +59,7 @@ A **premium iOS-only app** that gives people in Pakistan a calm, practical read 
 | AI briefing | Gemini via Vercel proxy `/api/ai-briefing` |
 | Road data | NHMP direct fetch (iOS) + Vercel proxy (fallback) |
 | Health | @kingstinct/react-native-healthkit (steps, distance, energy) |
-| Notifications | expo-notifications (local + background task) |
+| Notifications | Server-sent native push (Expo Push via `/api/push`, decision-first engine — see `NOTIFICATION_ARCHITECTURE.md`) + expo-notifications local fallback |
 | Background | expo-background-task + expo-task-manager |
 | Storage | AsyncStorage (preferences) + in-memory cache (weather/AQI) |
 | Maps | react-native-maps (TravelScreen) |
@@ -151,7 +151,7 @@ Activity scoring for running, cycling, walking, cricket, hiking, football. Each 
 ### 4. Settings (`src/screens/AlertsScreen.js`)
 Four sub-tabs:
 - **Thresholds** — AQI, PM2.5, wind alert levels (custom sliders)
-- **Notifications** — toggle local alert types; smart advisor settings
+- **Notifications** — toggle server push alert types (briefs, weather, AQI, heat/cold/fog, good windows, motorway routes); smart advisor settings
 - **Customize** — reorder/show/hide home sections
 - **About** — full App Store-compliant about page (see below)
 
@@ -252,13 +252,16 @@ WeatherKit REST API client. Generates ES256 JWT on-device (no backend needed):
 - `normalizeWeatherKit(json)` — maps Apple response to the `useWeather` shape
 
 ### `src/services/smartAdvisor.js`
-Runs on app start + foreground + background task. Checks conditions and sends smart local notifications (morning summary, walk nudge, AQI alert). 4h cooldown on walk nudges.
+Runs on app start + foreground + background task. Owns ONLY private Apple Health movement nudges (walk window / indoor alternative, 4h cooldown). All weather, AQI, PMD/NDMA, rain, wind, heat, cold, fog, and route alerts are server-owned — sent as native push by `api/_lib/alertEngine.js` (snapshot → rules → dispatcher, decision verdicts, quiet hours, mute-today). Full design: `NOTIFICATION_ARCHITECTURE.md`.
 
 ### `src/services/backgroundTask.js`
 Registers `OUTDOOR_ADVISOR_CHECK` with `expo-background-task`. Calls `runSmartAdvisorCheck` periodically in the background.
 
 ### `src/services/notificationService.js`
-Wrapper around `expo-notifications`. Sends local notifications; manages inbox in AsyncStorage.
+Wrapper around `expo-notifications`. Sends local notifications, registers the `oa-alert` actionable category ("Open OutdoorAdvisor" / "Mute alerts today"), manages inbox in AsyncStorage.
+
+### `src/services/pushRegistration.js`
+Registers the Expo native push token with `/api/push?action=register` (token, prefs, thresholds, location, timezone, premium, muteUntil). Exposes `muteAlertsForToday()` / `clearAlertMute()` used by the notification mute action.
 
 ---
 
