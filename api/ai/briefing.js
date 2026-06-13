@@ -5,6 +5,7 @@ import {
   buildAskPrompt,
   deriveAskVerdict,
   extractDestination,
+  isAskAdvisoryFresh,
   isOutdoorQuestion,
   matchOfficialItems,
   normalizeQuestion,
@@ -378,12 +379,15 @@ async function buildAskEvidence(req, body, googleKey) {
     text: officialAlertText(item).slice(0, 420),
     updatedAt: item.pubDate || item.onset || null,
   }));
-  const ndmaMatches = matchOfficialItems(ndma?.advisories, terms, ndmaAlertText).slice(0, 3).map((item) => ({
-    source: 'NDMA',
-    severity: item.level,
-    text: ndmaAlertText(item).slice(0, 420),
-    updatedAt: item.date || null,
-  }));
+  const ndmaMatches = matchOfficialItems(ndma?.advisories, terms, ndmaAlertText)
+    .filter((item) => isAskAdvisoryFresh(item))
+    .slice(0, 3)
+    .map((item) => ({
+      source: 'NDMA',
+      severity: item.level,
+      text: ndmaAlertText(item).slice(0, 420),
+      updatedAt: item.date || null,
+    }));
   const routeMatches = matchOfficialItems(
     nhmp?.advisories,
     [question, destinationQuery, origin.name],
@@ -393,6 +397,23 @@ async function buildAskEvidence(req, body, googleKey) {
     status: item.status || 'Status unavailable',
     severity: item.severity || 'unknown',
   }));
+  const routeRequested = wantsRouteEvidence(question);
+  const routeClarity = !routeRequested
+    ? { status: 'not_requested', summary: null }
+    : !nhmp?.success || nhmp?.stale
+      ? {
+          status: 'unavailable',
+          summary: 'Live NHMP route clarity is unavailable; check NHMP directly before leaving.',
+        }
+      : routeMatches.length
+        ? {
+            status: 'warning',
+            summary: `${routeMatches[0].route}: ${routeMatches[0].status}`,
+          }
+        : {
+            status: 'clear',
+            summary: 'No relevant NHMP closure or warning found in the latest live feed; recheck before departure.',
+          };
 
   const nearbyQuery = wantsNearbyEvidence(question) ? question : '';
   const [nearbyPlaces, routeWeather] = await Promise.all([
@@ -428,11 +449,17 @@ async function buildAskEvidence(req, body, googleKey) {
     updatedAt: item.issuedTime || item.effectiveTime || null,
   })).filter((item) => item.text);
   const officialMatches = [...providerMatches, ...pmdMatches, ...ndmaMatches];
-  const riskWeather = routeWeather.reduce((worst, point) => ({
-    feelsLike: Math.max(Number(worst.feelsLike) || -100, Number(point.feelsLike) || -100),
-    windKph: Math.max(Number(worst.windKph) || 0, Number(point.windKph) || 0),
-    rainNext3h: Math.max(Number(worst.rainNext3h) || 0, Number(point.rainNext6h) || 0),
-  }), weather);
+  const riskWeather = routeWeather.reduce((worst, point) => {
+    const worstFeels = Number(worst.feelsLike);
+    const worstLow = Number(worst.minFeelsLike ?? worst.feelsLike);
+    const pointFeels = Number(point.feelsLike);
+    return {
+      feelsLike: Math.max(Number.isFinite(worstFeels) ? worstFeels : -100, Number.isFinite(pointFeels) ? pointFeels : -100),
+      minFeelsLike: Math.min(Number.isFinite(worstLow) ? worstLow : 100, Number.isFinite(pointFeels) ? pointFeels : 100),
+      windKph: Math.max(Number(worst.windKph) || 0, Number(point.windKph) || 0),
+      rainNext3h: Math.max(Number(worst.rainNext3h) || 0, Number(point.rainNext6h) || 0),
+    };
+  }, weather);
   const verdict = deriveAskVerdict({
     weather: riskWeather,
     aqi: aqiResult?.aqi,
@@ -450,6 +477,7 @@ async function buildAskEvidence(req, body, googleKey) {
     airQuality: { aqi: aqiResult?.aqi ?? null, pm25: aqiResult?.pm25 ?? null },
     officialMatches,
     routeMatches,
+    routeClarity,
     routeWeather,
     nearbyPlaces,
     sourceStatus: {
@@ -815,6 +843,7 @@ export default async function handler(req, res) {
       weather: evidence.weather,
       aqi: evidence.airQuality.aqi,
       routeMatches: evidence.routeMatches,
+      routeClarity: evidence.routeClarity,
       officialMatches: evidence.officialMatches,
       nearbyPlaces: evidence.nearbyPlaces,
     });

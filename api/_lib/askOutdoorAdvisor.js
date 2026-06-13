@@ -47,8 +47,29 @@ function containsHazard(text, pattern) {
   return pattern.test(String(text || ''));
 }
 
+export function isAskAdvisoryFresh(item, now = Date.now(), maxAgeDays = 7) {
+  const expiry = item?.expires || item?.validUntil || item?.end || item?.endsAt;
+  if (expiry) {
+    const expiryTime = new Date(expiry).getTime();
+    if (Number.isFinite(expiryTime)) return expiryTime >= now;
+  }
+
+  const date = item?.updatedAt || item?.date || item?.pubDate || item?.onset || item?.issuedTime || item?.effectiveTime;
+  if (!date) return false;
+
+  const dateText = String(date);
+  const timestamp = /^\d{4}-\d{2}-\d{2}$/.test(dateText)
+    ? new Date(`${dateText}T23:59:59+05:00`).getTime()
+    : new Date(dateText).getTime();
+  if (!Number.isFinite(timestamp)) return false;
+
+  const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
+  return timestamp <= now + 24 * 60 * 60 * 1000 && now - timestamp <= maxAgeMs;
+}
+
 export function deriveAskVerdict({ weather = {}, aqi = null, officialMatches = [], routeMatches = [] }) {
   const feels = Number(weather.feelsLike ?? weather.temp);
+  const lowestFeels = Number(weather.minFeelsLike ?? weather.feelsLike ?? weather.temp);
   const wind = Number(weather.windKph);
   const rain = Number(weather.rainNext3h);
   const officialText = officialMatches.map((item) => `${item.severity || ''} ${item.text || ''}`).join(' ');
@@ -63,7 +84,8 @@ export function deriveAskVerdict({ weather = {}, aqi = null, officialMatches = [
   if (critical) return 'avoid';
 
   const caution =
-    (Number.isFinite(feels) && (feels >= 36 || feels <= 5)) ||
+    (Number.isFinite(feels) && feels >= 36) ||
+    (Number.isFinite(lowestFeels) && lowestFeels <= 0) ||
     (Number.isFinite(wind) && wind >= 35) ||
     (Number.isFinite(rain) && rain >= 45) ||
     (aqi != null && Number(aqi) >= 101) ||
@@ -86,7 +108,16 @@ export function matchOfficialItems(items, terms, textBuilder) {
   });
 }
 
-export function buildAskFallback({ verdict, targetName, weather, aqi, routeMatches, officialMatches, nearbyPlaces }) {
+export function buildAskFallback({
+  verdict,
+  targetName,
+  weather,
+  aqi,
+  routeMatches,
+  routeClarity,
+  officialMatches,
+  nearbyPlaces,
+}) {
   const verdictLead = verdict === 'avoid'
     ? 'Avoid this plan for now.'
     : verdict === 'caution'
@@ -101,7 +132,17 @@ export function buildAskFallback({ verdict, targetName, weather, aqi, routeMatch
   if (officialMatches?.length) facts.push(`${officialMatches.length} relevant official alert${officialMatches.length === 1 ? '' : 's'}`);
 
   const bullets = [];
-  if (routeMatches?.[0]) bullets.push(`${routeMatches[0].route}: ${routeMatches[0].status}`);
+  if (routeClarity?.summary) bullets.push(routeClarity.summary);
+  else if (routeMatches?.[0]) bullets.push(`${routeMatches[0].route}: ${routeMatches[0].status}`);
+  const feelsLike = Number(weather?.feelsLike);
+  if (
+    Number.isFinite(feelsLike) &&
+    feelsLike > 0 &&
+    feelsLike <= 18 &&
+    verdict !== 'avoid'
+  ) {
+    bullets.push('Cool destination weather may suit a heat-escape trip; pack warm layers.');
+  }
   if (officialMatches?.[0]) bullets.push(officialMatches[0].text);
   if (nearbyPlaces?.[0]) bullets.push(`Nearby option: ${nearbyPlaces[0].name}${nearbyPlaces[0].address ? `, ${nearbyPlaces[0].address}` : ''}`);
 
@@ -120,6 +161,8 @@ You are Ask OutdoorAdvisor, a Pakistan-focused weather, outdoor, and travel deci
 Answer ONLY from the supplied evidence. Never invent a road status, forecast, place, alert, or source.
 The deterministic safety verdict is "${fallback.verdict}" and MUST NOT be softened or changed.
 If a requested source is unavailable, say so briefly. Keep the answer concise and practical.
+Cool destination weather is not automatically bad: people may travel specifically for cooler conditions. Present it as a benefit unless freezing, ice, snow, strong wind, or a current official warning creates a real risk.
+Use only fresh/current advisories in the supplied evidence. For route questions, clearly state whether NHMP has a relevant warning, no relevant warning was found, or live route clarity is unavailable.
 
 Return strict JSON with exactly these keys:
 {"headline":"<=9 words","answer":"<=80 words","bullets":["<=18 words","<=18 words","<=18 words"]}
