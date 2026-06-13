@@ -42,6 +42,7 @@ import HealthStatsSection from '../components/home/HealthStatsSection';
 import CityPickerModal from '../components/home/CityPickerModal';
 import InsightModal from '../components/home/InsightModal';
 import ForecastDetailModal from '../components/home/ForecastDetailModal';
+import AskOutdoorAdvisor, { AskOutdoorAdvisorCard } from '../components/ask/AskOutdoorAdvisor';
 import {
   getAqiColor, getAqiCategory, getHomeDecision, decisionStatus,
   getWindDirectionLabel, getGreeting, getUserGreetingName, getLocationDisplay,
@@ -125,6 +126,7 @@ export default function HomeScreen({ navigation, route }) {
   const [insightModal, setInsightModal]       = useState(null);
   const [refreshNote, setRefreshNote]         = useState('');
   const [notificationCenterVisible, setNotificationCenterVisible] = useState(false);
+  const [askVisible, setAskVisible]               = useState(false);
   const [notificationInbox, setNotificationInbox] = useState([]);
   const [smartSnapshot, setSmartSnapshot] = useState(null);
   const refreshWindowRef                      = useRef([]);
@@ -289,6 +291,8 @@ export default function HomeScreen({ navigation, route }) {
             decision={decision}
           />
 
+          {isPremium ? <AskOutdoorAdvisorCard onPress={() => setAskVisible(true)} /> : null}
+
           <AlertBanner alerts={alerts} loading={alertsLoading} error={alertsError} />
 
           <HealthStatsSection
@@ -415,6 +419,13 @@ export default function HomeScreen({ navigation, route }) {
         />
         <InsightModal insightModal={insightModal} onClose={() => setInsightModal(null)} />
         <ForecastDetailModal forecastDetail={forecastDetail} onClose={() => setForecastDetail(null)} settings={settings} />
+        <AskOutdoorAdvisor
+          visible={askVisible}
+          onClose={() => setAskVisible(false)}
+          location={location}
+          locationName={locationDisplay.primary}
+          context="home"
+        />
         <Modal
           visible={notificationCenterVisible}
           animationType="slide"

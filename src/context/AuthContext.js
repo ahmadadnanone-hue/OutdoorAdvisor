@@ -102,6 +102,35 @@ export function AuthProvider({ children }) {
     refreshStoreKitSubscriptions().catch(() => {});
   }, [user, refreshStoreKitSubscriptions]);
 
+  // Keep the signed-in account's server-visible entitlement aligned with the
+  // confirmed StoreKit state. The AI API authenticates through Supabase, so
+  // this lets genuine Apple subscribers use premium server features and lets
+  // an expired/cancelled entitlement return to the free tier after refresh.
+  useEffect(() => {
+    if (!supabase || !user || !subscription.connected || subscription.loading || subscription.refreshing) return;
+
+    const nextStatus = subscription.isActive ? 'active' : 'free';
+    const currentStatus = String(user.user_metadata?.subscription_status || '').toLowerCase();
+    const currentProductId = user.user_metadata?.subscription_product_id || null;
+    const nextProductId = subscription.activeProductId || null;
+    if (currentStatus === nextStatus && currentProductId === nextProductId) return;
+
+    supabase.auth.updateUser({
+      data: {
+        subscription_status: nextStatus,
+        subscription_product_id: nextProductId,
+        subscription_synced_at: new Date().toISOString(),
+      },
+    }).catch(() => {});
+  }, [
+    user,
+    subscription.activeProductId,
+    subscription.connected,
+    subscription.isActive,
+    subscription.loading,
+    subscription.refreshing,
+  ]);
+
   const signIn = useCallback(async ({ email, password }) => {
     if (!supabase) throw new Error('Authentication is not configured yet.');
     const { error } = await supabase.auth.signInWithPassword({

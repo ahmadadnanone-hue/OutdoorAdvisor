@@ -1,5 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 import { derivePremiumState } from '../../src/lib/premium.js';
+import {
+  buildAskFallback,
+  buildAskPrompt,
+  deriveAskVerdict,
+  extractDestination,
+  isOutdoorQuestion,
+  matchOfficialItems,
+  normalizeQuestion,
+  wantsNearbyEvidence,
+  wantsRouteEvidence,
+} from '../_lib/askOutdoorAdvisor.js';
 
 function sendJson(res, status, payload) {
   res.status(status).json(payload);
@@ -195,11 +206,262 @@ function withTimeout(promise, ms) {
 async function fetchOpenMeteo(lat, lon) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
     `&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,uv_index,precipitation` +
-    `&hourly=precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum` +
-    `&timezone=auto&forecast_days=2`;
+    `&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,wind_speed_10m` +
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum` +
+    `&timezone=auto&forecast_days=3`;
   const r = await withTimeout(fetch(url), 8000);
   if (!r.ok) throw new Error('Open-Meteo error');
   return r.json();
+}
+
+function getApiOrigin(req) {
+  const host = req.headers?.['x-forwarded-host'] || req.headers?.host;
+  if (!host) return 'https://outdooradvisor.vercel.app';
+  const proto = req.headers?.['x-forwarded-proto'] || (String(host).includes('localhost') ? 'http' : 'https');
+  return `${proto}://${host}`;
+}
+
+async function fetchJsonOrNull(url, options) {
+  try {
+    const response = await withTimeout(fetch(url, options), 10000);
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function forwardGeocode(placeName, apiKey) {
+  if (!placeName || !apiKey) return null;
+  const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
+  url.searchParams.set('address', `${placeName}, Pakistan`);
+  url.searchParams.set('key', apiKey);
+  url.searchParams.set('language', 'en');
+  const json = await fetchJsonOrNull(url);
+  const result = json?.results?.[0];
+  if (!result?.geometry?.location) return null;
+  return {
+    name: result.formatted_address || placeName,
+    lat: result.geometry.location.lat,
+    lon: result.geometry.location.lng,
+  };
+}
+
+async function fetchNearbyPlaces(lat, lon, query, apiKey) {
+  if (!apiKey || !query) return [];
+  const response = await fetchJsonOrNull('https://places.googleapis.com/v1/places:searchText', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': apiKey,
+      'X-Goog-FieldMask': 'places.displayName,places.rating,places.shortFormattedAddress',
+    },
+    body: JSON.stringify({
+      textQuery: query,
+      pageSize: 4,
+      rankPreference: 'DISTANCE',
+      locationBias: { circle: { center: { latitude: lat, longitude: lon }, radius: 8000 } },
+    }),
+  });
+  return (response?.places || []).map((place) => ({
+    name: place.displayName?.text || '',
+    address: place.shortFormattedAddress || '',
+    rating: place.rating ?? null,
+  }));
+}
+
+function summarizeAskWeather(meteo) {
+  if (meteo?.current && Array.isArray(meteo?.hourly) && !meteo?.hourly?.time) {
+    const current = meteo.current;
+    const nearRain = meteo.hourly.slice(0, 6).map((item) => item.precipProbability).filter(Number.isFinite);
+    return {
+      source: meteo.source || 'WeatherKit',
+      observedAt: null,
+      temp: current.temp ?? null,
+      feelsLike: current.feelsLike ?? null,
+      humidity: current.humidity ?? null,
+      windKph: current.windSpeed ?? null,
+      condition: WMO_LABELS[current.weatherCode] || current.conditionCode || 'Variable',
+      rainNext3h: nearRain.length ? Math.max(...nearRain.slice(0, 3)) : null,
+      rainNext6h: nearRain.length ? Math.max(...nearRain) : null,
+      hourly: meteo.hourly.slice(0, 30).map((item) => ({
+        time: item.time,
+        temp: item.temp ?? null,
+        feelsLike: null,
+        rainChance: item.precipProbability ?? null,
+        windKph: null,
+        condition: WMO_LABELS[item.weatherCode] || item.conditionCode || 'Variable',
+      })),
+      daily: (meteo.daily || []).slice(0, 3).map((item) => ({
+        date: item.date,
+        min: item.minTemp ?? null,
+        max: item.maxTemp ?? null,
+        rainMm: item.precipSum ?? null,
+        rainChance: item.precipProbability ?? null,
+        condition: WMO_LABELS[item.weatherCode] || item.conditionCode || 'Variable',
+      })),
+      providerAlerts: (meteo.alerts || []).slice(0, 3),
+    };
+  }
+
+  const current = meteo?.current || {};
+  const hourly = meteo?.hourly || {};
+  const daily = meteo?.daily || {};
+  const nearRain = (hourly.precipitation_probability || []).slice(0, 6);
+  return {
+    observedAt: current.time || null,
+    temp: current.temperature_2m ?? null,
+    feelsLike: current.apparent_temperature ?? null,
+    humidity: current.relative_humidity_2m ?? null,
+    windKph: current.wind_speed_10m ?? null,
+    condition: WMO_LABELS[current.weather_code] || 'Variable',
+    rainNext3h: nearRain.length ? Math.max(...nearRain.slice(0, 3)) : null,
+    rainNext6h: nearRain.length ? Math.max(...nearRain) : null,
+    hourly: (hourly.time || []).slice(0, 30).map((time, index) => ({
+      time,
+      temp: hourly.temperature_2m?.[index] ?? null,
+      feelsLike: hourly.apparent_temperature?.[index] ?? null,
+      rainChance: hourly.precipitation_probability?.[index] ?? null,
+      windKph: hourly.wind_speed_10m?.[index] ?? null,
+      condition: WMO_LABELS[hourly.weather_code?.[index]] || 'Variable',
+    })),
+    daily: (daily.time || []).slice(0, 3).map((date, index) => ({
+      date,
+      min: daily.temperature_2m_min?.[index] ?? null,
+      max: daily.temperature_2m_max?.[index] ?? null,
+      rainMm: daily.precipitation_sum?.[index] ?? null,
+      condition: WMO_LABELS[daily.weather_code?.[index]] || 'Variable',
+    })),
+  };
+}
+
+async function fetchAskWeather(originUrl, lat, lon) {
+  const weatherKit = await fetchJsonOrNull(`${originUrl}/api/weatherkit?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`);
+  if (weatherKit?.current) return weatherKit;
+  return fetchOpenMeteo(lat, lon).catch(() => null);
+}
+
+function officialAlertText(item) {
+  return [item?.event, item?.title, item?.description, item?.instruction, ...(item?.regions || [])]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function ndmaAlertText(item) {
+  return [item?.title, item?.hazard, item?.summary, ...(item?.regions || [])].filter(Boolean).join(' ');
+}
+
+async function buildAskEvidence(req, body, googleKey) {
+  const question = normalizeQuestion(body.question);
+  const origin = {
+    name: String(body.locationName || 'Current location'),
+    lat: Number(body.lat),
+    lon: Number(body.lon),
+  };
+  const destinationQuery = extractDestination(question);
+  const destination = await forwardGeocode(destinationQuery, googleKey);
+  const target = destination || origin;
+  const originUrl = getApiOrigin(req);
+
+  const [meteo, aqiResult, pmd, ndma, nhmp] = await Promise.all([
+    fetchAskWeather(originUrl, target.lat, target.lon),
+    fetchGoogleAqi(target.lat, target.lon, googleKey).catch(() => null),
+    fetchJsonOrNull(`${originUrl}/api/alerts`),
+    fetchJsonOrNull(`${originUrl}/api/ndma?limit=12&location=${encodeURIComponent(target.name)}`),
+    wantsRouteEvidence(question) ? fetchJsonOrNull(`${originUrl}/api/nhmp`) : Promise.resolve(null),
+  ]);
+
+  const terms = [destinationQuery, target.name, origin.name];
+  const pmdMatches = matchOfficialItems(pmd?.alerts, terms, officialAlertText).slice(0, 3).map((item) => ({
+    source: 'PMD',
+    severity: item.severity,
+    text: officialAlertText(item).slice(0, 420),
+    updatedAt: item.pubDate || item.onset || null,
+  }));
+  const ndmaMatches = matchOfficialItems(ndma?.advisories, terms, ndmaAlertText).slice(0, 3).map((item) => ({
+    source: 'NDMA',
+    severity: item.level,
+    text: ndmaAlertText(item).slice(0, 420),
+    updatedAt: item.date || null,
+  }));
+  const routeMatches = matchOfficialItems(
+    nhmp?.advisories,
+    [question, destinationQuery, origin.name],
+    (item) => `${item?.route || ''} ${item?.sector || ''} ${item?.status || ''}`
+  ).slice(0, 5).map((item) => ({
+    route: item.route || item.sector || 'NHMP route',
+    status: item.status || 'Status unavailable',
+    severity: item.severity || 'unknown',
+  }));
+
+  const nearbyQuery = wantsNearbyEvidence(question) ? question : '';
+  const [nearbyPlaces, routeWeather] = await Promise.all([
+    fetchNearbyPlaces(target.lat, target.lon, nearbyQuery, googleKey),
+    wantsRouteEvidence(question) && destination
+      ? Promise.all([
+          { name: origin.name, lat: origin.lat, lon: origin.lon },
+          {
+            name: 'Approximate route midpoint',
+            lat: (origin.lat + destination.lat) / 2,
+            lon: (origin.lon + destination.lon) / 2,
+          },
+          { name: destination.name, lat: destination.lat, lon: destination.lon },
+        ].map(async (point) => {
+          const pointWeather = await fetchAskWeather(originUrl, point.lat, point.lon);
+          const summary = summarizeAskWeather(pointWeather);
+          return {
+            name: point.name,
+            temp: summary.temp,
+            feelsLike: summary.feelsLike,
+            condition: summary.condition,
+            rainNext6h: summary.rainNext6h,
+            windKph: summary.windKph,
+          };
+        }))
+      : Promise.resolve([]),
+  ]);
+  const weather = summarizeAskWeather(meteo);
+  const providerMatches = (weather.providerAlerts || []).map((item) => ({
+    source: weather.source || 'WeatherKit',
+    severity: item.severity || item.significance || 'warning',
+    text: [item.summary, item.description, item.detailsUrl].filter(Boolean).join(' ').slice(0, 420),
+    updatedAt: item.issuedTime || item.effectiveTime || null,
+  })).filter((item) => item.text);
+  const officialMatches = [...providerMatches, ...pmdMatches, ...ndmaMatches];
+  const riskWeather = routeWeather.reduce((worst, point) => ({
+    feelsLike: Math.max(Number(worst.feelsLike) || -100, Number(point.feelsLike) || -100),
+    windKph: Math.max(Number(worst.windKph) || 0, Number(point.windKph) || 0),
+    rainNext3h: Math.max(Number(worst.rainNext3h) || 0, Number(point.rainNext6h) || 0),
+  }), weather);
+  const verdict = deriveAskVerdict({
+    weather: riskWeather,
+    aqi: aqiResult?.aqi,
+    officialMatches,
+    routeMatches,
+  });
+
+  return {
+    question,
+    verdict,
+    target: { name: target.name, lat: target.lat, lon: target.lon },
+    origin,
+    weather,
+    weatherProvider: weather.source || 'Open-Meteo fallback',
+    airQuality: { aqi: aqiResult?.aqi ?? null, pm25: aqiResult?.pm25 ?? null },
+    officialMatches,
+    routeMatches,
+    routeWeather,
+    nearbyPlaces,
+    sourceStatus: {
+      forecast: meteo ? 'live' : 'unavailable',
+      airQuality: aqiResult ? 'live' : 'unavailable',
+      PMD: pmd?.success ? 'live' : 'unavailable',
+      NDMA: ndma?.success ? 'live' : 'unavailable',
+      NHMP: wantsRouteEvidence(question) ? (nhmp?.success ? (nhmp.stale ? 'stale' : 'live') : 'unavailable') : 'not requested',
+      places: nearbyQuery ? (nearbyPlaces.length ? 'live' : 'unavailable') : 'not requested',
+    },
+    fetchedAt: new Date().toISOString(),
+  };
 }
 
 async function fetchGoogleAqi(lat, lon, apiKey) {
@@ -481,6 +743,35 @@ async function callGemini(model, apiKey, prompt) {
   return parsed;
 }
 
+async function callGeminiAsk(model, apiKey, prompt) {
+  const response = await withTimeout(fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.35,
+          topP: 0.85,
+          maxOutputTokens: 500,
+          responseMimeType: 'application/json',
+        },
+      }),
+    }
+  ), 15000);
+
+  const json = await response.json();
+  if (!response.ok) throw new Error(json?.error?.message || `Gemini request failed (${response.status})`);
+  const parsed = tryParseJson(extractTextFromResponse(json));
+  if (!parsed?.headline || !parsed?.answer) throw new Error('Gemini returned an invalid Ask payload.');
+  return {
+    headline: String(parsed.headline).slice(0, 100),
+    answer: String(parsed.answer).slice(0, 800),
+    bullets: Array.isArray(parsed.bullets) ? parsed.bullets.map(String).slice(0, 3) : [],
+  };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
@@ -496,6 +787,55 @@ export default async function handler(req, res) {
   const geminiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '').trim();
   const googleKey = (process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
   const model     = (process.env.GEMINI_MODEL || 'gemini-2.0-flash').trim();
+
+  // ── Ask OutdoorAdvisor: premium evidence-first conversational answers ────
+  if (kind === 'ask') {
+    const question = normalizeQuestion(body.question);
+    const lat = Number(body.lat);
+    const lon = Number(body.lon);
+    if (!question || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+      return sendJson(res, 400, { error: 'question, lat, and lon are required.' });
+    }
+    if (!isOutdoorQuestion(question)) {
+      return sendJson(res, 400, {
+        error: 'Ask about weather, air quality, outdoor plans, nearby activities, or travel routes.',
+      });
+    }
+
+    const premiumState = await getRequestPremiumState(req);
+    if (!premiumState.isPremium) {
+      return sendJson(res, 403, { error: 'Ask OutdoorAdvisor is available to signed-in premium members.' });
+    }
+
+    res.setHeader('Cache-Control', 'no-store');
+    const evidence = await buildAskEvidence(req, body, googleKey);
+    const fallback = buildAskFallback({
+      verdict: evidence.verdict,
+      targetName: evidence.target.name,
+      weather: evidence.weather,
+      aqi: evidence.airQuality.aqi,
+      routeMatches: evidence.routeMatches,
+      officialMatches: evidence.officialMatches,
+      nearbyPlaces: evidence.nearbyPlaces,
+    });
+
+    if (!geminiKey) return sendJson(res, 200, { ...fallback, evidence });
+
+    try {
+      const prompt = buildAskPrompt({ question, evidence, fallback });
+      const result = await callGeminiAsk(model, geminiKey, prompt);
+      return sendJson(res, 200, {
+        provider: 'gemini',
+        verdict: evidence.verdict,
+        headline: result.headline,
+        answer: result.answer,
+        bullets: result.bullets,
+        evidence,
+      });
+    } catch (error) {
+      return sendJson(res, 200, { ...fallback, evidence, _debug: error?.message });
+    }
+  }
 
   // ── Synthesize: server fetches all sources, returns unified brief ─────────
   if (kind === 'synthesize') {

@@ -39,6 +39,7 @@ import { ScreenGradient } from '../components/layout';
 import { GlassCard } from '../components/glass';
 import { AdvisorySourceCard, TravelSnapshotCard } from '../components/cards';
 import Icon, { ICON } from '../components/Icon';
+import AskOutdoorAdvisor, { AskOutdoorAdvisorCard } from '../components/ask/AskOutdoorAdvisor';
 import { colors as dc, typography, statusColor } from '../design';
 
 const NHMP_REFRESH_MS = 5 * 60 * 1000;
@@ -796,7 +797,7 @@ export default function TravelScreen({ route }) {
     resetTravelSections,
   } = useSettings();
   const { isPremium } = useAuth();
-  const { city: pinnedCity, region: pinnedRegion } = useLocationContext();
+  const { location, city: pinnedCity, region: pinnedRegion } = useLocationContext();
   const [expandedMotorway, setExpandedMotorway] = useState(null);
   const [stopData, setStopData] = useState({});
   const fetchingRef = useRef({});
@@ -822,6 +823,7 @@ export default function TravelScreen({ route }) {
   const [ndmaExpanded, setNdmaExpanded] = useState(false);
   const [travelCustomizeExpanded, setTravelCustomizeExpanded] = useState(false);
   const [closureModalVisible, setClosureModalVisible] = useState(false);
+  const [askVisible, setAskVisible] = useState(false);
   const [majorRoutesExpanded, setMajorRoutesExpanded] = useState(false);
   const safeTravelSections = useMemo(
     () => (travelSections || []).filter((key) => VALID_TRAVEL_SECTION_KEYS.has(key)),
@@ -1570,6 +1572,8 @@ export default function TravelScreen({ route }) {
             }}
           />
 
+          {isPremium ? <AskOutdoorAdvisorCard compact onPress={() => setAskVisible(true)} /> : null}
+
           {safeTravelSections.map((key) => (
             <React.Fragment key={key}>
               {renderTravelSection(key)}
@@ -1675,6 +1679,13 @@ export default function TravelScreen({ route }) {
             )}
           </GlassCard>
         </ScrollView>
+        <AskOutdoorAdvisor
+          visible={askVisible}
+          onClose={() => setAskVisible(false)}
+          location={location}
+          locationName={[pinnedCity, pinnedRegion].filter(Boolean).join(', ')}
+          context="travel"
+        />
       </View>
     </ScreenGradient>
   );
