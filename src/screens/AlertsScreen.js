@@ -324,6 +324,9 @@ export default function AlertsScreen() {
         { key: 'heatAlert', label: 'Heat Alert (°C)',     range: '30 - 55',  min: 30,  max: 55,  step: 1,  trackColor: dc.accentYellow },
         { key: 'coldAlert', label: 'Cold Alert (°C)',     range: '-10 - 15', min: -10, max: 15,  step: 1,  trackColor: dc.accentCyan },
         { key: 'windAlert', label: 'Wind Gust Alert (km/h)', range: '25 - 90', min: 25, max: 90, step: 5, trackColor: dc.accentBlue },
+        { key: 'rainProbabilityAlert', label: 'Rain Chance Alert (%)', range: '30 - 90', min: 30, max: 90, step: 5, trackColor: dc.accentBlue },
+        { key: 'rainProbabilityJump', label: 'Sudden Rain Jump (%)', range: '15 - 50', min: 15, max: 50, step: 5, trackColor: dc.accentCyan },
+        { key: 'rainLeadHours', label: 'Rain Alert Lead Time (hours)', range: '1 - 4', min: 1, max: 4, step: 1, trackColor: dc.accentCyan },
       ].map(({ key, label, range, min, max, step, trackColor }) => (
         <GlassCard key={key} style={styles.sliderCard} contentStyle={styles.sliderContent}>
           <View style={styles.sliderHeader}>
@@ -357,7 +360,7 @@ export default function AlertsScreen() {
       { key: 'goodWindowAlerts',    label: 'Good Outdoor Windows',     desc: 'A heads-up when conditions clear after a rough stretch and a good outdoor window opens.' },
       { key: 'smartWalkNudges',     label: 'Smart Movement Nudges',    desc: 'Use your steps, weather, and AQI to spot a good time for a walk or suggest a better alternative.' },
       { key: 'smogAlerts',          label: 'Smog Season Alerts',       desc: 'Get notified when smog season conditions are detected.' },
-      { key: 'rainAlerts',          label: 'Rain Alerts',              desc: 'Get notified when active rain could affect outdoor plans or driving.' },
+      { key: 'rainAlerts',          label: 'Rain & Sudden Change Alerts', desc: 'Get notified when rain is approaching, starts nearby, or its forecast probability rises sharply.' },
       { key: 'thunderstormAlerts',  label: 'Thunderstorm Alerts',      desc: 'Important warnings for lightning and severe storm risk.' },
       { key: 'windAlerts',          label: 'Wind Alerts',              desc: 'Alerts when gusty conditions can disrupt outdoor activity or travel.' },
       { key: 'pollenAlerts',        label: 'High Pollen Alerts',       desc: 'Warnings for allergy-heavy days with elevated pollen levels.' },

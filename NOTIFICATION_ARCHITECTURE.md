@@ -1,6 +1,6 @@
 # OutdoorAdvisor Notification Architecture
 
-Last updated: 2026-06-10
+Last updated: 2026-06-13
 
 ## Goal
 
@@ -25,14 +25,16 @@ Every server push is built for decision-making, not just information:
 - PMD Severe/Extreme Alerts (critical): official CAP/RSS weather warnings.
 - NDMA National Advisories (critical): official hazard advisories for GLOF, flash flood, heatwave, storm, and related disaster-risk alerts.
 - Severe AQI Warnings (critical at hazardous, important otherwise): threshold-based air-quality alerts.
-- Rain Alerts (heavy = critical, light = important) and Rain-Soon heads-up (helpful).
+- Rain Alerts (heavy = critical, light = important), future-aware Rain-Soon heads-up, and sudden rain-probability jump alerts. Users can configure the trigger percentage, probability jump, and 1–4 hour lead time.
 - Thunderstorm Alerts (critical): lightning/severe storm risk; supersedes rain pushes.
-- Wind Alerts (severe = critical, threshold = important).
+- Wind Alerts (severe = critical, threshold = important), including rapid gust increases between scheduler snapshots.
 - Extreme Heat Alerts (critical well past threshold, else important) — now server-implemented.
 - Cold Snap Alerts (important) — new, uses the existing `coldAlert` threshold.
-- Local Fog Alerts (important) — new, visibility hazard at the user's pin.
-- Major Route Closures / Motorway Route Alerts (closure = critical; fog/rain/reopen = important/go) — premium, per-route subscription.
-- Smog Season & High Pollen Alerts: still pending dedicated server rules (covered today via PMD/NDMA matching in the morning brief).
+- Local Fog Alerts and sudden visibility-drop alerts — visibility hazards at the user's pin.
+- Major Route Closures (broad closure-only watch) and Motorway Route Alerts (closure = critical; fog/rain/reopen = important/go) — premium.
+- Severe AQI / PM2.5 alerts respect both configured thresholds, with rapid AQI-rise detection between snapshots.
+- Smog Season and High Pollen Alerts have dedicated premium server rules.
+- Native WeatherKit warning payloads are evaluated at the exact user pin in addition to PMD/NDMA feeds.
 - Notification Inbox: in-app history of local alerts and remote Expo pushes received/tapped on this device.
 
 ## Delivery Model
@@ -45,7 +47,7 @@ The production path is:
 2. App obtains an Expo push token with `Notifications.getExpoPushTokenAsync`.
 3. App registers that token at `/api/push?action=register`.
 4. Vercel stores token, device metadata, location snapshot, timezone, and alert preferences in KV.
-5. GitHub Actions triggers `/api/push?action=cron` every 15 minutes using the `OA_CRON_SECRET` repo secret.
+5. GitHub Actions requests `/api/push?action=cron` every 15 minutes using the `OA_CRON_SECRET` repo secret. GitHub scheduling has shown long real-world delays, so a validated five-minute Cloudflare Worker scheduler lives under `workers/notification-cron`; deployment still requires Cloudflare OAuth and its matching `CRON_SECRET`.
 6. Server sends pushes through Expo Push Service.
 7. Server stores Expo receipt IDs and later checks receipts to clean up delivery failures.
 8. Build 20 client code saves received/tapped remote pushes into the local in-app Notification Center.
@@ -109,17 +111,24 @@ Default behavior: once per day unless user explicitly asks for more.
   - single Hobby-plan-friendly push API with `action=register`, `action=unregister`, `action=test`, and `action=cron`.
 
 - `.github/workflows/push-cron.yml`
-  - active GitHub Actions scheduler path. It runs every 15 minutes and calls the authenticated production cron route.
+  - active fallback scheduler path. It requests a run every 15 minutes, but GitHub may delay scheduled jobs substantially.
+
+- `workers/notification-cron`
+  - validated Cloudflare Worker with a five-minute cron trigger,
+  - calls the same authenticated production cron route,
+  - requires Cloudflare login/deployment and a Worker `CRON_SECRET` matching Vercel before it becomes active.
 
 - `api/_lib/nativePush.js`
   - Expo Push API sender with iOS `interruptionLevel` (time-sensitive for criticals) and `categoryId` (actionable "Mute alerts today"),
   - token storage helpers including the per-device `muteUntil` field,
   - receipt-id storage keyed to tokens; `DeviceNotRegistered` receipts automatically remove the dead device record.
 
-- `api/_lib/alertEngine.js` — rewritten 2026-06-10 as a snapshot → rules → dispatcher pipeline:
+- `api/_lib/alertEngine.js` — rewritten 2026-06-10 and extended 2026-06-13 as a snapshot → rules → dispatcher pipeline:
   - shared feeds fetched once per run (PMD CAP every run; NDMA hourly; NHMP every ~30 min and only when someone is subscribed; national overview only when a morning brief is due),
   - ONE weather snapshot + ONE AQI snapshot per device per run, shared across devices pinned to the same rounded coordinates (previously each alert type re-fetched weather per device — up to 5x duplicate fetches),
-  - 14 rules emit candidates tagged with severity + decision: PMD, NDMA, motorway, thunderstorm, heavy/light rain, extreme heat, cold snap, wind, fog, rain-soon, severe AQI, good-window, morning brief, evening planner,
+  - future hourly weather is filtered relative to the current time before rain-soon evaluation; the old implementation incorrectly inspected the first hours of the day,
+  - short-lived per-device snapshots detect sharp changes in rain probability, wind gusts, visibility, feels-like temperature, and AQI,
+  - dedicated rules cover PMD, NDMA, native WeatherKit warnings, motorway subscriptions, broad major closures, thunderstorm, heavy/light/future/sudden rain, heat/cold, wind/sudden wind, fog/visibility drops, severe AQI/PM2.5, AQI surges, smog, pollen, good-window, morning brief, and evening planner,
   - dispatcher applies quiet hours (22:00–06:00 local), server-side mute-today, unified per-type cooldowns, the 2-per-day non-critical cap, max 3 criticals + 1 non-critical per run, then sends,
   - legacy dedupe state (PMD/NDMA/brief send records) is migrated on first run so a deploy never re-sends alerts users already received,
   - state is pruned every run (cooldowns >14 days, stale day counters) so KV records stay bounded,
@@ -162,7 +171,7 @@ Do not manually trigger the production cron merely to test summary copy: it can 
 ## Next Hardening Steps
 
 1. Improve NDMA attachment parsing so PDF/DOCX advisory bodies can enrich district targeting beyond title-based/default hazard regions.
-2. Add dedicated pollen and smog-season rules to the server engine (heat, cold, and local fog landed 2026-06-10; official PMD/NDMA smog/pollen warnings already surface via matching).
+2. Deploy the validated five-minute Cloudflare Worker scheduler and set its `CRON_SECRET`; GitHub Actions remains the fallback until then.
 3. ~~Delivery dashboard~~ — done: `/api/push?action=status` (test-secret protected).
 4. Add server-side notification inbox events for cross-device history.
 5. ~~Receipt-based automatic token cleanup~~ — done: `DeviceNotRegistered` receipts now remove the device record.

@@ -30,7 +30,11 @@ const QUIET_HOURS = { start: 22, end: 6 }; // device-local; criticals bypass
 const NDMA_CHECK_INTERVAL_MS = 60 * 60 * 1000;
 const NHMP_CHECK_INTERVAL_MS = 28 * 60 * 1000; // cron fires every 15 min
 const COOLDOWN_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
+const SNAPSHOT_RETENTION_MS = 6 * 60 * 60 * 1000;
 const SEND_LOG_LIMIT = 60;
+const DEFAULT_RAIN_PROBABILITY = 60;
+const DEFAULT_RAIN_JUMP = 25;
+const DEFAULT_RAIN_LEAD_HOURS = 3;
 
 const MORNING_BRIEF_WINDOW = { id: 'morning', start: 6, end: 10 };
 const EVENING_PLANNER_WINDOW = { id: 'evening', start: 19, end: 22 };
@@ -73,7 +77,7 @@ export async function runAlertEngine({ mode = 'scheduled' } = {}) {
 
   const now = new Date();
   const shared = await loadSharedFeeds(activeDevices, state, { mode, now });
-  const caches = { weather: new Map(), aqi: new Map() };
+  const caches = { weather: new Map(), aqi: new Map(), pollen: new Map() };
   const sentByType = {};
   let totalSent = 0;
 
@@ -81,6 +85,7 @@ export async function runAlertEngine({ mode = 'scheduled' } = {}) {
     try {
       const ctx = await buildDeviceContext(device, caches, shared, state, now);
       const candidates = evaluateRules(device, ctx, shared, state, now);
+      updateDeviceSnapshot(state, device, ctx, now);
       const sent = await dispatchCandidates(device, ctx, candidates, state, now);
       for (const item of sent) {
         sentByType[item.type] = (sentByType[item.type] || 0) + 1;
@@ -126,12 +131,18 @@ async function loadSharedFeeds(devices, state, { mode, now }) {
     }
   }
 
-  // NHMP route state every ~30 min, and only if someone subscribed.
+  // NHMP route state every ~30 min when someone follows a route or has broad
+  // major-closure alerts enabled.
   const hasMotorwayCandidates = devices.some((d) =>
     d.premium === true &&
-    d.preferences?.motorwayAlerts !== false &&
-    d.motorwaySubscriptions &&
-    Object.values(d.motorwaySubscriptions).some(Boolean));
+    (
+      d.preferences?.routeClosureAlerts !== false ||
+      (
+        d.preferences?.motorwayAlerts !== false &&
+        d.motorwaySubscriptions &&
+        Object.values(d.motorwaySubscriptions).some(Boolean)
+      )
+    ));
   if (hasMotorwayCandidates && Date.now() - (state.nhmpLastCheckedAt || 0) >= NHMP_CHECK_INTERVAL_MS) {
     state.nhmpLastCheckedAt = Date.now();
     const advisories = await fetchNhmpAdvisories();
@@ -169,16 +180,19 @@ async function buildDeviceContext(device, caches, shared, state, now) {
     prefs.rainAlerts !== false || prefs.thunderstormAlerts !== false ||
     prefs.windAlerts !== false || prefs.heatAlerts !== false ||
     prefs.coldAlerts !== false || prefs.fogWarnings !== false ||
+    prefs.smogAlerts !== false ||
     prefs.dailySummary !== false || prefs.eveningPlanner !== false ||
     prefs.goodWindowAlerts !== false
   );
   const needsAqi = hasLocation && (
     prefs.severeAqiWarnings !== false || prefs.dailySummary !== false ||
-    prefs.goodWindowAlerts !== false
+    prefs.goodWindowAlerts !== false || prefs.smogAlerts !== false
   );
+  const needsPollen = hasLocation && device.premium === true && prefs.pollenAlerts === true;
 
   let wx = null;
   let aqi = null;
+  let pollen = null;
   if (needsWeather) {
     const key = coordKey(device.location.lat, device.location.lon);
     if (!caches.weather.has(key)) {
@@ -193,8 +207,15 @@ async function buildDeviceContext(device, caches, shared, state, now) {
     }
     aqi = caches.aqi.get(key);
   }
+  if (needsPollen) {
+    const key = coordKey(device.location.lat, device.location.lon);
+    if (!caches.pollen.has(key)) {
+      caches.pollen.set(key, await fetchPollen(device.location.lat, device.location.lon));
+    }
+    pollen = caches.pollen.get(key);
+  }
 
-  return { prefs, hasLocation, localHour, day, wx, aqi };
+  return { prefs, hasLocation, localHour, day, wx, aqi, pollen };
 }
 
 // ─── Rules ───────────────────────────────────────────────────────────────────
@@ -203,9 +224,10 @@ async function buildDeviceContext(device, caches, shared, state, now) {
 //   cooldownKey, cooldownMs, countsTowardCap, brief }
 function evaluateRules(device, ctx, shared, state, now) {
   const candidates = [];
-  const { prefs, wx, aqi, day, localHour } = ctx;
+  const { prefs, wx, aqi, pollen, day, localHour } = ctx;
   const city = getDeviceLocationLabel(device);
   const token = device.expoPushToken;
+  const previous = state.weatherSnapshots?.[token] || null;
 
   // 1. PMD official alerts (critical)
   if (prefs.officialAdvisories !== false) {
@@ -281,12 +303,53 @@ function evaluateRules(device, ctx, shared, state, now) {
     }
   }
 
+  // 4. Major route closures (premium, broad closure-only watch)
+  if (device.premium === true && prefs.routeClosureAlerts !== false) {
+    for (const change of shared.nhmpChanges || []) {
+      if (change.type !== 'closed') continue;
+      if (prefs.motorwayAlerts !== false && device.motorwaySubscriptions?.[change.routeId]) continue;
+      const copy = buildMotorwayCopy(change);
+      candidates.push({
+        type: 'route-closure',
+        severity: 'critical',
+        decision: 'avoid',
+        title: copy.title,
+        body: copy.body,
+        category: 'Travel',
+        source: 'major-route-closure',
+        url: 'https://outdooradvisor.app',
+        data: { routeId: change.routeId, changeType: change.type },
+        cooldownKey: `route-closure:${change.routeId}`,
+        cooldownMs: 6 * 60 * 60 * 1000,
+      });
+    }
+  }
+
   // Weather-driven rules need a snapshot.
   if (wx) {
     const feels = wx.feelsLike ?? wx.temp;
     const storm = prefs.thunderstormAlerts !== false && isThunderstorm(wx);
 
-    // 4. Thunderstorm (critical)
+    // 5. Native provider warnings at the exact pin.
+    if (prefs.officialAdvisories !== false) {
+      for (const alert of normaliseNativeWeatherAlerts(wx.nativeAlerts)) {
+        candidates.push({
+          type: 'native-weather-alert',
+          severity: alert.critical ? 'critical' : 'important',
+          decision: alert.critical ? 'avoid' : 'caution',
+          title: alert.title,
+          body: withDecision(alert.critical ? 'avoid' : 'caution', alert.body),
+          category: 'Official Advisory',
+          source: 'weatherkit-alert',
+          url: alert.url || 'https://outdooradvisor.app',
+          data: { alertKey: alert.key },
+          cooldownKey: `native-alert:${alert.key}`,
+          cooldownMs: 12 * 60 * 60 * 1000,
+        });
+      }
+    }
+
+    // 6. Thunderstorm (critical)
     if (storm) {
       const copy = buildStormCopy(city);
       candidates.push({
@@ -304,7 +367,7 @@ function evaluateRules(device, ctx, shared, state, now) {
       });
     }
 
-    // 5. Rain — heavy is critical, light is important. Storm supersedes both.
+    // 7. Rain — heavy is critical, light is important. Storm supersedes both.
     if (prefs.rainAlerts !== false && !storm && isRaining(wx)) {
       const heavy = isHeavyRain(wx);
       const copy = buildRainCopy(city, heavy, wx.precipitation ?? null);
@@ -323,7 +386,7 @@ function evaluateRules(device, ctx, shared, state, now) {
       });
     }
 
-    // 6. Extreme heat (critical when well past threshold, else important)
+    // 8. Extreme heat (critical when well past threshold, else important)
     if (prefs.heatAlerts !== false && feels != null) {
       const heatThreshold = Number(device.thresholds?.heatAlert || 42);
       if (feels >= heatThreshold) {
@@ -349,7 +412,7 @@ function evaluateRules(device, ctx, shared, state, now) {
       }
     }
 
-    // 7. Cold snap (important)
+    // 9. Cold snap (important)
     if (prefs.coldAlerts !== false && feels != null) {
       const coldThreshold = Number(device.thresholds?.coldAlert ?? 5);
       if (feels <= coldThreshold) {
@@ -369,7 +432,7 @@ function evaluateRules(device, ctx, shared, state, now) {
       }
     }
 
-    // 8. Wind — severe is critical, threshold-crossing is important
+    // 10. Wind — severe is critical, threshold-crossing is important
     if (prefs.windAlerts !== false) {
       const windThreshold = Number(device.thresholds?.windAlert || 60);
       if (isWindy(wx, windThreshold)) {
@@ -393,7 +456,7 @@ function evaluateRules(device, ctx, shared, state, now) {
       }
     }
 
-    // 9. Local fog (important) — driving/visibility hazard at the pin
+    // 11. Local fog (important) — driving/visibility hazard at the pin
     if (prefs.fogWarnings !== false && isFoggy(wx)) {
       candidates.push({
         type: 'fog',
@@ -404,15 +467,19 @@ function evaluateRules(device, ctx, shared, state, now) {
         category: 'Weather',
         source: 'weather-fog',
         url: 'https://outdooradvisor.app',
-        data: { weatherCode: wx.weatherCode, conditionCode: wx.conditionCode },
+        data: { weatherCode: wx.weatherCode, conditionCode: wx.conditionCode, visibility: wx.visibility ?? null },
         cooldownKey: 'fog',
         cooldownMs: 6 * 60 * 60 * 1000,
       });
     }
 
-    // 10. Rain expected soon (helpful) — only when it is not already raining
+    // 12. Rain expected soon (helpful) — only when it is not already raining
     if (prefs.rainAlerts !== false && !storm && !isRaining(wx)) {
-      const rainSoon = getRainSoonSignal(wx);
+      const rainSoon = getRainSoonSignal(wx, {
+        now,
+        probabilityThreshold: Number(device.thresholds?.rainProbabilityAlert || DEFAULT_RAIN_PROBABILITY),
+        leadHours: Number(device.thresholds?.rainLeadHours || DEFAULT_RAIN_LEAD_HOURS),
+      });
       if (rainSoon) {
         candidates.push({
           type: 'rain-soon',
@@ -423,33 +490,85 @@ function evaluateRules(device, ctx, shared, state, now) {
           category: 'Weather',
           source: 'weather-rain-soon',
           url: 'https://outdooradvisor.app',
-          data: { precipProbability: rainSoon.probability, weatherCode: rainSoon.weatherCode },
+          data: { precipProbability: rainSoon.probability, weatherCode: rainSoon.weatherCode, etaMinutes: rainSoon.minutes },
           cooldownKey: 'rain-soon',
           cooldownMs: 3 * 60 * 60 * 1000,
         });
       }
     }
+
+    // 13. Sudden local weather changes between scheduler snapshots.
+    const sudden = buildSuddenWeatherCandidates({ device, wx, aqi, previous, city, now });
+    candidates.push(...sudden.filter((candidate) => {
+      if (candidate.type === 'sudden-rain' && (storm || isRaining(wx))) return false;
+      if (candidate.type === 'sudden-wind' && candidates.some((item) => item.type === 'wind' || item.type === 'thunderstorm')) return false;
+      if (candidate.type === 'visibility-drop' && candidates.some((item) => item.type === 'fog')) return false;
+      return true;
+    }));
   }
 
-  // 11. Severe AQI (hazardous is critical, otherwise important)
-  if (prefs.severeAqiWarnings !== false && aqi?.aqi != null) {
+  // 14. Severe AQI / PM2.5 (hazardous is critical, otherwise important)
+  if (prefs.severeAqiWarnings !== false && (aqi?.aqi != null || aqi?.pm25 != null)) {
     const threshold = Number(device.thresholds?.aqiAlert || 150);
-    if (aqi.aqi >= threshold) {
+    const pm25Threshold = Number(device.thresholds?.pm25Alert || 75);
+    if (aqi.aqi >= threshold || aqi.pm25 >= pm25Threshold) {
       const band = getAqiBand(aqi.aqi);
+      const hazardousPm25 = aqi.pm25 >= 150;
       candidates.push({
         type: 'severe-aqi',
-        severity: band === 'hazardous' ? 'critical' : 'important',
-        decision: band === 'unhealthy' ? 'caution' : 'avoid',
-        title: band === 'hazardous' ? 'Hazardous AQI Alert' : 'Severe AQI Warning',
+        severity: band === 'hazardous' || hazardousPm25 ? 'critical' : 'important',
+        decision: band === 'unhealthy' && !hazardousPm25 ? 'caution' : 'avoid',
+        title: band === 'hazardous' || hazardousPm25 ? 'Hazardous Air Alert' : 'Severe Air Quality Warning',
         body: buildAqiBody(aqi, device.location?.city || 'your area'),
         category: 'AQI',
         source: 'google-aqi',
         url: 'https://outdooradvisor.app',
-        data: { aqi: aqi.aqi, pm25: aqi.pm25 ?? null, band },
+        data: { aqi: aqi.aqi, pm25: aqi.pm25 ?? null, band, threshold, pm25Threshold },
         cooldownKey: `aqi:${band}`,
         cooldownMs: 4 * 60 * 60 * 1000,
       });
     }
+  }
+
+  // 15. Smog-season warning (premium) — fine-particle pollution plus haze,
+  // smoke, dust, or a strongly elevated PM2.5 reading.
+  if (
+    device.premium === true &&
+    prefs.smogAlerts !== false &&
+    isSmogRisk(wx, aqi, device.thresholds) &&
+    !candidates.some((candidate) => candidate.type === 'severe-aqi')
+  ) {
+    const severe = Number(aqi?.pm25 || 0) >= 150 || Number(aqi?.aqi || 0) >= 250;
+    candidates.push({
+      type: 'smog',
+      severity: severe ? 'critical' : 'important',
+      decision: severe ? 'avoid' : 'caution',
+      title: `Smog warning for ${city}`,
+      body: withDecision(severe ? 'avoid' : 'caution', `Fine-particle pollution is elevated${aqi?.pm25 != null ? ` at PM2.5 ${aqi.pm25} µg/m³` : ''}. Keep outdoor exertion low, close windows during the worst period, and use an N95 outside.`),
+      category: 'AQI',
+      source: 'smog-rule',
+      url: 'https://outdooradvisor.app',
+      data: { aqi: aqi?.aqi ?? null, pm25: aqi?.pm25 ?? null },
+      cooldownKey: 'smog',
+      cooldownMs: 8 * 60 * 60 * 1000,
+    });
+  }
+
+  // 16. High pollen (premium)
+  if (device.premium === true && prefs.pollenAlerts === true && pollen?.value >= 4) {
+    candidates.push({
+      type: 'pollen',
+      severity: pollen.value >= 5 ? 'important' : 'helpful',
+      decision: 'caution',
+      title: `High pollen near ${city}`,
+      body: withDecision('caution', `${pollen.displayName || 'Pollen'} is ${pollen.category || 'high'} today. Allergy-sensitive users should keep medication close, shower after outdoor time, and prefer lower-wind hours.`),
+      category: 'Air',
+      source: 'google-pollen',
+      url: 'https://outdooradvisor.app',
+      data: { pollenValue: pollen.value, pollenType: pollen.displayName || null },
+      cooldownKey: `pollen:${day}`,
+      cooldownMs: 18 * 60 * 60 * 1000,
+    });
   }
 
   // Track "bad day" so the good-window rule can detect recovery later.
@@ -740,8 +859,9 @@ export function buildEveningPlannerCopy({ city, wx, aqi }) {
 
 // ─── Weather fetch: WeatherKit first, Open-Meteo fallback ────────────────────
 // Returns a normalised shape:
-// { temp, feelsLike, humidity, windSpeed, windGusts, weatherCode, conditionCode,
-//   precipitation, precipitationIntensity, hourly, daily, nativeAlerts }
+// { temp, feelsLike, humidity, windSpeed, windGusts, visibility, weatherCode,
+//   conditionCode, precipitation, precipitationIntensity, hourly, daily,
+//   nativeAlerts }
 async function fetchWeatherForAlerts(lat, lon) {
   const wk = await fetchWeatherKit(lat, lon);
   if (wk) return wk;
@@ -765,11 +885,12 @@ async function fetchWeatherKit(lat, lon) {
       humidity:               c.humidity               ?? null,
       windSpeed:              c.windSpeed              ?? 0,
       windGusts:              c.windGusts              ?? 0,
+      visibility:             c.visibility             ?? null,
       weatherCode:            c.weatherCode            ?? 0,
       conditionCode:          c.conditionCode          ?? null,
       precipitation:          null,
       precipitationIntensity: c.precipitationIntensity ?? null,
-      hourly:                 Array.isArray(json.hourly) ? json.hourly.slice(0, 6) : [],
+      hourly:                 Array.isArray(json.hourly) ? json.hourly.slice(0, 24) : [],
       daily:                  Array.isArray(json.daily) ? json.daily.slice(0, 2) : [],
       nativeAlerts:           json.alerts              ?? [],
       source:                 'WeatherKit',
@@ -781,7 +902,7 @@ async function fetchWeatherKit(lat, lon) {
 
 async function fetchOpenMeteoNormalised(lat, lon) {
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_gusts_10m,precipitation&hourly=temperature_2m,weather_code,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,precipitation_sum,precipitation_probability_max&wind_speed_unit=kmh&forecast_days=2&timezone=auto`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_gusts_10m,precipitation,visibility&hourly=temperature_2m,weather_code,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,precipitation_sum,precipitation_probability_max&wind_speed_unit=kmh&forecast_days=2&timezone=auto`;
     const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!response.ok) return null;
     const json = await response.json();
@@ -803,11 +924,12 @@ async function fetchOpenMeteoNormalised(lat, lon) {
       humidity:      c.relative_humidity_2m    ?? null,
       windSpeed:     c.wind_speed_10m  ?? 0,
       windGusts:     c.wind_gusts_10m  ?? 0,
+      visibility:    c.visibility      ?? null,
       weatherCode:   c.weather_code    ?? 0,
       conditionCode: null,
       precipitation: c.precipitation   ?? null,
       precipitationIntensity: c.precipitation ?? null,
-      hourly: hourlyTimes.slice(0, 6).map((time, index) => ({
+      hourly: hourlyTimes.map((time, index) => ({
         time,
         temp: hourlyTemps[index] ?? null,
         weatherCode: hourlyCodes[index] ?? null,
@@ -873,24 +995,218 @@ function isHeavyRain(wx) {
 
 function isFoggy(wx) {
   return new Set(['Foggy', 'Haze', 'Smoky', 'BlowingDust']).has(wx?.conditionCode) ||
-    FOG_CODES.has(wx?.weatherCode);
+    FOG_CODES.has(wx?.weatherCode) ||
+    (Number.isFinite(wx?.visibility) && wx.visibility <= 2000);
 }
 
-function getRainSoonSignal(wx) {
-  const upcoming = (wx.hourly || []).slice(0, 2);
+export function getFutureHourly(wx, { now = new Date(), leadHours = DEFAULT_RAIN_LEAD_HOURS } = {}) {
+  const nowMs = now instanceof Date ? now.getTime() : new Date(now).getTime();
+  const maxMs = nowMs + Math.max(1, Number(leadHours) || DEFAULT_RAIN_LEAD_HOURS) * 60 * 60 * 1000;
+  return (wx?.hourly || []).filter((hour) => {
+    const at = hour?.time ? new Date(hour.time).getTime() : NaN;
+    return Number.isFinite(at) && at >= nowMs - 5 * 60 * 1000 && at <= maxMs;
+  });
+}
+
+export function getRainSoonSignal(wx, {
+  now = new Date(),
+  probabilityThreshold = DEFAULT_RAIN_PROBABILITY,
+  leadHours = DEFAULT_RAIN_LEAD_HOURS,
+} = {}) {
+  const upcoming = getFutureHourly(wx, { now, leadHours });
   const rainy = upcoming.find((hour) => {
     const probability = Number(hour?.precipProbability ?? 0);
     const code = hour?.weatherCode;
     const condition = hour?.conditionCode;
-    return probability >= 60 || RAIN_CODES.has(code) || WK_RAIN_DEFINITE.has(condition) || WK_RAIN_AREA.has(condition);
+    return probability >= probabilityThreshold || RAIN_CODES.has(code) || WK_RAIN_DEFINITE.has(condition) || WK_RAIN_AREA.has(condition);
   });
   if (!rainy) return null;
   const probability = Number(rainy.precipProbability ?? 0);
-  const minutes = rainy.time ? Math.max(15, Math.round((new Date(rainy.time).getTime() - Date.now()) / 60000)) : 60;
+  const nowMs = now instanceof Date ? now.getTime() : new Date(now).getTime();
+  const minutes = rainy.time ? Math.max(15, Math.round((new Date(rainy.time).getTime() - nowMs) / 60000)) : 60;
+  const timing = minutes <= 30 ? '30 minutes' : minutes <= 90 ? '1-2 hours' : `${Math.ceil(minutes / 60)} hours`;
   const label = probability > 0
-    ? `${probability}% rain risk in about ${minutes <= 30 ? '30 minutes' : '1-2 hours'}`
-    : `rain signals in about ${minutes <= 30 ? '30 minutes' : '1-2 hours'}`;
-  return { probability, label, weatherCode: rainy.weatherCode ?? null };
+    ? `${probability}% rain risk in about ${timing}`
+    : `rain signals in about ${timing}`;
+  return { probability, label, minutes, weatherCode: rainy.weatherCode ?? null };
+}
+
+function getPeakRainProbability(wx, now, leadHours) {
+  return getFutureHourly(wx, { now, leadHours }).reduce(
+    (max, hour) => Math.max(max, Number(hour?.precipProbability ?? 0)),
+    0,
+  );
+}
+
+export function buildSuddenWeatherCandidates({ device, wx, aqi, previous, city, now = new Date() }) {
+  if (!previous?.at || !wx) return [];
+  const ageMs = now.getTime() - Number(previous.at);
+  if (ageMs < 4 * 60 * 1000 || ageMs > SNAPSHOT_RETENTION_MS) return [];
+
+  const prefs = device.preferences || {};
+  const thresholds = device.thresholds || {};
+  const candidates = [];
+  const leadHours = Number(thresholds.rainLeadHours || DEFAULT_RAIN_LEAD_HOURS);
+  const rainThreshold = Number(thresholds.rainProbabilityAlert || DEFAULT_RAIN_PROBABILITY);
+  const rainJumpThreshold = Number(thresholds.rainProbabilityJump || DEFAULT_RAIN_JUMP);
+  const rainProbability = getPeakRainProbability(wx, now, leadHours);
+  const rainJump = rainProbability - Number(previous.rainProbability || 0);
+
+  if (prefs.rainAlerts !== false && rainProbability >= rainThreshold && rainJump >= rainJumpThreshold) {
+    candidates.push({
+      type: 'sudden-rain',
+      severity: rainProbability >= 80 ? 'important' : 'helpful',
+      decision: 'plan',
+      title: `Rain risk rising near ${city}`,
+      body: withDecision('plan', `Rain chance jumped from ${Math.round(previous.rainProbability || 0)}% to ${Math.round(rainProbability)}% within the next ${leadHours} hours. Finish exposed plans early and take rain gear.`),
+      category: 'Weather',
+      source: 'weather-change',
+      url: 'https://outdooradvisor.app',
+      data: { fromProbability: previous.rainProbability || 0, toProbability: rainProbability, leadHours },
+      cooldownKey: 'sudden-rain',
+      cooldownMs: 2 * 60 * 60 * 1000,
+    });
+  }
+
+  const gusts = Number(wx.windGusts || 0);
+  const gustJump = gusts - Number(previous.windGusts || 0);
+  const windThreshold = Number(thresholds.windAlert || 40);
+  if (prefs.windAlerts !== false && gusts >= windThreshold && gustJump >= 20) {
+    candidates.push({
+      type: 'sudden-wind',
+      severity: gusts >= 70 ? 'critical' : 'important',
+      decision: gusts >= 70 ? 'avoid' : 'caution',
+      title: `Wind strengthening near ${city}`,
+      body: withDecision(gusts >= 70 ? 'avoid' : 'caution', `Gusts rose from about ${Math.round(previous.windGusts || 0)} to ${Math.round(gusts)} km/h. Secure loose items and avoid exposed routes, trees, and signboards.`),
+      category: 'Wind',
+      source: 'weather-change',
+      url: 'https://outdooradvisor.app',
+      data: { fromGusts: previous.windGusts || 0, toGusts: gusts },
+      cooldownKey: 'sudden-wind',
+      cooldownMs: 2 * 60 * 60 * 1000,
+    });
+  }
+
+  const visibility = toFiniteMetric(wx.visibility);
+  const previousVisibility = toFiniteMetric(previous.visibility);
+  if (
+    prefs.fogWarnings !== false &&
+    Number.isFinite(visibility) &&
+    Number.isFinite(previousVisibility) &&
+    visibility <= 2000 &&
+    previousVisibility - visibility >= 2000
+  ) {
+    candidates.push({
+      type: 'visibility-drop',
+      severity: visibility <= 1000 ? 'critical' : 'important',
+      decision: visibility <= 1000 ? 'avoid' : 'caution',
+      title: `Visibility dropping near ${city}`,
+      body: withDecision(visibility <= 1000 ? 'avoid' : 'caution', `Visibility fell to about ${Math.round(visibility)} metres. Delay non-essential driving, slow down, and use low beams.`),
+      category: 'Weather',
+      source: 'weather-change',
+      url: 'https://outdooradvisor.app',
+      data: { fromVisibility: previousVisibility, toVisibility: visibility },
+      cooldownKey: 'visibility-drop',
+      cooldownMs: 3 * 60 * 60 * 1000,
+    });
+  }
+
+  const feels = toFiniteMetric(wx.feelsLike ?? wx.temp);
+  const previousFeels = toFiniteMetric(previous.feelsLike);
+  if (
+    prefs.heatAlerts !== false &&
+    Number.isFinite(feels) &&
+    Number.isFinite(previousFeels) &&
+    feels - previousFeels >= 6
+  ) {
+    candidates.push({
+      type: 'temperature-surge',
+      severity: feels >= Number(thresholds.heatAlert || 42) ? 'important' : 'helpful',
+      decision: 'caution',
+      title: `Temperature rising quickly near ${city}`,
+      body: withDecision('caution', `Feels-like temperature climbed from ${Math.round(previousFeels)}°C to ${Math.round(feels)}°C. Shorten exposed plans and hydrate before heading out.`),
+      category: 'Weather',
+      source: 'weather-change',
+      url: 'https://outdooradvisor.app',
+      data: { fromFeelsLike: previousFeels, toFeelsLike: feels },
+      cooldownKey: 'temperature-surge',
+      cooldownMs: 3 * 60 * 60 * 1000,
+    });
+  }
+
+  const currentAqi = toFiniteMetric(aqi?.aqi);
+  const previousAqi = toFiniteMetric(previous.aqi);
+  if (
+    prefs.severeAqiWarnings !== false &&
+    Number.isFinite(currentAqi) &&
+    Number.isFinite(previousAqi) &&
+    currentAqi >= 100 &&
+    currentAqi - previousAqi >= 50
+  ) {
+    candidates.push({
+      type: 'aqi-surge',
+      severity: currentAqi >= 200 ? 'critical' : 'important',
+      decision: currentAqi >= 200 ? 'avoid' : 'caution',
+      title: `Air quality worsening quickly near ${city}`,
+      body: withDecision(currentAqi >= 200 ? 'avoid' : 'caution', `AQI rose from ${Math.round(previousAqi)} to ${Math.round(currentAqi)}. Reduce outdoor exertion and recheck before longer plans.`),
+      category: 'AQI',
+      source: 'air-change',
+      url: 'https://outdooradvisor.app',
+      data: { fromAqi: previousAqi, toAqi: currentAqi },
+      cooldownKey: 'aqi-surge',
+      cooldownMs: 3 * 60 * 60 * 1000,
+    });
+  }
+
+  return candidates;
+}
+
+function updateDeviceSnapshot(state, device, ctx, now) {
+  if (!device.expoPushToken || (!ctx.wx && !ctx.aqi)) return;
+  const leadHours = Number(device.thresholds?.rainLeadHours || DEFAULT_RAIN_LEAD_HOURS);
+  state.weatherSnapshots = state.weatherSnapshots || {};
+  state.weatherSnapshots[device.expoPushToken] = {
+    at: now.getTime(),
+    rainProbability: ctx.wx ? getPeakRainProbability(ctx.wx, now, leadHours) : 0,
+    windGusts: ctx.wx?.windGusts ?? null,
+    visibility: ctx.wx?.visibility ?? null,
+    feelsLike: ctx.wx?.feelsLike ?? ctx.wx?.temp ?? null,
+    aqi: ctx.aqi?.aqi ?? null,
+    pm25: ctx.aqi?.pm25 ?? null,
+  };
+}
+
+function toFiniteMetric(value) {
+  if (value == null || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function normaliseNativeWeatherAlerts(alerts = []) {
+  return (Array.isArray(alerts) ? alerts : [])
+    .map((alert, index) => {
+      const title = alert?.headline || alert?.event || alert?.title || 'Official weather alert';
+      const body = alert?.description || alert?.details || alert?.instruction || title;
+      const severity = String(alert?.severity || alert?.significance || '').toLowerCase();
+      const critical = /extreme|severe|warning/.test(severity) || /flash flood|cyclone|tornado|severe|warning/i.test(`${title} ${body}`);
+      return {
+        key: alert?.id || alert?.identifier || hashKey(`${title}:${index}`),
+        title: truncate(title, 90),
+        body: truncate(body, 220),
+        url: alert?.sourceURL || alert?.detailsUrl || null,
+        critical,
+      };
+    })
+    .filter((alert) => alert.title && alert.body)
+    .slice(0, 3);
+}
+
+function isSmogRisk(wx, aqi, thresholds = {}) {
+  const pm25Threshold = Number(thresholds?.pm25Alert || 75);
+  const pm25 = Number(aqi?.pm25 || 0);
+  const aqiValue = Number(aqi?.aqi || 0);
+  const haze = new Set(['Haze', 'Smoky', 'Smoke', 'BlowingDust']).has(wx?.conditionCode);
+  return pm25 >= pm25Threshold && (haze || aqiValue >= 150 || pm25 >= Math.max(100, pm25Threshold + 25));
 }
 
 // ─── NHMP motorway helpers ───────────────────────────────────────────────────
@@ -1016,6 +1332,30 @@ async function fetchAqi(lat, lon) {
   }
 }
 
+async function fetchPollen(lat, lon) {
+  try {
+    const base = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'https://outdooradvisor.app';
+    const response = await fetch(`${base}/api/google/pollen?lat=${lat}&lon=${lon}&days=1`, {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) return null;
+    const json = await response.json();
+    const types = (json?.dailyInfo?.[0]?.pollenTypeInfo || [])
+      .map((item) => ({
+        value: item?.indexInfo?.value ?? null,
+        category: item?.indexInfo?.displayName || item?.indexInfo?.category || null,
+        displayName: item?.displayName || item?.code || 'Pollen',
+      }))
+      .filter((item) => Number.isFinite(item.value))
+      .sort((a, b) => b.value - a.value);
+    return types[0] || null;
+  } catch {
+    return null;
+  }
+}
+
 function getPollutantValue(pollutants, code) {
   const pollutant = pollutants.find((item) => item.code === code);
   const value = pollutant?.concentration?.value;
@@ -1023,6 +1363,7 @@ function getPollutantValue(pollutants, code) {
 }
 
 function getAqiBand(aqi) {
+  if (!Number.isFinite(aqi)) return 'unhealthy';
   if (aqi >= 300) return 'hazardous';
   if (aqi >= 200) return 'very-unhealthy';
   return 'unhealthy';
@@ -1030,6 +1371,9 @@ function getAqiBand(aqi) {
 
 function buildAqiBody(aqi, city) {
   const pm25 = aqi.pm25 != null ? ` PM2.5 is at ${aqi.pm25} µg/m³.` : '';
+  if (aqi.aqi == null || aqi.aqi < 100) {
+    return withDecision('caution', `Fine-particle pollution in ${city} is above your PM2.5 alert level.${pm25} Keep outdoor time short and use an N95 for longer exposure.`);
+  }
   if (aqi.aqi >= 300) {
     return withDecision('avoid', `Air in ${city} is hazardous right now (AQI ${aqi.aqi}).${pm25} Stay indoors, keep windows shut, and wear an N95 if you really must go out.`);
   }
@@ -1378,6 +1722,11 @@ function pruneState(state, now) {
   }
   for (const [token, badDay] of Object.entries(state.badDay || {})) {
     if (badDay !== day) delete state.badDay[token];
+  }
+  for (const [token, snapshot] of Object.entries(state.weatherSnapshots || {})) {
+    if (!Number.isFinite(snapshot?.at) || Date.now() - snapshot.at > SNAPSHOT_RETENTION_MS) {
+      delete state.weatherSnapshots[token];
+    }
   }
 }
 
