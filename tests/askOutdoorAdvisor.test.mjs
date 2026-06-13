@@ -6,6 +6,8 @@ import {
   extractDestination,
   isAskAdvisoryFresh,
   isOutdoorQuestion,
+  inferNhmpRoutePlan,
+  matchNhmpRouteItems,
   matchOfficialItems,
   wantsNearbyEvidence,
   wantsRouteEvidence,
@@ -27,6 +29,29 @@ test('detects evidence requirements', () => {
   assert.equal(wantsRouteEvidence('I am going to Multan now. Check the motorway.'), true);
   assert.equal(wantsNearbyEvidence('Where can I play football right now?'), true);
   assert.equal(wantsRouteEvidence('Will it rain tomorrow?'), false);
+});
+
+test('maps Lahore to Multan to M3 and M4, never M1', () => {
+  const plan = inferNhmpRoutePlan(
+    { lat: 31.5204, lon: 74.3587 },
+    { lat: 30.1575, lon: 71.5249 }
+  );
+  assert.deepEqual(plan.codes, ['M3', 'M4']);
+
+  const matches = matchNhmpRouteItems([
+    { route: 'M1 (Peshawar to Islamabad Motorway)', status: 'Road & Weather Clear' },
+    { route: 'M3 (Lahore to Abdul Hakeem)', status: 'Road & Weather Clear' },
+    { route: 'M4 (Abdul Hakeem to Multan)', status: 'Road & Weather Clear' },
+  ], plan);
+  assert.deepEqual(matches.map((item) => item.route.slice(0, 2)), ['M3', 'M4']);
+});
+
+test('maps Islamabad to Multan through M2 and M4', () => {
+  const plan = inferNhmpRoutePlan(
+    { lat: 33.6844, lon: 73.0479 },
+    { lat: 30.1575, lon: 71.5249 }
+  );
+  assert.deepEqual(plan.codes, ['M2', 'M4']);
 });
 
 test('deterministic verdict never softens closures or extreme heat', () => {

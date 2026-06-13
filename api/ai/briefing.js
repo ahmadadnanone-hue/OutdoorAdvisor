@@ -7,6 +7,8 @@ import {
   extractDestination,
   isAskAdvisoryFresh,
   isOutdoorQuestion,
+  inferNhmpRoutePlan,
+  matchNhmpRouteItems,
   matchOfficialItems,
   normalizeQuestion,
   wantsNearbyEvidence,
@@ -388,11 +390,12 @@ async function buildAskEvidence(req, body, googleKey) {
       text: ndmaAlertText(item).slice(0, 420),
       updatedAt: item.date || null,
     }));
-  const routeMatches = matchOfficialItems(
+  const routePlan = destination ? inferNhmpRoutePlan(origin, destination) : { codes: [], known: false };
+  const routeMatches = matchNhmpRouteItems(
     nhmp?.advisories,
-    [question, destinationQuery, origin.name],
-    (item) => `${item?.route || ''} ${item?.sector || ''} ${item?.status || ''}`
-  ).slice(0, 5).map((item) => ({
+    routePlan,
+    [destinationQuery, destination?.name, origin.name]
+  ).slice(0, 8).map((item) => ({
     route: item.route || item.sector || 'NHMP route',
     status: item.status || 'Status unavailable',
     severity: item.severity || 'unknown',
@@ -405,14 +408,21 @@ async function buildAskEvidence(req, body, googleKey) {
           status: 'unavailable',
           summary: 'Live NHMP route clarity is unavailable; check NHMP directly before leaving.',
         }
-      : routeMatches.length
+      : routeMatches.some((item) => item.severity !== 'clear')
         ? {
             status: 'warning',
-            summary: `${routeMatches[0].route}: ${routeMatches[0].status}`,
+            summary: `${routeMatches.find((item) => item.severity !== 'clear').route}: ${routeMatches.find((item) => item.severity !== 'clear').status}`,
           }
+        : routeMatches.length && routePlan.codes.length
+          ? {
+              status: 'clear',
+              summary: `${routePlan.codes.join(' and ')} report Road & Weather Clear in the latest NHMP feed.`,
+            }
         : {
-            status: 'clear',
-            summary: 'No relevant NHMP closure or warning found in the latest live feed; recheck before departure.',
+            status: 'unconfirmed',
+            summary: routePlan.codes.length
+              ? `NHMP has no matching update for ${routePlan.codes.join(' → ')}; this does not confirm route clearance.`
+              : 'No matching NHMP route update was found; this does not confirm the full route is clear.',
           };
 
   const nearbyQuery = wantsNearbyEvidence(question) ? question : '';
@@ -477,6 +487,7 @@ async function buildAskEvidence(req, body, googleKey) {
     airQuality: { aqi: aqiResult?.aqi ?? null, pm25: aqiResult?.pm25 ?? null },
     officialMatches,
     routeMatches,
+    routePlan,
     routeClarity,
     routeWeather,
     nearbyPlaces,

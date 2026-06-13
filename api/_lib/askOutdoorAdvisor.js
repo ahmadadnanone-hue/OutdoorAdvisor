@@ -8,6 +8,36 @@ const OUTDOOR_TERMS = [
 
 const ROUTE_TERMS = ['route', 'road', 'motorway', 'drive', 'driving', 'travel', 'trip', 'going to', 'go to'];
 const NEARBY_TERMS = ['where', 'nearby', 'play', 'ground', 'park', 'lunch', 'restaurant', 'picnic'];
+const ROUTE_HUBS = {
+  peshawar: { lat: 34.0151, lon: 71.5249 },
+  islamabad: { lat: 33.6844, lon: 73.0479 },
+  murree: { lat: 33.907, lon: 73.3943 },
+  thakot: { lat: 34.8054, lon: 72.9383 },
+  diKhan: { lat: 31.8626, lon: 70.9019 },
+  lahore: { lat: 31.5204, lon: 74.3587 },
+  sialkot: { lat: 32.4945, lon: 74.5229 },
+  pindiBhattian: { lat: 31.895, lon: 73.273 },
+  abdulHakeem: { lat: 30.552, lon: 72.127 },
+  multan: { lat: 30.1575, lon: 71.5249 },
+  sukkur: { lat: 27.7244, lon: 68.8228 },
+  hyderabad: { lat: 25.396, lon: 68.3578 },
+  karachi: { lat: 24.8607, lon: 67.0011 },
+};
+const ROUTE_EDGES = [
+  ['peshawar', 'islamabad', 'M1', 155],
+  ['islamabad', 'pindiBhattian', 'M2', 225],
+  ['pindiBhattian', 'lahore', 'M2', 135],
+  ['lahore', 'abdulHakeem', 'M3', 230],
+  ['pindiBhattian', 'abdulHakeem', 'M4', 180],
+  ['abdulHakeem', 'multan', 'M4', 100],
+  ['multan', 'sukkur', 'M5', 390],
+  ['sukkur', 'hyderabad', 'N5', 330],
+  ['hyderabad', 'karachi', 'M9', 136],
+  ['lahore', 'sialkot', 'M11', 103],
+  ['islamabad', 'diKhan', 'M14', 285],
+  ['islamabad', 'thakot', 'E35', 180],
+  ['islamabad', 'murree', 'N75', 60],
+];
 
 export function normalizeQuestion(value) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 500);
@@ -26,6 +56,75 @@ export function wantsRouteEvidence(question) {
 export function wantsNearbyEvidence(question) {
   const text = normalizeQuestion(question).toLowerCase();
   return NEARBY_TERMS.some((term) => text.includes(term));
+}
+
+function distanceKm(a, b) {
+  const toRad = (value) => value * Math.PI / 180;
+  const dLat = toRad(Number(b.lat) - Number(a.lat));
+  const dLon = toRad(Number(b.lon) - Number(a.lon));
+  const lat1 = toRad(Number(a.lat));
+  const lat2 = toRad(Number(b.lat));
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function nearestRouteHub(point, maxDistanceKm = 140) {
+  if (!Number.isFinite(Number(point?.lat)) || !Number.isFinite(Number(point?.lon))) return null;
+  const nearest = Object.entries(ROUTE_HUBS)
+    .map(([id, coords]) => ({ id, distance: distanceKm(point, coords) }))
+    .sort((a, b) => a.distance - b.distance)[0];
+  return nearest?.distance <= maxDistanceKm ? nearest : null;
+}
+
+export function extractNhmpRouteCode(item) {
+  const text = `${item?.route || ''} ${item?.sector || ''}`;
+  const match = text.match(/\b(M|N|E)\s*-?\s*(\d{1,2})\b/i);
+  return match ? `${match[1].toUpperCase()}${match[2]}` : '';
+}
+
+export function inferNhmpRoutePlan(origin, destination) {
+  const start = nearestRouteHub(origin);
+  const end = nearestRouteHub(destination);
+  if (!start || !end || start.id === end.id) return { codes: [], known: false };
+
+  const graph = {};
+  for (const [from, to, code, distance] of ROUTE_EDGES) {
+    (graph[from] ||= []).push({ to, code, distance });
+    (graph[to] ||= []).push({ to: from, code, distance });
+  }
+
+  const distances = { [start.id]: 0 };
+  const paths = { [start.id]: [] };
+  const pending = new Set(Object.keys(ROUTE_HUBS));
+  while (pending.size) {
+    const current = [...pending].sort((a, b) => (distances[a] ?? Infinity) - (distances[b] ?? Infinity))[0];
+    pending.delete(current);
+    if (current === end.id || !Number.isFinite(distances[current])) break;
+    for (const edge of graph[current] || []) {
+      const nextDistance = distances[current] + edge.distance;
+      if (nextDistance < (distances[edge.to] ?? Infinity)) {
+        distances[edge.to] = nextDistance;
+        paths[edge.to] = [...paths[current], edge.code];
+      }
+    }
+  }
+
+  const codes = [...new Set(paths[end.id] || [])];
+  return {
+    codes,
+    known: codes.length > 0,
+    originHub: start.id,
+    destinationHub: end.id,
+  };
+}
+
+export function matchNhmpRouteItems(items, routePlan, locationTerms = []) {
+  if (routePlan?.codes?.length) {
+    const codes = new Set(routePlan.codes);
+    return (items || []).filter((item) => codes.has(extractNhmpRouteCode(item)));
+  }
+  return matchOfficialItems(items, locationTerms, (item) => `${item?.route || ''} ${item?.sector || ''}`)
+    .filter((item) => !/^nhmp corridor$/i.test(String(item?.route || '').trim()));
 }
 
 export function extractDestination(question) {
