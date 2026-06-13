@@ -132,13 +132,22 @@ function AlertRow({ alert }) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function AlertBanner({ alerts = [] }) {
+export default function AlertBanner({ alerts = [], loading = false, error = null }) {
   // Pinned/rigid: the banner always shows active advisories — no dismiss.
   const visible = alerts;
-  if (!visible.length) return null;
 
   // Show top 3 alerts max to avoid overwhelming the screen
   const shown = visible.slice(0, 3);
+  const emptyTitle = loading
+    ? 'Checking official PMD alerts'
+    : error
+      ? 'PMD alert feed temporarily unavailable'
+      : 'No active PMD weather alerts';
+  const emptyBody = loading
+    ? 'Looking for current national weather advisories.'
+    : error
+      ? 'OutdoorAdvisor will check the official feed again shortly.'
+      : 'No current national weather advisory is published.';
 
   return (
     <View style={styles.container}>
@@ -149,9 +158,21 @@ export default function AlertBanner({ alerts = [] }) {
           <Text style={styles.moreLabel}>+{visible.length - 3} more</Text>
         )}
       </View>
-      {shown.map((alert) => (
-        <AlertRow key={alert.id} alert={alert} />
-      ))}
+      {shown.length ? (
+        shown.map((alert) => <AlertRow key={alert.id} alert={alert} />)
+      ) : (
+        <View style={styles.emptyRow}>
+          <Icon
+            name={loading ? 'sync-outline' : error ? 'cloud-offline-outline' : 'shield-checkmark-outline'}
+            size={17}
+            color={error ? dc.accentOrange : dc.accentGreen}
+          />
+          <View style={styles.emptyCopy}>
+            <Text style={styles.emptyTitle}>{emptyTitle}</Text>
+            <Text style={styles.emptyBody}>{emptyBody}</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -179,6 +200,31 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: dc.textMuted,
     fontWeight: '600',
+  },
+  emptyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: dc.cardStrokeSoft,
+    backgroundColor: dc.cardGlassSoft,
+  },
+  emptyCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  emptyTitle: {
+    color: dc.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  emptyBody: {
+    color: dc.textMuted,
+    fontSize: 11,
+    lineHeight: 15,
   },
 
   // Alert row

@@ -106,7 +106,7 @@ export default function HomeScreen({ navigation, route }) {
   // ── AI briefing ───────────────────────────────────────────────────────────
   const homeAiPayload   = useMemo(() => ({ locationName: locationDisplay.primary, decisionLabel: decision.label, decisionTone: decision.tone, aqi, pm25, temp: weatherCurrent?.temp, feelsLike: feelsLikeTemp, humidity: weatherCurrent?.humidity, windSpeed: weatherCurrent?.windSpeed, weatherLabel: weather.description, weatherCode: weatherCurrent?.weatherCode, pollenLabel: pollenCategory, pollenValue, peakRainChance, nextActivityWindows }), [locationDisplay.primary, decision.label, decision.tone, aqi, pm25, weatherCurrent?.temp, feelsLikeTemp, weatherCurrent?.humidity, weatherCurrent?.windSpeed, weatherCurrent?.weatherCode, weather.description, pollenCategory, pollenValue, peakRainChance, nextActivityWindows]);
   const homeAiSignature = useMemo(() => [locationDisplay.primary, decision.label, aqi ?? 'na', pm25 ?? 'na', weatherCurrent?.temp ?? 'na', feelsLikeTemp ?? 'na', weatherCurrent?.humidity ?? 'na', weatherCurrent?.windSpeed ?? 'na', weatherCurrent?.weatherCode ?? 'na', pollenValue ?? 'na', peakRainChance].join('|'), [locationDisplay.primary, decision.label, aqi, pm25, weatherCurrent?.temp, feelsLikeTemp, weatherCurrent?.humidity, weatherCurrent?.windSpeed, weatherCurrent?.weatherCode, pollenValue, peakRainChance]);
-  const { alerts } = useAlerts();
+  const { alerts, loading: alertsLoading, error: alertsError } = useAlerts();
   const { data: homeAiBriefing, loading: homeAiLoading } = useAiBriefing({ kind: 'home', signature: homeAiSignature, payload: homeAiPayload, enabled: isPremium && (aqi != null || weatherCurrent?.weatherCode != null || weatherCurrent?.temp != null || pollenValue != null) });
 
   // ── Unified synthesis (Home weather/air context only) ─────────────────────
@@ -289,7 +289,7 @@ export default function HomeScreen({ navigation, route }) {
             decision={decision}
           />
 
-          <AlertBanner alerts={alerts} />
+          <AlertBanner alerts={alerts} loading={alertsLoading} error={alertsError} />
 
           <HealthStatsSection
             steps={health.steps}
