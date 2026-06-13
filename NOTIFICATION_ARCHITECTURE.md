@@ -47,7 +47,7 @@ The production path is:
 2. App obtains an Expo push token with `Notifications.getExpoPushTokenAsync`.
 3. App registers that token at `/api/push?action=register`.
 4. Vercel stores token, device metadata, location snapshot, timezone, and alert preferences in KV.
-5. GitHub Actions requests `/api/push?action=cron` every 15 minutes using the `OA_CRON_SECRET` repo secret. GitHub scheduling has shown long real-world delays, so a validated five-minute Cloudflare Worker scheduler lives under `workers/notification-cron`; deployment still requires Cloudflare OAuth and its matching `CRON_SECRET`.
+5. Cloudflare Worker `outdooradvisor-notification-cron` triggers `/api/push?action=cron` every five minutes using a matching `CRON_SECRET`. GitHub Actions remains an active 15-minute fallback because its scheduled jobs can sometimes be delayed.
 6. Server sends pushes through Expo Push Service.
 7. Server stores Expo receipt IDs and later checks receipts to clean up delivery failures.
 8. Build 20 client code saves received/tapped remote pushes into the local in-app Notification Center.
@@ -114,9 +114,10 @@ Default behavior: once per day unless user explicitly asks for more.
   - active fallback scheduler path. It requests a run every 15 minutes, but GitHub may delay scheduled jobs substantially.
 
 - `workers/notification-cron`
-  - validated Cloudflare Worker with a five-minute cron trigger,
+  - live Cloudflare Worker with a five-minute cron trigger,
   - calls the same authenticated production cron route,
-  - requires Cloudflare login/deployment and a Worker `CRON_SECRET` matching Vercel before it becomes active.
+  - deployed at `https://outdooradvisor-notification-cron.outdooradvisor-ahmadadnan.workers.dev`,
+  - Worker `CRON_SECRET` matches Vercel; the public `/health` endpoint exposes only service health and whether the secret is configured.
 
 - `api/_lib/nativePush.js`
   - Expo Push API sender with iOS `interruptionLevel` (time-sensitive for criticals) and `categoryId` (actionable "Mute alerts today"),
@@ -171,7 +172,7 @@ Do not manually trigger the production cron merely to test summary copy: it can 
 ## Next Hardening Steps
 
 1. Improve NDMA attachment parsing so PDF/DOCX advisory bodies can enrich district targeting beyond title-based/default hazard regions.
-2. Deploy the validated five-minute Cloudflare Worker scheduler and set its `CRON_SECRET`; GitHub Actions remains the fallback until then.
+2. Monitor the five-minute Cloudflare Worker schedule and GitHub fallback for delivery gaps.
 3. ~~Delivery dashboard~~ — done: `/api/push?action=status` (test-secret protected).
 4. Add server-side notification inbox events for cross-device history.
 5. ~~Receipt-based automatic token cleanup~~ — done: `DeviceNotRegistered` receipts now remove the device record.

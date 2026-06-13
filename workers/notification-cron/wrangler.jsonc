@@ -2,6 +2,8 @@
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "outdooradvisor-notification-cron",
   "main": "src/index.js",
+  "workers_dev": true,
+  "preview_urls": false,
   "compatibility_date": "2026-06-13",
   "compatibility_flags": ["nodejs_compat"],
   "triggers": {
