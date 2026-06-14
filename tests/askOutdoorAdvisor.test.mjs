@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildAskFallback,
+  buildAskContext,
+  classifyAskIntent,
   deriveAskVerdict,
   extractDestination,
   isAskAdvisoryFresh,
@@ -9,6 +11,7 @@ import {
   inferNhmpRoutePlan,
   matchNhmpRouteItems,
   matchOfficialItems,
+  parseAskTimeWindow,
   wantsNearbyEvidence,
   wantsRouteEvidence,
 } from '../api/_lib/askOutdoorAdvisor.js';
@@ -16,7 +19,29 @@ import {
 test('recognizes supported outdoor questions and rejects unrelated questions', () => {
   assert.equal(isOutdoorQuestion('Should I go to Murree tomorrow evening?'), true);
   assert.equal(isOutdoorQuestion('Where can I play football right now?'), true);
+  assert.equal(isOutdoorQuestion('Where can I go camping in the mountains?'), true);
   assert.equal(isOutdoorQuestion('Write me a poem about accounting'), false);
+});
+
+test('classifies discovery, activity, trip, and forecast questions', () => {
+  assert.equal(classifyAskIntent('Where can I go camping in the mountains?'), 'nearby_discovery');
+  assert.equal(classifyAskIntent('Can I play football tonight?'), 'activity_advice');
+  assert.equal(classifyAskIntent('Should I go to Skardu tomorrow?'), 'destination_trip');
+  assert.equal(classifyAskIntent('What is the weather next week?'), 'simple_weather');
+});
+
+test('follow-up questions inherit destination and activity context', () => {
+  const previous = buildAskContext('Should I go to Skardu for hiking tomorrow?');
+  const followUp = buildAskContext('What about next week?', previous);
+  assert.equal(followUp.destinationQuery, 'Skardu');
+  assert.equal(followUp.activity, 'hiking');
+  assert.equal(followUp.timeWindow.key, 'next_week');
+  assert.equal(followUp.intent, 'destination_trip');
+});
+
+test('parses requested forecast windows', () => {
+  assert.equal(parseAskTimeWindow('What about next week?').forecastDays, 10);
+  assert.equal(parseAskTimeWindow('Tomorrow evening').key, 'tomorrow_evening');
 });
 
 test('extracts travel and forecast destinations', () => {
@@ -86,6 +111,16 @@ test('cool destination weather is workable while freezing conditions remain caut
   }), 'caution');
 });
 
+test('exposed activities use stricter rain and wind thresholds', () => {
+  assert.equal(deriveAskVerdict({
+    activity: 'camping',
+    weather: { feelsLike: 20, rainNext3h: 35, windKph: 10 },
+    aqi: 40,
+    officialMatches: [],
+    routeMatches: [],
+  }), 'caution');
+});
+
 test('drops old advisories while retaining current or explicitly valid advisories', () => {
   const now = new Date('2026-06-13T12:00:00+05:00').getTime();
   assert.equal(isAskAdvisoryFresh({ date: '2026-06-01' }, now), false);
@@ -113,6 +148,22 @@ test('fallback explains cool-weather benefit and route clarity', () => {
 
   assert.match(result.bullets[0], /route clarity is unavailable/i);
   assert.match(result.bullets[1], /cool destination weather/i);
+});
+
+test('discovery fallback recommends named places instead of current-condition boilerplate', () => {
+  const result = buildAskFallback({
+    context: { intent: 'nearby_discovery', activity: 'camping', timeWindow: { label: 'this weekend' } },
+    verdict: 'go',
+    targetName: 'Lahore',
+    weather: { feelsLike: 35 },
+    discoveryOptions: [
+      { name: 'Upper Kachura Lake', rating: 4.7, weatherSummary: 'Clear sky, 8–19°C, 10% rain' },
+      { name: 'Shogran', rating: 4.6, weatherSummary: 'Partly cloudy, 9–20°C, 20% rain' },
+    ],
+  });
+  assert.match(result.headline, /shortlist/i);
+  assert.match(result.bullets[0], /Upper Kachura Lake/);
+  assert.doesNotMatch(result.answer, /currently has/i);
 });
 
 test('matches official items to relevant locations', () => {

@@ -2,17 +2,15 @@ import { createClient } from '@supabase/supabase-js';
 import { derivePremiumState } from '../../src/lib/premium.js';
 import {
   buildAskFallback,
+  buildAskContext,
   buildAskPrompt,
   deriveAskVerdict,
-  extractDestination,
   isAskAdvisoryFresh,
   isOutdoorQuestion,
   inferNhmpRoutePlan,
   matchNhmpRouteItems,
   matchOfficialItems,
   normalizeQuestion,
-  wantsNearbyEvidence,
-  wantsRouteEvidence,
 } from '../_lib/askOutdoorAdvisor.js';
 
 function sendJson(res, status, payload) {
@@ -210,8 +208,8 @@ async function fetchOpenMeteo(lat, lon) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
     `&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,uv_index,precipitation` +
     `&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,wind_speed_10m` +
-    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum` +
-    `&timezone=auto&forecast_days=3`;
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max` +
+    `&timezone=auto&forecast_days=10`;
   const r = await withTimeout(fetch(url), 8000);
   if (!r.ok) throw new Error('Open-Meteo error');
   return r.json();
@@ -252,25 +250,117 @@ async function forwardGeocode(placeName, apiKey) {
 
 async function fetchNearbyPlaces(lat, lon, query, apiKey) {
   if (!apiKey || !query) return [];
+  const isBroadDiscovery = /\bcamp|camping|mountain|valley|trek|hiking\b/i.test(query);
   const response = await fetchJsonOrNull('https://places.googleapis.com/v1/places:searchText', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': 'places.displayName,places.rating,places.shortFormattedAddress',
+      'X-Goog-FieldMask': 'places.displayName,places.rating,places.userRatingCount,places.shortFormattedAddress,places.location,places.googleMapsUri,places.primaryType',
     },
     body: JSON.stringify({
-      textQuery: query,
-      pageSize: 4,
-      rankPreference: 'DISTANCE',
-      locationBias: { circle: { center: { latitude: lat, longitude: lon }, radius: 8000 } },
+      textQuery: isBroadDiscovery ? `${query} Pakistan` : query,
+      pageSize: 6,
+      ...(isBroadDiscovery
+        ? {}
+        : {
+            rankPreference: 'DISTANCE',
+            locationBias: { circle: { center: { latitude: lat, longitude: lon }, radius: 12000 } },
+          }),
     }),
   });
   return (response?.places || []).map((place) => ({
     name: place.displayName?.text || '',
     address: place.shortFormattedAddress || '',
     rating: place.rating ?? null,
+    userRatingCount: place.userRatingCount ?? null,
+    lat: place.location?.latitude ?? null,
+    lon: place.location?.longitude ?? null,
+    mapsUrl: place.googleMapsUri || null,
+    type: place.primaryType || null,
   }));
+}
+
+function decodeGooglePolyline(encoded) {
+  const points = [];
+  let index = 0;
+  let lat = 0;
+  let lon = 0;
+  while (index < String(encoded || '').length) {
+    let result = 0;
+    let shift = 0;
+    let byte;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20 && index < encoded.length);
+    lat += result & 1 ? ~(result >> 1) : result >> 1;
+    result = 0;
+    shift = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20 && index < encoded.length);
+    lon += result & 1 ? ~(result >> 1) : result >> 1;
+    points.push({ lat: lat / 1e5, lon: lon / 1e5 });
+  }
+  return points;
+}
+
+function formatRouteDuration(value) {
+  const seconds = Number(String(value || '').replace(/s$/, ''));
+  if (!Number.isFinite(seconds)) return null;
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.round((seconds % 3600) / 60);
+  return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
+
+async function fetchGoogleRoute(origin, destination, apiKey) {
+  if (!apiKey || !origin || !destination) return null;
+  const response = await fetchJsonOrNull('https://routes.googleapis.com/directions/v2:computeRoutes', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': apiKey,
+      'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline,routes.description,routes.routeLabels',
+    },
+    body: JSON.stringify({
+      origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lon } } },
+      destination: { location: { latLng: { latitude: destination.lat, longitude: destination.lon } } },
+      travelMode: 'DRIVE',
+      routingPreference: 'TRAFFIC_AWARE',
+      computeAlternativeRoutes: false,
+      languageCode: 'en',
+      units: 'METRIC',
+    }),
+  });
+  const route = response?.routes?.[0];
+  if (!route) return null;
+  const points = decodeGooglePolyline(route.polyline?.encodedPolyline);
+  return {
+    distanceMeters: route.distanceMeters ?? null,
+    distanceText: Number.isFinite(route.distanceMeters) ? `${Math.round(route.distanceMeters / 1000)} km` : null,
+    durationText: formatRouteDuration(route.duration),
+    description: route.description || null,
+    points,
+  };
+}
+
+function selectRouteSamplePoints(googleRoute, origin, destination) {
+  const points = googleRoute?.points || [];
+  if (points.length >= 5) {
+    return [0, 0.25, 0.5, 0.75, 1].map((ratio, index) => {
+      const point = points[Math.min(points.length - 1, Math.round((points.length - 1) * ratio))];
+      return { ...point, name: index === 0 ? origin.name : index === 4 ? destination.name : `Route checkpoint ${index}` };
+    });
+  }
+  return [
+    origin,
+    { name: 'Approximate route midpoint', lat: (origin.lat + destination.lat) / 2, lon: (origin.lon + destination.lon) / 2 },
+    destination,
+  ];
 }
 
 function summarizeAskWeather(meteo) {
@@ -287,7 +377,7 @@ function summarizeAskWeather(meteo) {
       condition: WMO_LABELS[current.weatherCode] || current.conditionCode || 'Variable',
       rainNext3h: nearRain.length ? Math.max(...nearRain.slice(0, 3)) : null,
       rainNext6h: nearRain.length ? Math.max(...nearRain) : null,
-      hourly: meteo.hourly.slice(0, 30).map((item) => ({
+      hourly: meteo.hourly.slice(0, 72).map((item) => ({
         time: item.time,
         temp: item.temp ?? null,
         feelsLike: null,
@@ -295,7 +385,7 @@ function summarizeAskWeather(meteo) {
         windKph: null,
         condition: WMO_LABELS[item.weatherCode] || item.conditionCode || 'Variable',
       })),
-      daily: (meteo.daily || []).slice(0, 3).map((item) => ({
+      daily: (meteo.daily || []).slice(0, 10).map((item) => ({
         date: item.date,
         min: item.minTemp ?? null,
         max: item.maxTemp ?? null,
@@ -320,7 +410,7 @@ function summarizeAskWeather(meteo) {
     condition: WMO_LABELS[current.weather_code] || 'Variable',
     rainNext3h: nearRain.length ? Math.max(...nearRain.slice(0, 3)) : null,
     rainNext6h: nearRain.length ? Math.max(...nearRain) : null,
-    hourly: (hourly.time || []).slice(0, 30).map((time, index) => ({
+    hourly: (hourly.time || []).slice(0, 72).map((time, index) => ({
       time,
       temp: hourly.temperature_2m?.[index] ?? null,
       feelsLike: hourly.apparent_temperature?.[index] ?? null,
@@ -328,13 +418,117 @@ function summarizeAskWeather(meteo) {
       windKph: hourly.wind_speed_10m?.[index] ?? null,
       condition: WMO_LABELS[hourly.weather_code?.[index]] || 'Variable',
     })),
-    daily: (daily.time || []).slice(0, 3).map((date, index) => ({
+    daily: (daily.time || []).slice(0, 10).map((date, index) => ({
       date,
       min: daily.temperature_2m_min?.[index] ?? null,
       max: daily.temperature_2m_max?.[index] ?? null,
       rainMm: daily.precipitation_sum?.[index] ?? null,
+      rainChance: daily.precipitation_probability_max?.[index] ?? null,
       condition: WMO_LABELS[daily.weather_code?.[index]] || 'Variable',
     })),
+  };
+}
+
+function selectAskForecastWindow(weather, timeWindow) {
+  const finiteMin = (values) => {
+    const numbers = values.map(Number).filter(Number.isFinite);
+    return numbers.length ? Math.min(...numbers) : null;
+  };
+  const finiteMax = (values) => {
+    const numbers = values.map(Number).filter(Number.isFinite);
+    return numbers.length ? Math.max(...numbers) : null;
+  };
+  const key = timeWindow?.key || 'now';
+  if (key === 'next_week' || key === 'weekend') {
+    const days = (weather?.daily || []).slice(key === 'weekend' ? 0 : 3, key === 'weekend' ? 7 : 10);
+    if (!days.length) return { label: timeWindow?.label || key, summary: 'Extended forecast unavailable' };
+    return {
+      label: timeWindow.label,
+      min: finiteMin(days.map((day) => day.min)),
+      max: finiteMax(days.map((day) => day.max)),
+      rainChance: finiteMax(days.map((day) => day.rainChance)),
+      condition: days.map((day) => day.condition).find((condition) => /rain|storm|snow|fog/i.test(condition)) || days[0].condition,
+      days,
+    };
+  }
+
+  if (key.startsWith('tomorrow')) {
+    const day = weather?.daily?.[1];
+    const hours = (weather?.hourly || []).filter((item) => {
+      const date = new Date(item.time);
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const sameDay = date.getFullYear() === tomorrow.getFullYear() && date.getMonth() === tomorrow.getMonth() && date.getDate() === tomorrow.getDate();
+      if (!sameDay) return false;
+      if (key === 'tomorrow_morning') return date.getHours() >= 6 && date.getHours() <= 11;
+      if (key === 'tomorrow_evening') return date.getHours() >= 17 && date.getHours() <= 22;
+      return true;
+    });
+    return {
+      label: timeWindow.label,
+      min: day?.min ?? null,
+      max: day?.max ?? null,
+      rainChance: finiteMax([...hours.map((item) => item.rainChance), day?.rainChance]),
+      condition: day?.condition || hours[0]?.condition || 'Variable',
+      feelsLike: finiteMax(hours.map((item) => item.feelsLike)),
+      windKph: finiteMax(hours.map((item) => item.windKph)),
+    };
+  }
+
+  if (key === 'evening' || key === 'morning') {
+    const hours = (weather?.hourly || []).filter((item) => {
+      const date = new Date(item.time);
+      const hour = date.getHours();
+      return key === 'evening' ? hour >= 17 && hour <= 22 : hour >= 6 && hour <= 11;
+    }).slice(0, 8);
+    if (hours.length) {
+      return {
+        label: timeWindow.label,
+        feelsLike: finiteMax(hours.map((item) => item.feelsLike)),
+        rainChance: finiteMax(hours.map((item) => item.rainChance)),
+        windKph: finiteMax(hours.map((item) => item.windKph)),
+        condition: hours.find((item) => /rain|storm|snow|fog/i.test(item.condition))?.condition || hours[0].condition,
+      };
+    }
+  }
+
+  return {
+    label: timeWindow?.label || 'right now',
+    feelsLike: weather?.feelsLike ?? weather?.temp ?? null,
+    rainChance: weather?.rainNext3h ?? null,
+    windKph: weather?.windKph ?? null,
+    condition: weather?.condition || 'Variable',
+  };
+}
+
+function findBestActivityWindow(weather, activity) {
+  const exposed = ['camping', 'hiking', 'cycling', 'running', 'football', 'cricket', 'picnic', 'fishing'].includes(activity);
+  const candidates = (weather?.hourly || []).filter((item) => {
+    const timestamp = new Date(item.time).getTime();
+    return Number.isFinite(timestamp) && timestamp >= Date.now() - 30 * 60 * 1000;
+  }).slice(0, 36);
+  if (!candidates.length) return null;
+
+  const ranked = candidates.map((item) => {
+    const feels = Number(item.feelsLike ?? item.temp);
+    const rain = Number(item.rainChance) || 0;
+    const wind = Number(item.windKph) || 0;
+    const temperaturePenalty = Number.isFinite(feels)
+      ? Math.max(0, feels - (exposed ? 31 : 35)) * 5 + Math.max(0, 5 - feels) * 4
+      : 10;
+    return { item, score: rain * (exposed ? 1.5 : 0.8) + wind * (exposed ? 0.7 : 0.3) + temperaturePenalty };
+  }).sort((a, b) => a.score - b.score);
+  const best = ranked[0]?.item;
+  if (!best) return null;
+  const start = new Date(best.time);
+  const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+  const format = (date) => date.toLocaleTimeString('en-PK', { hour: 'numeric', minute: '2-digit' });
+  return {
+    label: `${format(start)}–${format(end)}`,
+    condition: best.condition,
+    rainChance: best.rainChance,
+    feelsLike: best.feelsLike ?? best.temp,
+    windKph: best.windKph,
   };
 }
 
@@ -356,22 +550,36 @@ function ndmaAlertText(item) {
 
 async function buildAskEvidence(req, body, googleKey) {
   const question = normalizeQuestion(body.question);
+  const context = buildAskContext(question, body.conversationContext || {});
   const origin = {
     name: String(body.locationName || 'Current location'),
     lat: Number(body.lat),
     lon: Number(body.lon),
   };
-  const destinationQuery = extractDestination(question);
+  const destinationQuery = context.destinationQuery;
   const destination = await forwardGeocode(destinationQuery, googleKey);
   const target = destination || origin;
   const originUrl = getApiOrigin(req);
+  const routeRequested = context.intent === 'destination_trip' && Boolean(destination);
+  const nearbyQuery = context.intent === 'nearby_discovery' || context.intent === 'activity_advice'
+    ? question
+    : context.intent === 'destination_trip' && destinationQuery
+      ? `outdoor attractions in ${destinationQuery}, Pakistan`
+      : '';
 
   const [meteo, aqiResult, pmd, ndma, nhmp] = await Promise.all([
     fetchAskWeather(originUrl, target.lat, target.lon),
     fetchGoogleAqi(target.lat, target.lon, googleKey).catch(() => null),
     fetchJsonOrNull(`${originUrl}/api/alerts`),
     fetchJsonOrNull(`${originUrl}/api/ndma?limit=12&location=${encodeURIComponent(target.name)}`),
-    wantsRouteEvidence(question) ? fetchJsonOrNull(`${originUrl}/api/nhmp`) : Promise.resolve(null),
+    routeRequested ? fetchJsonOrNull(`${originUrl}/api/nhmp`) : Promise.resolve(null),
+  ]);
+  const weather = summarizeAskWeather(meteo);
+  const forecastWindow = selectAskForecastWindow(weather, context.timeWindow);
+  const bestActivityWindow = context.activity ? findBestActivityWindow(weather, context.activity) : null;
+  const [googleRoute, nearbyPlaces] = await Promise.all([
+    routeRequested ? fetchGoogleRoute(origin, destination, googleKey) : Promise.resolve(null),
+    nearbyQuery ? fetchNearbyPlaces(target.lat, target.lon, nearbyQuery, googleKey) : Promise.resolve([]),
   ]);
 
   const terms = [destinationQuery, target.name, origin.name];
@@ -400,7 +608,6 @@ async function buildAskEvidence(req, body, googleKey) {
     status: item.status || 'Status unavailable',
     severity: item.severity || 'unknown',
   }));
-  const routeRequested = wantsRouteEvidence(question);
   const routeClarity = !routeRequested
     ? { status: 'not_requested', summary: null }
     : !nhmp?.success || nhmp?.stale
@@ -425,33 +632,40 @@ async function buildAskEvidence(req, body, googleKey) {
               : 'No matching NHMP route update was found; this does not confirm the full route is clear.',
           };
 
-  const nearbyQuery = wantsNearbyEvidence(question) ? question : '';
-  const [nearbyPlaces, routeWeather] = await Promise.all([
-    fetchNearbyPlaces(target.lat, target.lon, nearbyQuery, googleKey),
-    wantsRouteEvidence(question) && destination
-      ? Promise.all([
-          { name: origin.name, lat: origin.lat, lon: origin.lon },
-          {
-            name: 'Approximate route midpoint',
-            lat: (origin.lat + destination.lat) / 2,
-            lon: (origin.lon + destination.lon) / 2,
-          },
-          { name: destination.name, lat: destination.lat, lon: destination.lon },
-        ].map(async (point) => {
-          const pointWeather = await fetchAskWeather(originUrl, point.lat, point.lon);
-          const summary = summarizeAskWeather(pointWeather);
+  const [routeWeather, discoveryOptions] = await Promise.all([
+    routeRequested
+      ? Promise.all(selectRouteSamplePoints(googleRoute, origin, destination).map(async (point) => {
+        const pointWeather = await fetchAskWeather(originUrl, point.lat, point.lon);
+        const summary = summarizeAskWeather(pointWeather);
+        const pointWindow = selectAskForecastWindow(summary, context.timeWindow);
+        return {
+          name: point.name,
+          temp: summary.temp,
+          feelsLike: pointWindow.feelsLike ?? pointWindow.max ?? summary.feelsLike,
+          minFeelsLike: pointWindow.min ?? pointWindow.feelsLike ?? summary.feelsLike,
+          condition: pointWindow.condition || summary.condition,
+          rainNext6h: pointWindow.rainChance ?? summary.rainNext6h,
+          windKph: pointWindow.windKph ?? summary.windKph,
+        };
+        }))
+      : Promise.resolve([]),
+    context.intent === 'nearby_discovery'
+      ? Promise.all(nearbyPlaces.slice(0, 4).map(async (place) => {
+          if (!Number.isFinite(Number(place.lat)) || !Number.isFinite(Number(place.lon))) return place;
+          const placeWeather = summarizeAskWeather(await fetchAskWeather(originUrl, place.lat, place.lon));
+          const placeWindow = selectAskForecastWindow(placeWeather, context.timeWindow);
           return {
-            name: point.name,
-            temp: summary.temp,
-            feelsLike: summary.feelsLike,
-            condition: summary.condition,
-            rainNext6h: summary.rainNext6h,
-            windKph: summary.windKph,
+            ...place,
+            forecastWindow: placeWindow,
+            weatherSummary: [
+              placeWindow.condition,
+              placeWindow.min != null && placeWindow.max != null ? `${Math.round(placeWindow.min)}–${Math.round(placeWindow.max)}°C` : null,
+              placeWindow.rainChance != null ? `${Math.round(placeWindow.rainChance)}% rain` : null,
+            ].filter(Boolean).join(', '),
           };
         }))
       : Promise.resolve([]),
   ]);
-  const weather = summarizeAskWeather(meteo);
   const providerMatches = (weather.providerAlerts || []).map((item) => ({
     source: weather.source || 'WeatherKit',
     severity: item.severity || item.significance || 'warning',
@@ -459,6 +673,16 @@ async function buildAskEvidence(req, body, googleKey) {
     updatedAt: item.issuedTime || item.effectiveTime || null,
   })).filter((item) => item.text);
   const officialMatches = [...providerMatches, ...pmdMatches, ...ndmaMatches];
+  const decisionWindow = context.intent === 'nearby_discovery' && discoveryOptions[0]?.forecastWindow
+    ? discoveryOptions[0].forecastWindow
+    : forecastWindow;
+  const planWeather = {
+    ...weather,
+    feelsLike: decisionWindow.feelsLike ?? decisionWindow.max ?? weather.feelsLike,
+    minFeelsLike: decisionWindow.min ?? decisionWindow.feelsLike ?? weather.feelsLike,
+    rainNext3h: decisionWindow.rainChance ?? weather.rainNext3h,
+    windKph: decisionWindow.windKph ?? weather.windKph,
+  };
   const riskWeather = routeWeather.reduce((worst, point) => {
     const worstFeels = Number(worst.feelsLike);
     const worstLow = Number(worst.minFeelsLike ?? worst.feelsLike);
@@ -469,34 +693,46 @@ async function buildAskEvidence(req, body, googleKey) {
       windKph: Math.max(Number(worst.windKph) || 0, Number(point.windKph) || 0),
       rainNext3h: Math.max(Number(worst.rainNext3h) || 0, Number(point.rainNext6h) || 0),
     };
-  }, weather);
+  }, planWeather);
   const verdict = deriveAskVerdict({
+    activity: context.activity,
     weather: riskWeather,
-    aqi: aqiResult?.aqi,
+    aqi: context.intent === 'nearby_discovery' ? null : aqiResult?.aqi,
     officialMatches,
     routeMatches,
   });
 
   return {
     question,
+    context,
     verdict,
     target: { name: target.name, lat: target.lat, lon: target.lon },
     origin,
     weather,
+    forecastWindow,
+    bestActivityWindow,
     weatherProvider: weather.source || 'Open-Meteo fallback',
     airQuality: { aqi: aqiResult?.aqi ?? null, pm25: aqiResult?.pm25 ?? null },
     officialMatches,
     routeMatches,
     routePlan,
     routeClarity,
+    googleRoute: googleRoute ? {
+      distanceMeters: googleRoute.distanceMeters,
+      distanceText: googleRoute.distanceText,
+      durationText: googleRoute.durationText,
+      description: googleRoute.description,
+    } : null,
     routeWeather,
     nearbyPlaces,
+    discoveryOptions,
     sourceStatus: {
       forecast: meteo ? 'live' : 'unavailable',
       airQuality: aqiResult ? 'live' : 'unavailable',
       PMD: pmd?.success ? 'live' : 'unavailable',
       NDMA: ndma?.success ? 'live' : 'unavailable',
-      NHMP: wantsRouteEvidence(question) ? (nhmp?.success ? (nhmp.stale ? 'stale' : 'live') : 'unavailable') : 'not requested',
+      NHMP: routeRequested ? (nhmp?.success ? (nhmp.stale ? 'stale' : 'live') : 'unavailable') : 'not requested',
+      GoogleRoute: routeRequested ? (googleRoute ? 'live' : 'unavailable') : 'not requested',
       places: nearbyQuery ? (nearbyPlaces.length ? 'live' : 'unavailable') : 'not requested',
     },
     fetchedAt: new Date().toISOString(),
@@ -807,8 +1043,32 @@ async function callGeminiAsk(model, apiKey, prompt) {
   return {
     headline: String(parsed.headline).slice(0, 100),
     answer: String(parsed.answer).slice(0, 800),
-    bullets: Array.isArray(parsed.bullets) ? parsed.bullets.map(String).slice(0, 3) : [],
+    bullets: Array.isArray(parsed.bullets) ? parsed.bullets.map(String).slice(0, 4) : [],
+    sections: Array.isArray(parsed.sections)
+      ? parsed.sections.slice(0, 4).map((section) => ({
+          title: String(section?.title || '').slice(0, 50),
+          items: Array.isArray(section?.items) ? section.items.map(String).slice(0, 4) : [],
+        })).filter((section) => section.title && section.items.length)
+      : [],
   };
+}
+
+function isSpecificAskResult(result, evidence) {
+  if (evidence?.context?.intent === 'simple_weather') return true;
+  const text = [
+    result?.headline,
+    result?.answer,
+    ...(result?.bullets || []),
+    ...(result?.sections || []).flatMap((section) => [section.title, ...(section.items || [])]),
+  ].join(' ').toLowerCase();
+  const tokens = [
+    evidence?.context?.activity,
+    String(evidence?.target?.name || '').split(/[,\s]/)[0],
+    ...(evidence?.routePlan?.codes || []),
+    ...(evidence?.nearbyPlaces || []).slice(0, 3).map((place) => String(place.name || '').split(/\s/)[0]),
+    ...(evidence?.discoveryOptions || []).slice(0, 3).map((place) => String(place.name || '').split(/\s/)[0]),
+  ].map((value) => String(value || '').trim().toLowerCase()).filter((value) => value.length >= 2);
+  return tokens.some((token) => text.includes(token));
 }
 
 export default async function handler(req, res) {
@@ -849,14 +1109,19 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store');
     const evidence = await buildAskEvidence(req, body, googleKey);
     const fallback = buildAskFallback({
+      context: evidence.context,
       verdict: evidence.verdict,
       targetName: evidence.target.name,
       weather: evidence.weather,
+      forecastWindow: evidence.forecastWindow,
+      bestActivityWindow: evidence.bestActivityWindow,
       aqi: evidence.airQuality.aqi,
       routeMatches: evidence.routeMatches,
       routeClarity: evidence.routeClarity,
+      googleRoute: evidence.googleRoute,
       officialMatches: evidence.officialMatches,
       nearbyPlaces: evidence.nearbyPlaces,
+      discoveryOptions: evidence.discoveryOptions,
     });
 
     if (!geminiKey) return sendJson(res, 200, { ...fallback, evidence });
@@ -864,12 +1129,16 @@ export default async function handler(req, res) {
     try {
       const prompt = buildAskPrompt({ question, evidence, fallback });
       const result = await callGeminiAsk(model, geminiKey, prompt);
+      if (!isSpecificAskResult(result, evidence)) {
+        return sendJson(res, 200, { ...fallback, evidence, provider: 'fallback-specificity-guard' });
+      }
       return sendJson(res, 200, {
         provider: 'gemini',
         verdict: evidence.verdict,
         headline: result.headline,
         answer: result.answer,
         bullets: result.bullets,
+        sections: result.sections.length ? result.sections : fallback.sections,
         evidence,
       });
     } catch (error) {

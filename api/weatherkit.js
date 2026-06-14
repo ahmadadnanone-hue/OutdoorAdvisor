@@ -132,7 +132,7 @@ function normalizeWeatherKit(json) {
       daylight: c.daylight ?? null,
       precipitationIntensity: c.precipitationIntensity ?? null,
     },
-    hourly: fh.slice(0, 24).map((h) => ({
+    hourly: fh.slice(0, 72).map((h) => ({
       time: h.forecastStart ?? null,
       temp: h.temperature ?? null,
       humidity: h.humidity != null ? Math.round(h.humidity * 100) : null,

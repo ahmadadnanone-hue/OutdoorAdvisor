@@ -22,13 +22,14 @@ import { ScreenGradient } from '../layout';
 const HOME_PROMPTS = [
   'Can I have lunch outdoors tomorrow?',
   'Where can I play football right now?',
+  'Where can I go camping in the mountains?',
   'Will it rain tomorrow?',
 ];
 
 const TRAVEL_PROMPTS = [
   'Should I go to Murree tomorrow evening?',
+  'Plan a trip to Skardu tomorrow.',
   'I am going to Multan now. Check the motorway.',
-  'Is road travel safe this evening?',
 ];
 
 export function AskOutdoorAdvisorCard({ onPress, compact = false }) {
@@ -73,7 +74,7 @@ export default function AskOutdoorAdvisor({
 
   const sourceRows = useMemo(() => {
     const status = result?.evidence?.sourceStatus || {};
-    const labels = { forecast: 'Forecast', airQuality: 'Air quality', PMD: 'PMD', NDMA: 'NDMA', NHMP: 'NHMP', places: 'Places' };
+    const labels = { forecast: 'Forecast', airQuality: 'Air quality', PMD: 'PMD', NDMA: 'NDMA', NHMP: 'NHMP', GoogleRoute: 'Google route', places: 'Places' };
     return Object.entries(status)
       .filter(([, value]) => value !== 'not requested')
       .map(([key, value]) => ({ key, label: labels[key] || key, value }));
@@ -82,6 +83,7 @@ export default function AskOutdoorAdvisor({
   const ask = async (preset) => {
     const nextQuestion = String(preset || question).trim();
     if (!nextQuestion || loading) return;
+    const conversationContext = result?.evidence?.context || null;
     setQuestion(nextQuestion);
     setLoading(true);
     setError('');
@@ -103,6 +105,7 @@ export default function AskOutdoorAdvisor({
           lat: location?.lat,
           lon: location?.lon,
           locationName,
+          conversationContext,
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -183,6 +186,16 @@ export default function AskOutdoorAdvisor({
                     <View key={`${bullet}-${index}`} style={styles.bulletRow}>
                       <View style={[styles.bullet, { backgroundColor: tone.fg }]} />
                       <Text selectable style={styles.bulletText}>{bullet}</Text>
+                    </View>
+                  ))}
+                  {(result.sections || []).map((section) => (
+                    <View key={section.title} style={styles.resultSection}>
+                      <Text style={styles.resultSectionTitle}>{section.title}</Text>
+                      {(section.items || []).map((item, index) => (
+                        <Text key={`${section.title}-${index}`} selectable style={styles.resultSectionItem}>
+                          {item}
+                        </Text>
+                      ))}
                     </View>
                   ))}
                   {sourceRows.length > 0 && (
@@ -269,6 +282,9 @@ const styles = StyleSheet.create({
   bulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
   bullet: { width: 5, height: 5, borderRadius: 3, marginTop: 7 },
   bulletText: { flex: 1, fontSize: 13, lineHeight: 19, color: dc.textPrimary },
+  resultSection: { gap: 6, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: dc.cardStrokeSoft },
+  resultSectionTitle: { fontSize: 9, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase', color: dc.textMuted },
+  resultSectionItem: { fontSize: 12, lineHeight: 18, color: dc.textSecondary },
   sources: { gap: 8, paddingTop: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: dc.cardStrokeSoft },
   sourcesLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 1.2, color: dc.textMuted },
   sourceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
