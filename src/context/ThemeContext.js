@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Appearance, Platform, useColorScheme } from 'react-native';
+import { Appearance, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors as dc } from '../design';
 
@@ -12,26 +12,45 @@ const ThemeContext = createContext();
  * iOS to resolve DynamicColorIOS design tokens against that choice.
  */
 export function ThemeProvider({ children }) {
-  const systemScheme = useColorScheme();
   const [mode, setMode] = useState('auto'); // 'auto' | 'dark' | 'light'
+  const [systemScheme, setSystemScheme] = useState(() => Appearance.getColorScheme() || 'light');
+  const [isReady, setIsReady] = useState(Platform.OS === 'web');
 
   useEffect(() => {
+    let mounted = true;
+    const appearanceSubscription = Appearance.addChangeListener(({ colorScheme }) => {
+      if (mounted && colorScheme) setSystemScheme(colorScheme);
+    });
+
     AsyncStorage.getItem(STORAGE_KEY)
       .then((saved) => {
-        if (saved === 'auto' || saved === 'dark' || saved === 'light') setMode(saved);
+        if (!mounted) return;
+        const savedMode = saved === 'auto' || saved === 'dark' || saved === 'light' ? saved : 'auto';
+        if (Platform.OS !== 'web' && typeof Appearance.setColorScheme === 'function') {
+          Appearance.setColorScheme(savedMode === 'auto' ? null : savedMode);
+        }
+        setMode(savedMode);
+        setSystemScheme(Appearance.getColorScheme() || 'light');
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setIsReady(true);
+      });
+
+    return () => {
+      mounted = false;
+      appearanceSubscription.remove();
+    };
   }, []);
 
-  const isDark = mode === 'auto' ? systemScheme !== 'light' : mode === 'dark';
-
-  useEffect(() => {
-    if (Platform.OS === 'web' || typeof Appearance.setColorScheme !== 'function') return;
-    Appearance.setColorScheme(mode === 'auto' ? null : mode);
-  }, [mode]);
+  const isDark = mode === 'auto' ? systemScheme === 'dark' : mode === 'dark';
 
   const setThemeMode = async (newMode) => {
+    if (Platform.OS !== 'web' && typeof Appearance.setColorScheme === 'function') {
+      Appearance.setColorScheme(newMode === 'auto' ? null : newMode);
+    }
     setMode(newMode);
+    setSystemScheme(Appearance.getColorScheme() || 'light');
     AsyncStorage.setItem(STORAGE_KEY, newMode).catch(() => {});
   };
 
@@ -51,11 +70,11 @@ export function ThemeProvider({ children }) {
     border: dc.cardStrokeSoft,
   };
 
-  return (
+  return isReady ? (
     <ThemeContext.Provider value={{ isDark, mode, cycleTheme, setThemeMode, toggleTheme: cycleTheme, colors }}>
       {children}
     </ThemeContext.Provider>
-  );
+  ) : null;
 }
 
 export function useTheme() {
