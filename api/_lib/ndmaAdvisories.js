@@ -99,6 +99,7 @@ export function parseNdmaAdvisories(html) {
 
     const classification = classifyNdmaAdvisory(title);
     const regions = inferNdmaRegions(title);
+    const important = shouldHighlightNdmaAdvisory({ ...classification, date });
 
     advisories.push({
       key,
@@ -107,6 +108,7 @@ export function parseNdmaAdvisories(html) {
       sourceUrl,
       fileUrl,
       ...classification,
+      important,
       regions: regions.length ? regions : classification.defaultRegions,
       pushEligible: isNdmaPushFresh(date),
     });
@@ -245,6 +247,10 @@ export function isNdmaPushFresh(date, now = Date.now()) {
 
 export function isNdmaDisplayFresh(date, now = Date.now()) {
   return isNdmaFreshWithin(date, NDMA_DISPLAY_MAX_AGE_MS, now);
+}
+
+export function shouldHighlightNdmaAdvisory(advisory, now = Date.now()) {
+  return advisory?.important === true || isNdmaPushFresh(advisory?.date, now);
 }
 
 function isNdmaFreshWithin(date, maxAgeMs, now = Date.now()) {
