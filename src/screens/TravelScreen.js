@@ -10,9 +10,11 @@ import {
   LayoutAnimation,
   UIManager,
   Platform,
+  RefreshControl,
   StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import * as WebBrowser from 'expo-web-browser';
 
 function openInApp(url) {
@@ -812,6 +814,7 @@ export default function TravelScreen({ route }) {
   const [nhmpStale, setNhmpStale] = useState(false);
   const [nhmpError, setNhmpError] = useState(false);
   const [nhmpAlertsExpanded, setNhmpAlertsExpanded] = useState(false);
+  const [travelRefreshing, setTravelRefreshing] = useState(false);
 
   const [pmdAlerts, setPmdAlerts] = useState([]);
   const [pmdLoading, setPmdLoading] = useState(true);
@@ -859,68 +862,83 @@ export default function TravelScreen({ route }) {
     }
   }, [nhmpData.length]);
 
-  useEffect(() => {
-    nhmpCancelRef.current = false;
-    loadNhmp();
-    const nhmpInterval = setInterval(() => loadNhmp({ silent: true }), NHMP_REFRESH_MS);
-
-    (async () => {
-      let pmdPageBlocked = false;
+  const loadPmd = useCallback(async () => {
+    let pmdPageBlocked = false;
+    try {
       try {
-        try {
-          const json = await fetchApiJson('/api/pmd');
-          if (!nhmpCancelRef.current && json.success) {
-            setPmdAlerts(json.alerts || []);
-            if (!json.alerts?.length && !json.cities?.length) pmdPageBlocked = true;
-          } else if (!nhmpCancelRef.current) {
-            pmdPageBlocked = true;
-          }
-        } catch {
+        const json = await fetchApiJson('/api/pmd');
+        if (!nhmpCancelRef.current && json.success) {
+          setPmdAlerts(json.alerts || []);
+          if (!json.alerts?.length && !json.cities?.length) pmdPageBlocked = true;
+        } else if (!nhmpCancelRef.current) {
           pmdPageBlocked = true;
         }
-
-        if (!nhmpCancelRef.current && pmdPageBlocked) {
-          try {
-            const alertJson = await fetchApiJson('/api/alerts');
-            if (!nhmpCancelRef.current && alertJson.success) {
-              setPmdAlerts(Array.isArray(alertJson.alerts) ? alertJson.alerts : []);
-              setPmdBlocked(false);
-            } else if (!nhmpCancelRef.current) {
-              setPmdBlocked(true);
-            }
-          } catch {
-            if (!nhmpCancelRef.current) setPmdBlocked(true);
-          }
-        } else if (!nhmpCancelRef.current) {
-          setPmdBlocked(false);
-        }
-      } finally {
-        if (!nhmpCancelRef.current) setPmdLoading(false);
-      }
-    })();
-
-    (async () => {
-      try {
-        const query = pinnedCity ? `?limit=8&location=${encodeURIComponent(pinnedCity)}` : '?limit=8';
-        const json = await fetchApiJson(`/api/ndma${query}`);
-        if (!nhmpCancelRef.current && json.success) {
-          setNdmaAdvisories(Array.isArray(json.advisories) ? json.advisories : []);
-          setNdmaError(false);
-        } else if (!nhmpCancelRef.current) {
-          setNdmaError(true);
-        }
       } catch {
-        if (!nhmpCancelRef.current) setNdmaError(true);
-      } finally {
-        if (!nhmpCancelRef.current) setNdmaLoading(false);
+        pmdPageBlocked = true;
       }
-    })();
 
+      if (!nhmpCancelRef.current && pmdPageBlocked) {
+        try {
+          const alertJson = await fetchApiJson('/api/alerts');
+          if (!nhmpCancelRef.current && alertJson.success) {
+            setPmdAlerts(Array.isArray(alertJson.alerts) ? alertJson.alerts : []);
+            setPmdBlocked(false);
+          } else if (!nhmpCancelRef.current) {
+            setPmdBlocked(true);
+          }
+        } catch {
+          if (!nhmpCancelRef.current) setPmdBlocked(true);
+        }
+      } else if (!nhmpCancelRef.current) {
+        setPmdBlocked(false);
+      }
+    } finally {
+      if (!nhmpCancelRef.current) setPmdLoading(false);
+    }
+  }, []);
+
+  const loadNdma = useCallback(async () => {
+    try {
+      const query = pinnedCity ? `?limit=8&location=${encodeURIComponent(pinnedCity)}` : '?limit=8';
+      const json = await fetchApiJson(`/api/ndma${query}`);
+      if (!nhmpCancelRef.current && json.success) {
+        setNdmaAdvisories(Array.isArray(json.advisories) ? json.advisories : []);
+        setNdmaError(false);
+      } else if (!nhmpCancelRef.current) {
+        setNdmaError(true);
+      }
+    } catch {
+      if (!nhmpCancelRef.current) setNdmaError(true);
+    } finally {
+      if (!nhmpCancelRef.current) setNdmaLoading(false);
+    }
+  }, [pinnedCity]);
+
+  const refreshTravelSources = useCallback(async ({ pull = false } = {}) => {
+    nhmpCancelRef.current = false;
+    if (pull) setTravelRefreshing(true);
+    await Promise.all([
+      loadNhmp({ silent: !pull }),
+      loadPmd(),
+      loadNdma(),
+    ]);
+    if (pull && !nhmpCancelRef.current) setTravelRefreshing(false);
+  }, [loadNhmp, loadNdma, loadPmd]);
+
+  useFocusEffect(useCallback(() => {
+    refreshTravelSources();
+    return () => {
+      nhmpCancelRef.current = true;
+    };
+  }, [refreshTravelSources]));
+
+  useEffect(() => {
+    const nhmpInterval = setInterval(() => loadNhmp({ silent: true }), NHMP_REFRESH_MS);
     return () => {
       nhmpCancelRef.current = true;
       clearInterval(nhmpInterval);
     };
-  }, [loadNhmp, pinnedCity]);
+  }, [loadNhmp]);
 
   // Notifications for closures, fog, and PMD alerts are pushed server-side
   // via /api/push?action=cron (sendMotorwayClosureAlerts + sendPmdCriticalAlerts
@@ -1547,6 +1565,13 @@ export default function TravelScreen({ route }) {
           style={styles.scroll}
           contentContainerStyle={[styles.contentContainer, { paddingTop: Math.max(insets.top, 12) }]}
           showsVerticalScrollIndicator={false}
+          refreshControl={(
+            <RefreshControl
+              refreshing={travelRefreshing}
+              onRefresh={() => refreshTravelSources({ pull: true })}
+              tintColor={dc.accentCyan}
+            />
+          )}
         >
           {/* Screen header */}
           <View style={styles.screenHeader}>
