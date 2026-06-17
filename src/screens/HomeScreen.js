@@ -67,7 +67,7 @@ export default function HomeScreen({ navigation, route }) {
 
   // ── Data ──────────────────────────────────────────────────────────────────
   const { aqi, pm25, history: aqiHistory, loading: aqiLoading, isUsingCache: aqiCached, updatedAt: aqiUpdatedAt, refresh: refreshAqi } = useAQI(location.lat, location.lon);
-  const { current: weatherCurrent, daily, hourly, loading: weatherLoading, isUsingCache: weatherCached, updatedAt: weatherUpdatedAt, refresh: refreshWeather } = useWeather(location.lat, location.lon);
+  const { current: weatherCurrent, daily, hourly, loading: weatherLoading, isUsingCache: weatherCached, updatedAt: weatherUpdatedAt, refresh: refreshWeather, source: weatherSource } = useWeather(location.lat, location.lon);
   const { primary: pollenPrimary, types: pollenTypes, refresh: refreshPollen } = usePollen(location.lat, location.lon);
 
   // ── Derived ───────────────────────────────────────────────────────────────
@@ -424,6 +424,14 @@ export default function HomeScreen({ navigation, route }) {
           onClose={() => setAskVisible(false)}
           location={location}
           locationName={locationDisplay.primary}
+          weatherSnapshot={{
+            current: weatherCurrent,
+            hourly,
+            daily,
+            updatedAt: weatherUpdatedAt,
+            isUsingCache: weatherCached,
+            source: weatherSource,
+          }}
           context="home"
         />
         <Modal

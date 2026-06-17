@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { buildApiUrl } from '../../config/api';
 import { useAuth } from '../../context/AuthContext';
+import { AREAS } from '../../data/cities';
 import { colors as dc, statusColor } from '../../design';
 import Icon from '../Icon';
 import { GlassCard } from '../glass';
@@ -31,6 +32,45 @@ const TRAVEL_PROMPTS = [
   'Plan a trip to Skardu tomorrow.',
   'I am going to Multan now. Check the motorway.',
 ];
+
+function distanceKm(a, b) {
+  const toRad = (value) => (Number(value) * Math.PI) / 180;
+  const lat1 = Number(a?.lat);
+  const lon1 = Number(a?.lon);
+  const lat2 = Number(b?.lat);
+  const lon2 = Number(b?.lon);
+  if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) return Infinity;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const s1 = Math.sin(dLat / 2);
+  const s2 = Math.sin(dLon / 2);
+  const h = s1 * s1 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * s2 * s2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function getPreciseLocationName(location, locationName) {
+  const label = String(locationName || '').trim();
+  const nearest = AREAS
+    .map((area) => ({ ...area, distance: distanceKm(location, area) }))
+    .sort((a, b) => a.distance - b.distance)[0];
+  if (!nearest || nearest.distance > 12) return label;
+
+  const alreadySpecific = label && !new RegExp(`^${nearest.city}$`, 'i').test(label) && !/^pakistan$/i.test(label);
+  if (alreadySpecific) return label;
+  return `${nearest.name}, ${nearest.city}`;
+}
+
+function compactWeatherSnapshot(snapshot) {
+  if (!snapshot?.current) return null;
+  return {
+    source: snapshot.source,
+    updatedAt: snapshot.updatedAt,
+    isUsingCache: Boolean(snapshot.isUsingCache),
+    current: snapshot.current,
+    hourly: (snapshot.hourly || []).slice(0, 72),
+    daily: (snapshot.daily || []).slice(0, 10),
+  };
+}
 
 export function AskOutdoorAdvisorCard({ onPress, compact = false }) {
   return (
@@ -62,6 +102,7 @@ export default function AskOutdoorAdvisor({
   onClose,
   location,
   locationName,
+  weatherSnapshot,
   context = 'home',
 }) {
   const insets = useSafeAreaInsets();
@@ -105,6 +146,8 @@ export default function AskOutdoorAdvisor({
           lat: location?.lat,
           lon: location?.lon,
           locationName,
+          preciseLocationName: getPreciseLocationName(location, locationName),
+          localWeatherSnapshot: compactWeatherSnapshot(weatherSnapshot),
           conversationContext,
         }),
       });
@@ -205,7 +248,7 @@ export default function AskOutdoorAdvisor({
                         {sourceRows.map((source) => (
                           <View key={source.key} style={styles.sourcePill}>
                             <View style={[styles.sourceDot, {
-                              backgroundColor: source.value === 'live' ? dc.accentGreen : source.value === 'stale' ? dc.accentYellow : dc.textMuted,
+                              backgroundColor: source.value === 'live' || source.value === 'cached' ? dc.accentGreen : source.value === 'stale' ? dc.accentYellow : dc.textMuted,
                             }]} />
                             <Text style={styles.sourceText}>{source.label}</Text>
                           </View>

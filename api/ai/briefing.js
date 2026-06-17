@@ -429,6 +429,35 @@ function summarizeAskWeather(meteo) {
   };
 }
 
+function sanitizeClientWeatherSnapshot(snapshot, origin) {
+  if (!snapshot?.current || !origin || !Number.isFinite(origin.lat) || !Number.isFinite(origin.lon)) return null;
+  const updatedAt = Number(snapshot.updatedAt);
+  if (!Number.isFinite(updatedAt) || Date.now() - updatedAt > 30 * 60 * 1000) return null;
+
+  const current = snapshot.current || {};
+  const temp = Number(current.temp);
+  const weatherCode = Number(current.weatherCode);
+  const normalizedCurrent = {
+    temp: Number.isFinite(temp) ? temp : null,
+    feelsLike: Number.isFinite(Number(current.feelsLike)) ? Number(current.feelsLike) : null,
+    humidity: Number.isFinite(Number(current.humidity)) ? Number(current.humidity) : null,
+    windSpeed: Number.isFinite(Number(current.windSpeed)) ? Number(current.windSpeed) : null,
+    weatherCode: Number.isFinite(weatherCode) ? weatherCode : null,
+    conditionCode: current.conditionCode || null,
+  };
+  if (normalizedCurrent.temp == null && normalizedCurrent.feelsLike == null && normalizedCurrent.weatherCode == null) return null;
+
+  return {
+    current: normalizedCurrent,
+    hourly: Array.isArray(snapshot.hourly) ? snapshot.hourly.slice(0, 72) : [],
+    daily: Array.isArray(snapshot.daily) ? snapshot.daily.slice(0, 10) : [],
+    alerts: [],
+    source: snapshot.source || (snapshot.isUsingCache ? 'Cached app forecast' : 'App forecast'),
+    cachedFromApp: true,
+    updatedAt,
+  };
+}
+
 function selectAskForecastWindow(weather, timeWindow) {
   const finiteMin = (values) => {
     const numbers = values.map(Number).filter(Number.isFinite);
@@ -552,13 +581,14 @@ async function buildAskEvidence(req, body, googleKey) {
   const question = normalizeQuestion(body.question);
   const context = buildAskContext(question, body.conversationContext || {});
   const origin = {
-    name: String(body.locationName || 'Current location'),
+    name: String(body.preciseLocationName || body.locationName || 'Current location'),
     lat: Number(body.lat),
     lon: Number(body.lon),
   };
   const destinationQuery = context.destinationQuery;
   const destination = await forwardGeocode(destinationQuery, googleKey);
   const target = destination || origin;
+  const localSnapshot = !destination ? sanitizeClientWeatherSnapshot(body.localWeatherSnapshot, origin) : null;
   const originUrl = getApiOrigin(req);
   const routeRequested = context.intent === 'destination_trip' && Boolean(destination);
   const nearbyQuery = context.intent === 'nearby_discovery' || context.intent === 'activity_advice'
@@ -568,7 +598,7 @@ async function buildAskEvidence(req, body, googleKey) {
       : '';
 
   const [meteo, aqiResult, pmd, ndma, nhmp] = await Promise.all([
-    fetchAskWeather(originUrl, target.lat, target.lon),
+    localSnapshot ? Promise.resolve(localSnapshot) : fetchAskWeather(originUrl, target.lat, target.lon),
     fetchGoogleAqi(target.lat, target.lon, googleKey).catch(() => null),
     fetchJsonOrNull(`${originUrl}/api/alerts`),
     fetchJsonOrNull(`${originUrl}/api/ndma?limit=12&location=${encodeURIComponent(target.name)}`),
@@ -727,7 +757,7 @@ async function buildAskEvidence(req, body, googleKey) {
     nearbyPlaces,
     discoveryOptions,
     sourceStatus: {
-      forecast: meteo ? 'live' : 'unavailable',
+      forecast: localSnapshot ? 'cached' : meteo ? 'live' : 'unavailable',
       airQuality: aqiResult ? 'live' : 'unavailable',
       PMD: pmd?.success ? 'live' : 'unavailable',
       NDMA: ndma?.success ? 'live' : 'unavailable',
