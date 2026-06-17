@@ -4,6 +4,7 @@ import { CITIES } from '../data/cities';
 import { reverseGeocode } from '../config/googleApi';
 import * as persistentCache from '../utils/persistentCache';
 import { saveLocationSnapshot } from '../utils/locationSnapshot';
+import { getPreciseLocationName, splitLocationLabel } from '../utils/preciseLocationName';
 import { registerNativePushToken } from '../services/pushRegistration';
 
 const DEFAULT_CITY = CITIES.find((c) => c.name === 'Lahore');
@@ -48,13 +49,20 @@ export function LocationProvider({ children }) {
       if (!forceFresh) {
         const cached = persistentCache.get(LOCATION_CACHE_NS, LOCATION_CACHE_KEY, LOCATION_CACHE_TTL);
         if (cached?.lat != null && cached?.lon != null) {
-          setLocation({ lat: cached.lat, lon: cached.lon });
-          setCity(cached.city || DEFAULT_CITY.name);
-          setRegion(cached.region ?? 'Pakistan');
+          const cachedLocation = { lat: cached.lat, lon: cached.lon };
+          const preciseLabel = cached.source === 'manual'
+            ? cached.city
+            : getPreciseLocationName(cachedLocation, [cached.city, cached.region].filter(Boolean).join(', '));
+          const preciseParts = splitLocationLabel(preciseLabel || cached.city || DEFAULT_CITY.name, cached.region ?? 'Pakistan');
+          const resolvedCached = { ...cached, city: preciseParts.city, region: preciseParts.region };
+          setLocation(cachedLocation);
+          setCity(resolvedCached.city);
+          setRegion(resolvedCached.region);
           setIsUsingDeviceLocation(cached.source !== 'manual');
-          saveLocationSnapshot(cached).catch(() => {});
+          persistentCache.set(LOCATION_CACHE_NS, LOCATION_CACHE_KEY, resolvedCached);
+          saveLocationSnapshot(resolvedCached).catch(() => {});
           setLoading(false);
-          return cached;
+          return resolvedCached;
         }
       }
 
@@ -81,11 +89,10 @@ export function LocationProvider({ children }) {
       setLocation(nextLocation);
 
       const friendly = await reverseGeocode(latitude, longitude);
-      // friendly may be "Area, City" or just "City" — extract primary city & region
-      const resolvedFull = friendly || findNearestCity(latitude, longitude).name;
-      const parts = resolvedFull.split(',').map((p) => p.trim()).filter(Boolean);
-      const resolvedCity = parts[0];
-      const resolvedRegion = parts.length >= 2 ? parts.slice(1).join(', ') : 'Pakistan';
+      // friendly may be "Area, City" or just "City"; upgrade broad city labels from precise coords.
+      const broadFallback = friendly || findNearestCity(latitude, longitude).name;
+      const preciseLabel = getPreciseLocationName(nextLocation, broadFallback);
+      const { city: resolvedCity, region: resolvedRegion } = splitLocationLabel(preciseLabel || broadFallback);
       setCity(resolvedCity);
       setRegion(resolvedRegion);
       setIsUsingDeviceLocation(true);

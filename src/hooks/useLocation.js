@@ -4,6 +4,7 @@ import { CITIES } from '../data/cities';
 import { reverseGeocode } from '../config/googleApi';
 import * as persistentCache from '../utils/persistentCache';
 import { saveLocationSnapshot } from '../utils/locationSnapshot';
+import { getPreciseLocationName } from '../utils/preciseLocationName';
 import { registerNativePushToken } from '../services/pushRegistration';
 
 const DEFAULT_CITY = CITIES.find((c) => c.name === 'Lahore');
@@ -47,12 +48,18 @@ export default function useLocation() {
       if (!forceFresh) {
         const cached = persistentCache.get(LOCATION_CACHE_NS, LOCATION_CACHE_KEY, LOCATION_CACHE_TTL);
         if (cached?.lat != null && cached?.lon != null) {
-          setLocation({ lat: cached.lat, lon: cached.lon });
-          setCity(cached.city || DEFAULT_CITY.name);
+          const cachedLocation = { lat: cached.lat, lon: cached.lon };
+          const preciseLabel = cached.source === 'manual'
+            ? cached.city
+            : getPreciseLocationName(cachedLocation, [cached.city, cached.region].filter(Boolean).join(', '));
+          const resolvedCached = { ...cached, city: preciseLabel || cached.city || DEFAULT_CITY.name };
+          setLocation(cachedLocation);
+          setCity(resolvedCached.city);
           setIsUsingDeviceLocation(cached.source !== 'manual');
-          saveLocationSnapshot(cached).catch(() => {});
+          persistentCache.set(LOCATION_CACHE_NS, LOCATION_CACHE_KEY, resolvedCached);
+          saveLocationSnapshot(resolvedCached).catch(() => {});
           setLoading(false);
-          return cached;
+          return resolvedCached;
         }
       }
 
@@ -83,7 +90,8 @@ export default function useLocation() {
       // Try Google reverse-geocoding for a friendly "Area, City" label.
       // Fall back to nearest known city if it fails.
       const friendly = await reverseGeocode(latitude, longitude);
-      const resolvedCity = friendly || findNearestCity(latitude, longitude).name;
+      const broadFallback = friendly || findNearestCity(latitude, longitude).name;
+      const resolvedCity = getPreciseLocationName(nextLocation, broadFallback) || broadFallback;
       setCity(resolvedCity);
       setIsUsingDeviceLocation(true);
       const resolved = { ...nextLocation, city: resolvedCity, source: 'device' };
