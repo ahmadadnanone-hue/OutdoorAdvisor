@@ -1,7 +1,8 @@
 const OUTDOOR_TERMS = [
   'weather', 'rain', 'storm', 'thunder', 'wind', 'fog', 'smog', 'aqi', 'air quality',
   'heat', 'cold', 'temperature', 'forecast', 'outdoor', 'outside', 'walk', 'run',
-  'running', 'cycle', 'cycling', 'football', 'cricket', 'golf', 'lunch', 'picnic',
+  'running', 'cycle', 'cycling', 'football', 'cricket', 'tennis', 'padel', 'badminton',
+  'basketball', 'yoga', 'gym', 'golf', 'lunch', 'picnic',
   'hike', 'hiking', 'camp', 'camping', 'trek', 'trekking', 'mountain', 'valley',
   'sightseeing', 'fishing', 'swimming', 'travel', 'trip', 'route', 'road', 'motorway', 'drive', 'driving',
   'go to', 'going to', 'visit', 'murree', 'multan', 'lahore', 'karachi', 'islamabad',
@@ -9,12 +10,17 @@ const OUTDOOR_TERMS = [
 ];
 
 const ROUTE_TERMS = ['route', 'road', 'motorway', 'drive', 'driving', 'travel', 'trip', 'going to', 'go to'];
-const NEARBY_TERMS = ['where', 'nearby', 'play', 'ground', 'park', 'lunch', 'restaurant', 'picnic', 'camp', 'camping', 'trail', 'hike'];
+const NEARBY_TERMS = ['where', 'nearby', 'play', 'court', 'club', 'ground', 'park', 'lunch', 'restaurant', 'picnic', 'camp', 'camping', 'trail', 'hike'];
 const ACTIVITY_TERMS = {
   camping: ['camp', 'camping', 'campsite'],
   hiking: ['hike', 'hiking', 'trek', 'trekking', 'trail'],
   football: ['football', 'soccer'],
   cricket: ['cricket'],
+  tennis: ['tennis', 'padel', 'padel tennis'],
+  badminton: ['badminton'],
+  basketball: ['basketball'],
+  yoga: ['yoga'],
+  gym: ['gym', 'workout', 'fitness'],
   cycling: ['cycle', 'cycling', 'bike', 'biking'],
   running: ['run', 'running', 'jog'],
   picnic: ['picnic'],

@@ -20,11 +20,13 @@ test('recognizes supported outdoor questions and rejects unrelated questions', (
   assert.equal(isOutdoorQuestion('Should I go to Murree tomorrow evening?'), true);
   assert.equal(isOutdoorQuestion('Where can I play football right now?'), true);
   assert.equal(isOutdoorQuestion('Where can I go camping in the mountains?'), true);
+  assert.equal(isOutdoorQuestion('Where to play tennis now?'), true);
   assert.equal(isOutdoorQuestion('Write me a poem about accounting'), false);
 });
 
 test('classifies discovery, activity, trip, and forecast questions', () => {
   assert.equal(classifyAskIntent('Where can I go camping in the mountains?'), 'nearby_discovery');
+  assert.equal(classifyAskIntent('Where to play tennis now?'), 'nearby_discovery');
   assert.equal(classifyAskIntent('Can I play football tonight?'), 'activity_advice');
   assert.equal(classifyAskIntent('Should I go to Skardu tomorrow?'), 'destination_trip');
   assert.equal(classifyAskIntent('What is the weather next week?'), 'simple_weather');
