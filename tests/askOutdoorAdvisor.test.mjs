@@ -6,6 +6,7 @@ import {
   classifyAskIntent,
   deriveAskVerdict,
   extractDestination,
+  inferRouteStopType,
   isAskAdvisoryFresh,
   isOutdoorQuestion,
   inferNhmpRoutePlan,
@@ -14,6 +15,7 @@ import {
   parseAskTimeWindow,
   wantsNearbyEvidence,
   wantsRouteEvidence,
+  wantsRouteStopEvidence,
 } from '../api/_lib/askOutdoorAdvisor.js';
 
 test('recognizes supported outdoor questions and rejects unrelated questions', () => {
@@ -21,6 +23,7 @@ test('recognizes supported outdoor questions and rejects unrelated questions', (
   assert.equal(isOutdoorQuestion('Where can I play football right now?'), true);
   assert.equal(isOutdoorQuestion('Where can I go camping in the mountains?'), true);
   assert.equal(isOutdoorQuestion('Where to play tennis now?'), true);
+  assert.equal(isOutdoorQuestion('I want to go to Muree. Tell me best place to eat midway.'), true);
   assert.equal(isOutdoorQuestion('Write me a poem about accounting'), false);
 });
 
@@ -29,6 +32,8 @@ test('classifies discovery, activity, trip, and forecast questions', () => {
   assert.equal(classifyAskIntent('Where to play tennis now?'), 'nearby_discovery');
   assert.equal(classifyAskIntent('Can I play football tonight?'), 'activity_advice');
   assert.equal(classifyAskIntent('Should I go to Skardu tomorrow?'), 'destination_trip');
+  assert.equal(classifyAskIntent('I want to go to Muree. Tell me best place to eat midway.'), 'route_stop');
+  assert.equal(classifyAskIntent('Tell me best place to eat midway to Murree.'), 'route_stop');
   assert.equal(classifyAskIntent('What is the weather next week?'), 'simple_weather');
 });
 
@@ -48,6 +53,8 @@ test('parses requested forecast windows', () => {
 
 test('extracts travel and forecast destinations', () => {
   assert.equal(extractDestination('Should I go to Murree tomorrow evening?'), 'Murree');
+  assert.equal(extractDestination('I want to go to Muree. Tell me best place to eat midway.'), 'Murree');
+  assert.equal(extractDestination('Tell me best place to eat midway to Murree.'), 'Murree');
   assert.equal(extractDestination('What is the weather in Multan tomorrow?'), 'Multan');
   assert.equal(extractDestination('Where can I play football right now?'), '');
 });
@@ -55,6 +62,8 @@ test('extracts travel and forecast destinations', () => {
 test('detects evidence requirements', () => {
   assert.equal(wantsRouteEvidence('I am going to Multan now. Check the motorway.'), true);
   assert.equal(wantsNearbyEvidence('Where can I play football right now?'), true);
+  assert.equal(wantsRouteStopEvidence('Tell me the best place to eat midway to Murree.'), true);
+  assert.equal(inferRouteStopType('Tell me the best cafe on the way to Murree.'), 'cafe');
   assert.equal(wantsRouteEvidence('Will it rain tomorrow?'), false);
 });
 
@@ -165,6 +174,28 @@ test('discovery fallback recommends named places instead of current-condition bo
   });
   assert.match(result.headline, /shortlist/i);
   assert.match(result.bullets[0], /Upper Kachura Lake/);
+  assert.doesNotMatch(result.answer, /currently has/i);
+});
+
+test('route-stop fallback recommends midpoint food options', () => {
+  const result = buildAskFallback({
+    context: { intent: 'route_stop', routeStopType: 'food', timeWindow: { label: 'today' } },
+    verdict: 'go',
+    targetName: 'Murree, Pakistan',
+    weather: { feelsLike: 26, rainNext3h: 10 },
+    routeClarity: {
+      status: 'clear',
+      summary: 'N75 reports Road & Weather Clear in the latest NHMP feed.',
+    },
+    googleRoute: { distanceText: '65 km', durationText: '1h 55m' },
+    routeStopPoint: { name: 'route midpoint', lat: 33.75, lon: 73.2 },
+    nearbyPlaces: [
+      { name: 'Highway Food Court', rating: 4.3, address: 'Murree Expressway' },
+      { name: 'Hill View Cafe', rating: 4.1, address: 'Lower Topa Road' },
+    ],
+  });
+  assert.match(result.headline, /midway food/i);
+  assert.match(result.bullets.join(' '), /Highway Food Court/);
   assert.doesNotMatch(result.answer, /currently has/i);
 });
 

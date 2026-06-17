@@ -363,6 +363,17 @@ function selectRouteSamplePoints(googleRoute, origin, destination) {
   ];
 }
 
+function selectRouteStopPoint(googleRoute, origin, destination) {
+  const samples = selectRouteSamplePoints(googleRoute, origin, destination);
+  const midpoint = samples[Math.floor(samples.length / 2)];
+  if (midpoint) return { ...midpoint, name: 'route midpoint' };
+  return {
+    name: 'approximate route midpoint',
+    lat: (Number(origin.lat) + Number(destination.lat)) / 2,
+    lon: (Number(origin.lon) + Number(destination.lon)) / 2,
+  };
+}
+
 function summarizeAskWeather(meteo) {
   if (meteo?.current && Array.isArray(meteo?.hourly) && !meteo?.hourly?.time) {
     const current = meteo.current;
@@ -590,8 +601,8 @@ async function buildAskEvidence(req, body, googleKey) {
   const target = destination || origin;
   const localSnapshot = !destination ? sanitizeClientWeatherSnapshot(body.localWeatherSnapshot, origin) : null;
   const originUrl = getApiOrigin(req);
-  const routeRequested = context.intent === 'destination_trip' && Boolean(destination);
-  const nearbyQuery = context.intent === 'nearby_discovery' || context.intent === 'activity_advice'
+  const routeRequested = ['destination_trip', 'route_stop'].includes(context.intent) && Boolean(destination);
+  const initialNearbyQuery = context.intent === 'nearby_discovery' || context.intent === 'activity_advice'
     ? question
     : context.intent === 'destination_trip' && destinationQuery
       ? `outdoor attractions in ${destinationQuery}, Pakistan`
@@ -607,10 +618,20 @@ async function buildAskEvidence(req, body, googleKey) {
   const weather = summarizeAskWeather(meteo);
   const forecastWindow = selectAskForecastWindow(weather, context.timeWindow);
   const bestActivityWindow = context.activity ? findBestActivityWindow(weather, context.activity) : null;
-  const [googleRoute, nearbyPlaces] = await Promise.all([
-    routeRequested ? fetchGoogleRoute(origin, destination, googleKey) : Promise.resolve(null),
-    nearbyQuery ? fetchNearbyPlaces(target.lat, target.lon, nearbyQuery, googleKey) : Promise.resolve([]),
-  ]);
+  const googleRoute = routeRequested ? await fetchGoogleRoute(origin, destination, googleKey) : null;
+  const routeStopPoint = context.intent === 'route_stop' && destination
+    ? selectRouteStopPoint(googleRoute, origin, destination)
+    : null;
+  const routeStopQuery = context.intent === 'route_stop'
+    ? context.routeStopType === 'cafe'
+      ? 'cafes tea coffee'
+      : 'restaurants food dhaba'
+    : '';
+  const nearbyQuery = routeStopQuery || initialNearbyQuery;
+  const nearbyPoint = routeStopPoint || target;
+  const nearbyPlaces = nearbyQuery
+    ? await fetchNearbyPlaces(nearbyPoint.lat, nearbyPoint.lon, nearbyQuery, googleKey)
+    : [];
 
   const terms = [destinationQuery, target.name, origin.name];
   const pmdMatches = matchOfficialItems(pmd?.alerts, terms, officialAlertText).slice(0, 3).map((item) => ({
@@ -756,6 +777,7 @@ async function buildAskEvidence(req, body, googleKey) {
     routeWeather,
     nearbyPlaces,
     discoveryOptions,
+    routeStopPoint,
     sourceStatus: {
       forecast: localSnapshot ? 'cached' : meteo ? 'live' : 'unavailable',
       airQuality: aqiResult ? 'live' : 'unavailable',
@@ -1095,6 +1117,7 @@ function isSpecificAskResult(result, evidence) {
     evidence?.context?.activity,
     String(evidence?.target?.name || '').split(/[,\s]/)[0],
     ...(evidence?.routePlan?.codes || []),
+    evidence?.routeStopPoint?.name,
     ...(evidence?.nearbyPlaces || []).slice(0, 3).map((place) => String(place.name || '').split(/\s/)[0]),
     ...(evidence?.discoveryOptions || []).slice(0, 3).map((place) => String(place.name || '').split(/\s/)[0]),
   ].map((value) => String(value || '').trim().toLowerCase()).filter((value) => value.length >= 2);
@@ -1152,6 +1175,7 @@ export default async function handler(req, res) {
       officialMatches: evidence.officialMatches,
       nearbyPlaces: evidence.nearbyPlaces,
       discoveryOptions: evidence.discoveryOptions,
+      routeStopPoint: evidence.routeStopPoint,
     });
 
     if (!geminiKey) return sendJson(res, 200, { ...fallback, evidence });

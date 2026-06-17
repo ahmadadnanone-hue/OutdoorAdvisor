@@ -2,7 +2,9 @@ const OUTDOOR_TERMS = [
   'weather', 'rain', 'storm', 'thunder', 'wind', 'fog', 'smog', 'aqi', 'air quality',
   'heat', 'cold', 'temperature', 'forecast', 'outdoor', 'outside', 'walk', 'run',
   'running', 'cycle', 'cycling', 'football', 'cricket', 'tennis', 'padel', 'badminton',
-  'basketball', 'yoga', 'gym', 'golf', 'lunch', 'picnic',
+  'basketball', 'yoga', 'gym', 'golf', 'lunch', 'dinner', 'breakfast', 'eat', 'food',
+  'restaurant', 'cafe', 'coffee', 'tea', 'dhaba', 'midway', 'halfway', 'on the way',
+  'along the way', 'en route', 'stopover', 'rest stop', 'picnic',
   'hike', 'hiking', 'camp', 'camping', 'trek', 'trekking', 'mountain', 'valley',
   'sightseeing', 'fishing', 'swimming', 'travel', 'trip', 'route', 'road', 'motorway', 'drive', 'driving',
   'go to', 'going to', 'visit', 'murree', 'multan', 'lahore', 'karachi', 'islamabad',
@@ -10,7 +12,8 @@ const OUTDOOR_TERMS = [
 ];
 
 const ROUTE_TERMS = ['route', 'road', 'motorway', 'drive', 'driving', 'travel', 'trip', 'going to', 'go to'];
-const NEARBY_TERMS = ['where', 'nearby', 'play', 'court', 'club', 'ground', 'park', 'lunch', 'restaurant', 'picnic', 'camp', 'camping', 'trail', 'hike'];
+const NEARBY_TERMS = ['where', 'nearby', 'play', 'court', 'club', 'ground', 'park', 'lunch', 'dinner', 'breakfast', 'eat', 'food', 'restaurant', 'cafe', 'coffee', 'dhaba', 'midway', 'halfway', 'on the way', 'along the way', 'en route', 'stopover', 'rest stop', 'picnic', 'camp', 'camping', 'trail', 'hike'];
+const ROUTE_STOP_TERMS = ['midway', 'mid-way', 'halfway', 'half-way', 'on the way', 'along the way', 'en route', 'stopover', 'stop over', 'rest stop', 'eat', 'food', 'restaurant', 'lunch', 'dinner', 'breakfast', 'cafe', 'coffee', 'tea', 'dhaba'];
 const ACTIVITY_TERMS = {
   camping: ['camp', 'camping', 'campsite'],
   hiking: ['hike', 'hiking', 'trek', 'trekking', 'trail'],
@@ -24,7 +27,7 @@ const ACTIVITY_TERMS = {
   cycling: ['cycle', 'cycling', 'bike', 'biking'],
   running: ['run', 'running', 'jog'],
   picnic: ['picnic'],
-  outdoor_dining: ['lunch', 'dinner', 'eat', 'restaurant', 'dining'],
+  outdoor_dining: ['lunch', 'dinner', 'breakfast', 'eat', 'food', 'restaurant', 'dining', 'cafe', 'coffee', 'tea', 'dhaba'],
   sightseeing: ['sightseeing', 'visit', 'tour'],
   fishing: ['fish', 'fishing'],
   swimming: ['swim', 'swimming'],
@@ -79,6 +82,23 @@ export function wantsNearbyEvidence(question) {
   return NEARBY_TERMS.some((term) => text.includes(term));
 }
 
+export function wantsRouteStopEvidence(question) {
+  const text = normalizeQuestion(question).toLowerCase();
+  return ROUTE_STOP_TERMS.some((term) => containsTerm(text, term));
+}
+
+export function inferRouteStopType(question, previousContext = {}) {
+  const text = normalizeQuestion(question).toLowerCase();
+  if (/\bcoffee|cafe|tea\b/.test(text)) return 'cafe';
+  if (/\brest\s*stop|stopover|stop\s+over\b/.test(text)) return 'rest_stop';
+  if (/\bbreakfast\b/.test(text)) return 'breakfast';
+  if (/\bdinner\b/.test(text)) return 'dinner';
+  if (/\blunch\b/.test(text)) return 'lunch';
+  if (/\bdhaba\b/.test(text)) return 'dhaba';
+  if (/\beat|food|restaurant|dining\b/.test(text)) return 'food';
+  return previousContext.routeStopType || '';
+}
+
 function containsTerm(text, term) {
   const escaped = String(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
   return new RegExp(`(?:^|\\b)${escaped}(?:\\b|$)`, 'i').test(text);
@@ -113,11 +133,13 @@ export function classifyAskIntent(question, previousContext = {}) {
   const activity = extractAskActivity(question, previousContext);
   const destination = extractDestination(question) || previousContext.destinationQuery || '';
   const asksWhere = /\bwhere\b|\brecommend\b|\bsuggest\b|\bfind\b|\bbest place\b/.test(text);
-  const routeRequested = wantsRouteEvidence(question) || Boolean(destination && /\bgo\b|\bvisit\b|\btrip\b|\btravel\b/.test(text));
+  const routeRequested = wantsRouteEvidence(question) || wantsRouteStopEvidence(question) || Boolean(destination && /\bgo\b|\bvisit\b|\btrip\b|\btravel\b/.test(text));
   const weatherOnly = /\bweather\b|\brain\b|\bforecast\b|\btemperature\b|\bwind\b|\bfog\b|\bsmog\b|\baqi\b/.test(text);
 
+  if (destination && routeRequested && wantsRouteStopEvidence(question)) return 'route_stop';
+  if (destination && previousContext.intent === 'route_stop' && wantsRouteStopEvidence(question)) return 'route_stop';
   if (asksWhere && activity) return 'nearby_discovery';
-  if (destination && (routeRequested || previousContext.intent === 'destination_trip')) return 'destination_trip';
+  if (destination && (routeRequested || ['destination_trip', 'route_stop'].includes(previousContext.intent))) return 'destination_trip';
   if (activity) return 'activity_advice';
   if (routeRequested) return 'destination_trip';
   if (weatherOnly) return 'simple_weather';
@@ -128,8 +150,9 @@ export function buildAskContext(question, previousContext = {}) {
   const destinationQuery = extractDestination(question) || previousContext.destinationQuery || '';
   const activity = extractAskActivity(question, previousContext);
   const timeWindow = parseAskTimeWindow(question, previousContext);
-  const intent = classifyAskIntent(question, { ...previousContext, destinationQuery, activity, timeWindow });
-  return { intent, destinationQuery, activity, timeWindow };
+  const routeStopType = inferRouteStopType(question, previousContext);
+  const intent = classifyAskIntent(question, { ...previousContext, destinationQuery, activity, timeWindow, routeStopType });
+  return { intent, destinationQuery, activity, timeWindow, routeStopType };
 }
 
 function distanceKm(a, b) {
@@ -205,15 +228,22 @@ export function extractDestination(question) {
   const text = normalizeQuestion(question);
   const patterns = [
     /(?:going|driving|travel(?:ling)?|go|drive|trip)\s+to\s+([a-z][a-z .'-]{2,40}?)(?=\s+(?:tomorrow|today|tonight|this|right|now|on|at|in|by|via|from|for|after|before)|[?.!,]|$)/i,
+    /(?:midway|mid-way|halfway|half-way|on the way|along the way|en route|stopover|stop over|rest stop|eat|food|restaurant|lunch|dinner|breakfast|cafe|coffee|dhaba).*?\bto\s+([a-z][a-z .'-]{2,40}?)(?=\s+(?:tomorrow|today|tonight|this|right|now|on|at|in|by|via|from|for|after|before)|[?.!,]|$)/i,
     /(?:weather|forecast|rain|conditions?)\s+(?:for|in|at)\s+([a-z][a-z .'-]{2,40}?)(?=\s+(?:tomorrow|today|tonight|this|right|now|on|at|in|by|via|from|for|after|before)|[?.!,]|$)/i,
     /(?:visit|reach)\s+([a-z][a-z .'-]{2,40}?)(?=\s+(?:tomorrow|today|tonight|this|right|now|on|at|in|by|via|from|for|after|before)|[?.!,]|$)/i,
   ];
 
   for (const pattern of patterns) {
     const match = text.match(pattern);
-    if (match?.[1]) return match[1].trim();
+    if (match?.[1]) return normalizeDestinationAlias(match[1].trim());
   }
   return '';
+}
+
+function normalizeDestinationAlias(value) {
+  const cleaned = String(value || '').replace(/\s+/g, ' ').trim();
+  if (/^muree$/i.test(cleaned)) return 'Murree';
+  return cleaned;
 }
 
 function containsHazard(text, pattern) {
@@ -296,6 +326,7 @@ export function buildAskFallback({
   officialMatches,
   nearbyPlaces,
   discoveryOptions,
+  routeStopPoint,
 }) {
   const verdictLead = verdict === 'avoid'
     ? 'Avoid this plan for now.'
@@ -336,6 +367,36 @@ export function buildAskFallback({
 
   const intent = context?.intent || 'general_outdoor';
   const timeLabel = context?.timeWindow?.label || 'right now';
+  if (intent === 'route_stop') {
+    const options = (nearbyPlaces || []).slice(0, 4);
+    return {
+      provider: 'fallback',
+      verdict: routeClarity?.status === 'warning' ? 'caution' : (options.length ? verdict : 'plan'),
+      headline: options.length ? 'Midway food options' : 'Midway stop needs a route check',
+      answer: options.length
+        ? `For ${targetName || 'your destination'}, I checked the driving route and food options near ${routeStopPoint?.name || 'the route midpoint'}.`
+        : `I could not verify food stops near the route midpoint yet. Check the route first, then search around ${routeStopPoint?.name || 'the midpoint'} before leaving.`,
+      bullets: [
+        googleRoute?.durationText ? `${googleRoute.distanceText} · about ${googleRoute.durationText}.` : null,
+        routeClarity?.summary,
+        ...options.map((option) => `${option.name}${option.rating ? ` · ${option.rating}★` : ''}${option.address ? ` · ${option.address}` : ''}`),
+      ].filter(Boolean).slice(0, 4),
+      sections: [
+        {
+          title: 'Food stops',
+          items: options.map((option) => `${option.name}${option.rating ? ` · ${option.rating}★` : ''}`).slice(0, 4),
+        },
+        {
+          title: 'Journey',
+          items: [
+            googleRoute?.durationText ? `${googleRoute.distanceText} · about ${googleRoute.durationText}` : null,
+            routeClarity?.summary,
+          ].filter(Boolean),
+        },
+      ].filter((section) => section.items.length),
+    };
+  }
+
   if (intent === 'nearby_discovery') {
     const options = (discoveryOptions?.length ? discoveryOptions : nearbyPlaces || []).slice(0, 4);
     return {
@@ -397,6 +458,7 @@ Cool destination weather is not automatically bad: people may travel specificall
 Use only fresh/current advisories in the supplied evidence. For route questions, clearly state whether NHMP has a relevant warning, no relevant warning was found, or live route clarity is unavailable.
 
 Tailor the answer to EVIDENCE.context.intent. Simple weather questions may be brief. Activity, discovery, and trip questions must give specific recommendations and explicitly use the relevant places, route, forecast window, and official alerts.
+For route_stop intent, recommend named food/cafe/rest options near EVIDENCE.routeStopPoint or the supplied nearbyPlaces. Do not substitute destination-city restaurants unless no midpoint places are available.
 Do not repeat generic phrases such as "recheck before leaving" as the main answer. If named places, route codes, route duration, best activity window, or specific alerts exist, mention them.
 Follow-up questions inherit destination/activity context from EVIDENCE.context.
 
