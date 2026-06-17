@@ -65,11 +65,11 @@ Important: Weather, air quality, pollen, and road-condition data is provided for
 
 ### Keywords
 
-air,quality,pollen,allergy,forecast,UV,Lahore,Islamabad,Karachi,Murree,motorway,fog,traffic,heat
+air,quality,pollen,allergy,forecast,UV,Lahore,Islamabad,Karachi,Murree,motorway,traffic,heat,outdoor
 
-Character count: 96 / 100
+Character count: 100 / 100
 
-> ASO note (2026-05-31): rewritten to remove words already covered by the title (`outdoor`, `advisor`, `aqi`, `smog`), subtitle (`pakistan`, `weather`, `travel`), and the Weather category — Apple forms compound queries across all fields, so duplicated words are wasted. Singular forms only (Apple auto-matches plurals). Dropped low-volume branded acronyms `PMD`/`NHMP` in favor of higher-volume `air`/`quality`/`allergy`/`forecast`/`UV`/`fog`/`traffic`/`heat`. Total unique indexed terms across title+subtitle+keywords: 21.
+> ASO note (2026-06-17): added explicit `outdoor` per product direction. To keep within Apple's 100-character keyword limit, dropped `fog` from the keyword field; fog remains covered by app copy, screenshots, and travel/advisory content. Singular forms only (Apple auto-matches plurals). Dropped low-volume branded acronyms `PMD`/`NHMP` in favor of higher-volume `air`/`quality`/`allergy`/`forecast`/`UV`/`traffic`/`heat` plus explicit `outdoor`.
 
 ### Categories
 
