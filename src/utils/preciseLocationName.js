@@ -29,7 +29,7 @@ function isBroadCityLabel(label, city) {
   return new RegExp(`^${city}$`, 'i').test(primary) && (!rest || /^pakistan$/i.test(rest));
 }
 
-export function getNearestKnownArea(location, maxDistanceKm = 12) {
+export function getNearestKnownArea(location, maxDistanceKm = 2.5) {
   const nearest = AREAS
     .map((area) => ({ ...area, distance: distanceKm(location, area) }))
     .sort((a, b) => a.distance - b.distance)[0];

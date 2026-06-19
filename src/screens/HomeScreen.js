@@ -188,7 +188,16 @@ export default function HomeScreen({ navigation, route }) {
     return () => {
       cancelled = true;
     };
-  }, [health.steps, health.distanceKm, health.calories, aqi, weatherCurrent?.temp, weatherCurrent?.weatherCode]);
+  }, [
+    health.steps,
+    health.distanceKm,
+    health.calories,
+    aqi,
+    weatherCurrent?.temp,
+    weatherCurrent?.feelsLike,
+    weatherCurrent?.windSpeed,
+    weatherCurrent?.weatherCode,
+  ]);
 
   // ── Pull-to-refresh ───────────────────────────────────────────────────────
   const onRefresh = useCallback(async () => {

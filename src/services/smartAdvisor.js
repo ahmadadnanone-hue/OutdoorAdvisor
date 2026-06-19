@@ -39,6 +39,16 @@ function isRainRightNow(weather) {
   return code != null && [51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code);
 }
 
+function isHeavyRainRightNow(weather) {
+  const code = weather?.current?.weatherCode;
+  return code != null && [65, 82].includes(code);
+}
+
+function isThunderstormRightNow(weather) {
+  const code = weather?.current?.weatherCode;
+  return code != null && [95, 96, 99].includes(code);
+}
+
 function isSwimmingWeather(weather) {
   const feelsLike = weather?.current?.feelsLike ?? weather?.current?.temp ?? null;
   return feelsLike != null && feelsLike >= 34;
@@ -50,8 +60,10 @@ function isGoodWalkWeather(weather) {
 }
 
 function computeOutdoorScore({ steps, aqi, weather }) {
-  const temp = weather?.current?.temp ?? null;
+  const temp = weather?.current?.feelsLike ?? weather?.current?.temp ?? null;
   const isRain = isRainRightNow(weather);
+  const isHeavyRain = isHeavyRainRightNow(weather);
+  const isStorm = isThunderstormRightNow(weather);
 
   let aqiScore = 0;
   if (aqi <= 50) aqiScore = 4;
@@ -60,9 +72,12 @@ function computeOutdoorScore({ steps, aqi, weather }) {
   else if (aqi <= 200) aqiScore = 1;
 
   let weatherScore = 0;
-  if (!isRain && temp != null && temp >= 18 && temp <= 32) weatherScore = 4;
-  else if (!isRain && temp != null && temp >= 15 && temp <= 38) weatherScore = 3;
-  else if (!isRain && temp != null) weatherScore = 2;
+  if (isStorm) weatherScore = 0;
+  else if (isHeavyRain) weatherScore = 0.5;
+  else if (isRain) weatherScore = 1;
+  else if (temp != null && temp >= 18 && temp <= 32) weatherScore = 4;
+  else if (temp != null && temp >= 15 && temp <= 38) weatherScore = 3;
+  else if (temp != null) weatherScore = 2;
   else weatherScore = 1;
 
   let activityScore = 0;
@@ -70,7 +85,11 @@ function computeOutdoorScore({ steps, aqi, weather }) {
   else if (steps < 3000) activityScore = 1.5;
   else if (steps < 5000) activityScore = 1;
 
-  return Math.max(0, Math.min(10, Math.round((aqiScore + weatherScore + activityScore) * 10) / 10));
+  const raw = Math.max(0, Math.min(10, Math.round((aqiScore + weatherScore + activityScore) * 10) / 10));
+  if (isStorm) return Math.min(raw, 2);
+  if (isHeavyRain) return Math.min(raw, 4);
+  if (isRain) return Math.min(raw, 6);
+  return raw;
 }
 
 function buildWalkNudgeMessage(steps, weather, aqi) {
@@ -129,7 +148,7 @@ function buildAlternativeNudgeMessage(weather, aqi) {
 function buildSmartSuggestion({ steps, weather, aqi }) {
   if (steps >= DAILY_STEP_GOAL) return null;
 
-  const walkWindow = aqi != null && aqi < 100 && !isRainRightNow(weather) && isGoodWalkWeather(weather);
+  const walkWindow = aqi != null && aqi < 100 && !isThunderstormRightNow(weather) && !isRainRightNow(weather) && isGoodWalkWeather(weather);
   if (walkWindow) {
     return {
       ...buildWalkNudgeMessage(steps, weather, aqi),
