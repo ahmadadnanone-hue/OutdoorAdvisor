@@ -51,7 +51,30 @@ test('sudden rain candidate explains a sharp probability jump', () => {
     now: NOW,
   });
   assert.equal(candidates[0].type, 'sudden-rain');
+  assert.equal(candidates[0].severity, 'important');
   assert.match(candidates[0].body, /20% to 75%/);
+});
+
+test('temperature surge only notifies after crossing the heat threshold', () => {
+  const base = {
+    device: { preferences: { heatAlerts: true }, thresholds: { heatAlert: 42 } },
+    aqi: null,
+    city: 'Lahore',
+    now: NOW,
+  };
+  assert.deepEqual(buildSuddenWeatherCandidates({
+    ...base,
+    wx: { feelsLike: 39, hourly: [] },
+    previous: { at: NOW.getTime() - 20 * 60 * 1000, feelsLike: 32 },
+  }), []);
+
+  const candidates = buildSuddenWeatherCandidates({
+    ...base,
+    wx: { feelsLike: 43, hourly: [] },
+    previous: { at: NOW.getTime() - 20 * 60 * 1000, feelsLike: 35 },
+  });
+  assert.equal(candidates[0].type, 'temperature-surge');
+  assert.equal(candidates[0].severity, 'important');
 });
 
 test('old snapshots do not trigger sudden-change alerts', () => {

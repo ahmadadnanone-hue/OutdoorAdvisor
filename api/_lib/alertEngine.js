@@ -2,9 +2,8 @@
 //
 // Pipeline: shared feeds → per-device snapshot → rules → dispatcher.
 //
-// 1. Shared feeds (PMD CAP, NDMA advisories, NHMP route state, national
-//    overview) are fetched at most once per cron run, with their own
-//    refresh throttles.
+// 1. Shared feeds (PMD CAP, NDMA advisories, NHMP route state) are fetched at
+//    most once per cron run, with their own refresh throttles.
 // 2. Each device gets ONE weather snapshot and ONE AQI snapshot per run,
 //    shared across devices pinned to the same rounded coordinates.
 // 3. Every rule evaluates that snapshot and emits candidate notifications
@@ -24,7 +23,7 @@ import {
 const ALERT_STATE_KEY = 'push:alert-engine:state';
 const PMD_RSS_URL = 'https://cap-sources.s3.amazonaws.com/pk-pmd-en/rss.xml';
 
-const NON_CRITICAL_DAILY_LIMIT = 2;
+const NON_CRITICAL_DAILY_LIMIT = 1;
 const MAX_CRITICALS_PER_RUN = 3;
 const QUIET_HOURS = { start: 22, end: 6 }; // device-local; criticals bypass
 const NDMA_CHECK_INTERVAL_MS = 60 * 60 * 1000;
@@ -153,15 +152,6 @@ async function loadSharedFeeds(devices, state, { mode, now }) {
     }
   }
 
-  // National overview only when at least one morning brief is due.
-  const briefDue = devices.some((device) =>
-    device.preferences?.dailySummary !== false &&
-    device.location?.lat != null &&
-    isWindowDue(state, device, MORNING_BRIEF_WINDOW, now));
-  if (briefDue) {
-    shared.nationalOverview = await fetchPakistanMorningOverview();
-  }
-
   return shared;
 }
 
@@ -179,16 +169,14 @@ async function buildDeviceContext(device, caches, shared, state, now) {
   const needsWeather = hasLocation && (
     prefs.rainAlerts !== false || prefs.thunderstormAlerts !== false ||
     prefs.windAlerts !== false || prefs.heatAlerts !== false ||
-    prefs.coldAlerts !== false || prefs.fogWarnings !== false ||
+    prefs.fogWarnings !== false ||
     prefs.smogAlerts !== false ||
-    prefs.dailySummary !== false || prefs.eveningPlanner !== false ||
-    prefs.goodWindowAlerts !== false
+    prefs.severeAqiWarnings !== false
   );
   const needsAqi = hasLocation && (
-    prefs.severeAqiWarnings !== false || prefs.dailySummary !== false ||
-    prefs.goodWindowAlerts !== false || prefs.smogAlerts !== false
+    prefs.severeAqiWarnings !== false || prefs.smogAlerts !== false
   );
-  const needsPollen = hasLocation && device.premium === true && prefs.pollenAlerts === true;
+  const needsPollen = false;
 
   let wx = null;
   let aqi = null;
@@ -224,7 +212,7 @@ async function buildDeviceContext(device, caches, shared, state, now) {
 //   cooldownKey, cooldownMs, countsTowardCap, brief }
 function evaluateRules(device, ctx, shared, state, now) {
   const candidates = [];
-  const { prefs, wx, aqi, pollen, day, localHour } = ctx;
+  const { prefs, wx, aqi, day } = ctx;
   const city = getDeviceLocationLabel(device);
   const token = device.expoPushToken;
   const previous = state.weatherSnapshots?.[token] || null;
@@ -285,6 +273,7 @@ function evaluateRules(device, ctx, shared, state, now) {
   if (device.premium === true && prefs.motorwayAlerts !== false && device.motorwaySubscriptions) {
     for (const change of shared.nhmpChanges || []) {
       if (!device.motorwaySubscriptions[change.routeId]) continue;
+      if (change.type !== 'closed') continue;
       const copy = buildMotorwayCopy(change);
       const isClosure = change.type === 'closed';
       candidates.push({
@@ -367,8 +356,8 @@ function evaluateRules(device, ctx, shared, state, now) {
       });
     }
 
-    // 7. Rain — heavy is critical, light is important. Storm supersedes both.
-    if (prefs.rainAlerts !== false && !storm && isRaining(wx)) {
+    // 7. Heavy rain only. Light rain is visible in-app but no longer pushed.
+    if (prefs.rainAlerts !== false && !storm && isHeavyRain(wx)) {
       const heavy = isHeavyRain(wx);
       const copy = buildRainCopy(city, heavy, wx.precipitation ?? null);
       candidates.push({
@@ -412,92 +401,35 @@ function evaluateRules(device, ctx, shared, state, now) {
       }
     }
 
-    // 9. Cold snap (important)
-    if (prefs.coldAlerts !== false && feels != null) {
-      const coldThreshold = Number(device.thresholds?.coldAlert ?? 5);
-      if (feels <= coldThreshold) {
-        candidates.push({
-          type: 'cold-snap',
-          severity: 'important',
-          decision: 'caution',
-          title: `Cold snap in ${city}`,
-          body: withDecision('caution', `Feels like ${Math.round(feels)}°C. Layer up before heading out, keep outdoor sessions short, and watch for icy patches early in the day.`),
-          category: 'Weather',
-          source: 'weather-cold',
-          url: 'https://outdooradvisor.app',
-          data: { feelsLike: feels, threshold: coldThreshold },
-          cooldownKey: 'cold',
-          cooldownMs: 12 * 60 * 60 * 1000,
-        });
-      }
-    }
-
-    // 10. Wind — severe is critical, threshold-crossing is important
+    // 9. Wind — push only severe wind; ordinary breezy windows stay in-app.
     if (prefs.windAlerts !== false) {
       const windThreshold = Number(device.thresholds?.windAlert || 60);
       if (isWindy(wx, windThreshold)) {
         const gusts = Math.round(wx.windGusts);
         const speed = Math.round(wx.windSpeed);
         const severe = gusts >= 80 || speed >= 70;
-        const copy = buildWindCopy(city, speed, gusts, severe);
-        candidates.push({
-          type: 'wind',
-          severity: severe ? 'critical' : 'important',
-          decision: severe ? 'avoid' : 'caution',
-          title: copy.title,
-          body: copy.body,
-          category: 'Wind',
-          source: 'weather-wind',
-          url: 'https://outdooradvisor.app',
-          data: { windSpeed: speed, windGusts: gusts },
-          cooldownKey: 'wind',
-          cooldownMs: 3 * 60 * 60 * 1000,
-        });
+        if (!severe) {
+          // Sudden wind strengthening is handled separately below.
+        } else {
+          const copy = buildWindCopy(city, speed, gusts, severe);
+          candidates.push({
+            type: 'wind',
+            severity: 'critical',
+            decision: 'avoid',
+            title: copy.title,
+            body: copy.body,
+            category: 'Wind',
+            source: 'weather-wind',
+            url: 'https://outdooradvisor.app',
+            data: { windSpeed: speed, windGusts: gusts },
+            cooldownKey: 'wind',
+            cooldownMs: 3 * 60 * 60 * 1000,
+          });
+        }
       }
     }
 
-    // 11. Local fog (important) — driving/visibility hazard at the pin
-    if (prefs.fogWarnings !== false && isFoggy(wx)) {
-      candidates.push({
-        type: 'fog',
-        severity: 'important',
-        decision: 'caution',
-        title: `Fog reducing visibility near ${city}`,
-        body: withDecision('caution', 'Fog or dense haze is active around your pin. Delay non-essential driving, use low beams and fog lights, and leave extra following distance.'),
-        category: 'Weather',
-        source: 'weather-fog',
-        url: 'https://outdooradvisor.app',
-        data: { weatherCode: wx.weatherCode, conditionCode: wx.conditionCode, visibility: wx.visibility ?? null },
-        cooldownKey: 'fog',
-        cooldownMs: 6 * 60 * 60 * 1000,
-      });
-    }
-
-    // 12. Rain expected soon (helpful) — only when it is not already raining
-    if (prefs.rainAlerts !== false && !storm && !isRaining(wx)) {
-      const rainSoon = getRainSoonSignal(wx, {
-        now,
-        probabilityThreshold: Number(device.thresholds?.rainProbabilityAlert || DEFAULT_RAIN_PROBABILITY),
-        leadHours: Number(device.thresholds?.rainLeadHours || DEFAULT_RAIN_LEAD_HOURS),
-      });
-      if (rainSoon) {
-        candidates.push({
-          type: 'rain-soon',
-          severity: 'helpful',
-          decision: 'plan',
-          title: `Rain may reach ${city} soon`,
-          body: withDecision('plan', `Your pin shows ${rainSoon.label}. Finish exposed errands now, keep rain gear close, and recheck before leaving.`),
-          category: 'Weather',
-          source: 'weather-rain-soon',
-          url: 'https://outdooradvisor.app',
-          data: { precipProbability: rainSoon.probability, weatherCode: rainSoon.weatherCode, etaMinutes: rainSoon.minutes },
-          cooldownKey: 'rain-soon',
-          cooldownMs: 3 * 60 * 60 * 1000,
-        });
-      }
-    }
-
-    // 13. Sudden local weather changes between scheduler snapshots.
+    // 10. Sudden local weather changes between scheduler snapshots.
     const sudden = buildSuddenWeatherCandidates({ device, wx, aqi, previous, city, now });
     candidates.push(...sudden.filter((candidate) => {
       if (candidate.type === 'sudden-rain' && (storm || isRaining(wx))) return false;
@@ -554,112 +486,10 @@ function evaluateRules(device, ctx, shared, state, now) {
     });
   }
 
-  // 16. High pollen (premium)
-  if (device.premium === true && prefs.pollenAlerts === true && pollen?.value >= 4) {
-    candidates.push({
-      type: 'pollen',
-      severity: pollen.value >= 5 ? 'important' : 'helpful',
-      decision: 'caution',
-      title: `High pollen near ${city}`,
-      body: withDecision('caution', `${pollen.displayName || 'Pollen'} is ${pollen.category || 'high'} today. Allergy-sensitive users should keep medication close, shower after outdoor time, and prefer lower-wind hours.`),
-      category: 'Air',
-      source: 'google-pollen',
-      url: 'https://outdooradvisor.app',
-      data: { pollenValue: pollen.value, pollenType: pollen.displayName || null },
-      cooldownKey: `pollen:${day}`,
-      cooldownMs: 18 * 60 * 60 * 1000,
-    });
-  }
-
   // Track "bad day" so the good-window rule can detect recovery later.
   if (candidates.some((c) => c.severity !== 'helpful')) {
     state.badDay = state.badDay || {};
     state.badDay[token] = day;
-  }
-
-  // 12. Good outdoor window (helpful) — conditions recovered after a rough day
-  if (
-    prefs.goodWindowAlerts !== false &&
-    state.badDay?.[token] === day &&
-    localHour >= 8 && localHour < 19 &&
-    wx && aqi?.aqi != null &&
-    !candidates.some((c) => c.severity !== 'helpful') &&
-    isGoodOutdoorWindow(wx, aqi.aqi)
-  ) {
-    const feels = Math.round(wx.feelsLike ?? wx.temp);
-    candidates.push({
-      type: 'good-window',
-      severity: 'helpful',
-      decision: 'go',
-      title: `Conditions cleared in ${city}`,
-      body: withDecision('go', `Air is at AQI ${aqi.aqi} and it feels like ${feels}°C with calm weather. This is the best outdoor window of the day — use it while it lasts.`),
-      category: 'Smart',
-      source: 'good-window',
-      url: 'https://outdooradvisor.app',
-      data: { aqi: aqi.aqi, feelsLike: feels },
-      cooldownKey: `good-window:${day}`,
-      cooldownMs: 20 * 60 * 60 * 1000,
-    });
-  }
-
-  // 13. Pakistan Morning Outdoor Brief (helpful, cap-exempt)
-  if (prefs.dailySummary !== false && ctx.hasLocation && isWindowHourMatch(localHour, MORNING_BRIEF_WINDOW)) {
-    const officialContext = prefs.officialAdvisories !== false
-      ? buildOfficialMorningContext({
-        pmdAlerts: state.pmdLatest || [],
-        ndmaAdvisories: state.ndmaLatest || [],
-        device,
-      })
-      : null;
-    const advisory = buildOutdoorSummaryCopy({
-      city,
-      window: MORNING_BRIEF_WINDOW,
-      wx,
-      aqi,
-      nationalOverview: shared.nationalOverview,
-      officialContext,
-    });
-    candidates.push({
-      type: 'morning-brief',
-      severity: 'helpful',
-      decision: advisory.decision,
-      title: advisory.title,
-      body: advisory.body,
-      category: 'Summary',
-      source: 'outdoor-summary',
-      url: 'https://outdooradvisor.app',
-      data: {
-        day,
-        window: MORNING_BRIEF_WINDOW.id,
-        weatherSource: wx?.source || null,
-        aqi: aqi?.aqi ?? null,
-        temp: wx?.temp ?? null,
-      },
-      cooldownKey: `brief:morning:${day}`,
-      cooldownMs: 18 * 60 * 60 * 1000,
-      brief: true,
-    });
-  }
-
-  // 14. Evening planner — tomorrow's outlook for decision-making tonight
-  if (prefs.eveningPlanner !== false && ctx.hasLocation && wx && isWindowHourMatch(localHour, EVENING_PLANNER_WINDOW)) {
-    const planner = buildEveningPlannerCopy({ city, wx, aqi });
-    if (planner) {
-      candidates.push({
-        type: 'evening-planner',
-        severity: 'helpful',
-        decision: planner.decision,
-        title: planner.title,
-        body: planner.body,
-        category: 'Summary',
-        source: 'evening-planner',
-        url: 'https://outdooradvisor.app',
-        data: { day, window: EVENING_PLANNER_WINDOW.id, weatherSource: wx?.source || null },
-        cooldownKey: `brief:evening:${day}`,
-        cooldownMs: 18 * 60 * 60 * 1000,
-        brief: true,
-      });
-    }
   }
 
   return candidates;
@@ -1055,7 +885,7 @@ export function buildSuddenWeatherCandidates({ device, wx, aqi, previous, city, 
   if (prefs.rainAlerts !== false && rainProbability >= rainThreshold && rainJump >= rainJumpThreshold) {
     candidates.push({
       type: 'sudden-rain',
-      severity: rainProbability >= 80 ? 'important' : 'helpful',
+      severity: 'important',
       decision: 'plan',
       title: `Rain risk rising near ${city}`,
       body: withDecision('plan', `Rain chance jumped from ${Math.round(previous.rainProbability || 0)}% to ${Math.round(rainProbability)}% within the next ${leadHours} hours. Finish exposed plans early and take rain gear.`),
@@ -1117,11 +947,12 @@ export function buildSuddenWeatherCandidates({ device, wx, aqi, previous, city, 
     prefs.heatAlerts !== false &&
     Number.isFinite(feels) &&
     Number.isFinite(previousFeels) &&
+    feels >= Number(thresholds.heatAlert || 42) &&
     feels - previousFeels >= 6
   ) {
     candidates.push({
       type: 'temperature-surge',
-      severity: feels >= Number(thresholds.heatAlert || 42) ? 'important' : 'helpful',
+      severity: 'important',
       decision: 'caution',
       title: `Temperature rising quickly near ${city}`,
       body: withDecision('caution', `Feels-like temperature climbed from ${Math.round(previousFeels)}°C to ${Math.round(feels)}°C. Shorten exposed plans and hydrate before heading out.`),
