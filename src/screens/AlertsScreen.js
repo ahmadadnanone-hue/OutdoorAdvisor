@@ -43,7 +43,7 @@ import { colors as dc } from '../design';
 
 const TABS = ['Thresholds', 'Notifications', 'Customize', 'About'];
 const PREMIUM_HOME_SECTION_KEYS = new Set(['pollen', 'wind', 'details', 'forecast']);
-const PREMIUM_NOTIFICATION_KEYS = new Set(['smogAlerts', 'pollenAlerts', 'fogWarnings', 'routeClosureAlerts', 'motorwayAlerts']);
+const PREMIUM_NOTIFICATION_KEYS = new Set(['smogAlerts', 'fogWarnings', 'routeClosureAlerts', 'motorwayAlerts']);
 
 const SECTION_META = {
   decision:   { label: 'Outdoor Decision',     icon: '🧭', desc: 'Plain-language go / go with care / limit exposure answer' },
@@ -353,19 +353,13 @@ export default function AlertsScreen() {
       { key: 'dark',  icon: '🌙', label: 'Dark',  desc: 'Always dark' },
     ];
     const items = [
-      { key: 'officialAdvisories',   label: 'Official PMD & NDMA Warnings', desc: 'Receive important official warnings matched to your area and include them in the Pakistan morning brief.' },
+      { key: 'officialAdvisories',   label: 'Official PMD & NDMA Warnings', desc: 'Receive important official warnings matched to your area.' },
       { key: 'severeAqiWarnings',   label: 'Severe AQI Warnings',     desc: 'Important alerts when air quality becomes unhealthy enough to change outdoor plans.' },
-      { key: 'dailySummary',        label: 'Pakistan Morning Outdoor Brief', desc: 'One morning notification combining your local air and weather with the most important PMD and NDMA warnings across Pakistan.' },
-      { key: 'eveningPlanner',      label: 'Evening Planner',          desc: 'One evening notification with tomorrow’s outlook so you can plan outdoor time before the day starts.' },
-      { key: 'goodWindowAlerts',    label: 'Good Outdoor Windows',     desc: 'A heads-up when conditions clear after a rough stretch and a good outdoor window opens.' },
-      { key: 'smartWalkNudges',     label: 'Smart Movement Nudges',    desc: 'Use your steps, weather, and AQI to spot a good time for a walk or suggest a better alternative.' },
       { key: 'smogAlerts',          label: 'Smog Season Alerts',       desc: 'Get notified when smog season conditions are detected.' },
       { key: 'rainAlerts',          label: 'Rain & Sudden Change Alerts', desc: 'Get notified when rain is approaching, starts nearby, or its forecast probability rises sharply.' },
       { key: 'thunderstormAlerts',  label: 'Thunderstorm Alerts',      desc: 'Important warnings for lightning and severe storm risk.' },
       { key: 'windAlerts',          label: 'Wind Alerts',              desc: 'Alerts when gusty conditions can disrupt outdoor activity or travel.' },
-      { key: 'pollenAlerts',        label: 'High Pollen Alerts',       desc: 'Warnings for allergy-heavy days with elevated pollen levels.' },
       { key: 'heatAlerts',          label: 'Extreme Heat Alerts',      desc: 'Warnings when feels-like heat becomes unsafe for longer exposure.' },
-      { key: 'coldAlerts',          label: 'Cold Snap Alerts',         desc: 'Warnings when feels-like cold drops below your threshold.' },
       { key: 'fogWarnings',         label: 'Motorway Fog Warnings',    desc: 'Warnings for dangerous fog conditions on motorways.' },
       { key: 'routeClosureAlerts',  label: 'Major Route Closures',     desc: 'Important alerts for serious motorway and corridor closures.' },
       { key: 'motorwayAlerts',      label: 'Motorway Route Alerts',    desc: 'Server-monitored NHMP alerts for specific motorways you choose. Select routes below.' },
@@ -377,7 +371,7 @@ export default function AlertsScreen() {
         {!isPremium && (
           <GlassCard tintColor={dc.infoGlass} borderColor={dc.infoStroke} style={styles.premiumBanner} contentStyle={styles.premiumBannerContent}>
             <Text style={styles.premiumBannerTitle}>Premium unlocks higher-value alerts</Text>
-            <Text style={styles.premiumBannerBody}>Smog season, high pollen, motorway fog, major route closures, and browser push sync are reserved for premium accounts.</Text>
+            <Text style={styles.premiumBannerBody}>Smog season, motorway fog, major route closures, and route-specific alerts are reserved for premium accounts.</Text>
           </GlassCard>
         )}
 

@@ -4,7 +4,6 @@ import { fetchAqiForLocation } from '../hooks/useAQI';
 import { fetchWeatherForLocation } from '../hooks/useWeather';
 import { loadStoredNotifications } from '../utils/alertPreferences';
 import { loadLocationSnapshot } from '../utils/locationSnapshot';
-import { sendSmartNotification } from './notificationService';
 import { getNotificationDeliveryState } from './notificationService';
 
 const SMART_STATE_KEY = 'outdooradvisor_smart_advisor_state_v1';
@@ -12,10 +11,6 @@ const WALK_NUDGE_COOLDOWN_MS    = 4 * 60 * 60 * 1000;
 
 let _advisorRunning = false;
 const DAILY_STEP_GOAL            = 5000;
-
-function dateKey(date = new Date()) {
-  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-}
 
 function hourOfDay(date = new Date()) {
   return date.getHours();
@@ -230,24 +225,16 @@ async function _runSmartAdvisorCheck({ reason = 'manual', promptForHealth = fals
     };
   }
 
-  const sent = await sendSmartNotification(suggestion.title, suggestion.body, {
-    category: 'Smart',
-    tag: `${suggestion.tag}-${dateKey(now)}`,
-    promptForPermission: reason !== 'background',
-  });
-
-  if (!sent) {
-    return { sent: false, reason: 'notification-not-sent', health, aqi, weather };
-  }
-
   await saveSmartState({
     ...state,
     lastWalkNudgeAt: now.getTime(),
   });
 
   return {
-    sent: true,
+    sent: false,
     reason,
+    suppressed: 'routine-smart-nudge',
+    suggestion,
     health,
     aqi,
     weather,

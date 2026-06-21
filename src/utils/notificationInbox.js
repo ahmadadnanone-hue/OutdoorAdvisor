@@ -3,6 +3,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const INBOX_KEY = 'outdooradvisor_notification_inbox_v1';
 const MAX_ITEMS = 40;
 const CONTENT_DEDUPE_WINDOW_MS = 6 * 60 * 60 * 1000;
+const ROUTINE_CATEGORIES = new Set(['smart', 'summary']);
+const ROUTINE_TITLE_PATTERNS = [
+  /^avoid the hot window$/i,
+  /^shift movement indoors$/i,
+  /^good window for easy movement$/i,
+  /^short walk window$/i,
+  /^easy finish if you want it$/i,
+  /^tomorrow'?s outlook\b/i,
+  /^pakistan morning brief\b/i,
+];
 
 function normalizeText(value) {
   return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -12,6 +22,16 @@ function getContentKey(item) {
   return `${normalizeText(item?.title)}|${normalizeText(item?.body)}`;
 }
 
+function isRoutineInboxItem(item) {
+  const category = normalizeText(item?.category);
+  const source = normalizeText(item?.source);
+  const title = String(item?.title || '').trim();
+
+  if (ROUTINE_CATEGORIES.has(category)) return true;
+  if (source === 'local-smart-advisor') return true;
+  return ROUTINE_TITLE_PATTERNS.some((pattern) => pattern.test(title));
+}
+
 function compactInboxItems(items) {
   const seenIds = new Set();
   const seenContent = new Map();
@@ -19,6 +39,7 @@ function compactInboxItems(items) {
 
   for (const item of items) {
     if (!item?.title && !item?.body) continue;
+    if (isRoutineInboxItem(item)) continue;
     const idKey = item.dedupeKey || item.id;
     if (idKey && seenIds.has(idKey)) continue;
 
@@ -66,6 +87,7 @@ export async function saveNotificationInbox(items) {
 
 export async function appendInboxNotification(payload) {
   if (!payload?.title && !payload?.body) return loadNotificationInbox();
+  if (isRoutineInboxItem(payload)) return loadNotificationInbox();
   const current = await loadNotificationInbox();
   const id = payload.id || payload.remoteId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const dedupeKey = payload.dedupeKey || payload.remoteId || id;
