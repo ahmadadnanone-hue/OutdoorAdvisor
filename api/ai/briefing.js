@@ -189,6 +189,24 @@ const WMO_LABELS = {
   80:'Light showers',81:'Showers',82:'Heavy showers',95:'Thunderstorm',96:'Thunderstorm',99:'Thunderstorm',
 };
 const UV_LABELS = ['Low','Low','Low','Moderate','Moderate','Moderate','High','High','Very High','Very High','Extreme','Extreme'];
+const KNOWN_DESTINATION_COORDS = {
+  islamabad: { name: 'Islamabad, Pakistan', lat: 33.6844, lon: 73.0479 },
+  rawalpindi: { name: 'Rawalpindi, Pakistan', lat: 33.5651, lon: 73.0169 },
+  lahore: { name: 'Lahore, Pakistan', lat: 31.5204, lon: 74.3587 },
+  multan: { name: 'Multan, Pakistan', lat: 30.1575, lon: 71.5249 },
+  murree: { name: 'Murree, Pakistan', lat: 33.907, lon: 73.3943 },
+  muree: { name: 'Murree, Pakistan', lat: 33.907, lon: 73.3943 },
+  skardu: { name: 'Skardu, Pakistan', lat: 35.2971, lon: 75.6333 },
+  hunza: { name: 'Hunza, Pakistan', lat: 36.3167, lon: 74.65 },
+  gilgit: { name: 'Gilgit, Pakistan', lat: 35.9208, lon: 74.3144 },
+  karachi: { name: 'Karachi, Pakistan', lat: 24.8607, lon: 67.0011 },
+  peshawar: { name: 'Peshawar, Pakistan', lat: 34.0151, lon: 71.5249 },
+  faisalabad: { name: 'Faisalabad, Pakistan', lat: 31.4504, lon: 73.135 },
+  'nathia gali': { name: 'Nathia Gali, Pakistan', lat: 34.0729, lon: 73.3813 },
+  nathiagali: { name: 'Nathia Gali, Pakistan', lat: 34.0729, lon: 73.3813 },
+  naran: { name: 'Naran, Pakistan', lat: 34.907, lon: 73.649 },
+  kalam: { name: 'Kalam, Pakistan', lat: 35.4902, lon: 72.5796 },
+};
 function uvLabel(v) { return UV_LABELS[Math.min(Math.round(v || 0), UV_LABELS.length - 1)]; }
 function aqiCat(n) {
   if (n == null) return null;
@@ -233,19 +251,56 @@ async function fetchJsonOrNull(url, options) {
 }
 
 async function forwardGeocode(placeName, apiKey) {
-  if (!placeName || !apiKey) return null;
-  const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
-  url.searchParams.set('address', `${placeName}, Pakistan`);
-  url.searchParams.set('key', apiKey);
-  url.searchParams.set('language', 'en');
-  const json = await fetchJsonOrNull(url);
-  const result = json?.results?.[0];
-  if (!result?.geometry?.location) return null;
-  return {
-    name: result.formatted_address || placeName,
-    lat: result.geometry.location.lat,
-    lon: result.geometry.location.lng,
-  };
+  if (!placeName) return null;
+
+  if (apiKey) {
+    const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
+    url.searchParams.set('address', `${placeName}, Pakistan`);
+    url.searchParams.set('key', apiKey);
+    url.searchParams.set('language', 'en');
+    const json = await fetchJsonOrNull(url);
+    const result = json?.results?.[0];
+    if (result?.geometry?.location) {
+      return {
+        name: result.formatted_address || placeName,
+        lat: result.geometry.location.lat,
+        lon: result.geometry.location.lng,
+      };
+    }
+  }
+
+  return await forwardGeocodeOsm(placeName) || resolveKnownDestination(placeName);
+}
+
+async function forwardGeocodeOsm(placeName) {
+  try {
+    const url = new URL('https://nominatim.openstreetmap.org/search');
+    url.searchParams.set('format', 'jsonv2');
+    url.searchParams.set('q', `${placeName}, Pakistan`);
+    url.searchParams.set('limit', '1');
+    url.searchParams.set('addressdetails', '1');
+    const response = await withTimeout(fetch(url, {
+      headers: {
+        'User-Agent': 'OutdoorAdvisor/1.0 (support@outdooradvisor.app)',
+        'Accept-Language': 'en',
+      },
+    }), 8000);
+    const json = await response.json();
+    const result = Array.isArray(json) ? json[0] : null;
+    if (!response.ok || !result?.lat || !result?.lon) return null;
+    return {
+      name: result.display_name || `${placeName}, Pakistan`,
+      lat: Number(result.lat),
+      lon: Number(result.lon),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function resolveKnownDestination(placeName) {
+  const normalized = String(placeName || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  return KNOWN_DESTINATION_COORDS[normalized] || null;
 }
 
 async function fetchNearbyPlaces(lat, lon, query, apiKey) {
@@ -792,24 +847,54 @@ async function buildAskEvidence(req, body, googleKey) {
 }
 
 async function fetchGoogleAqi(lat, lon, apiKey) {
-  if (!apiKey) return null;
-  const r = await withTimeout(fetch(
-    `https://airquality.googleapis.com/v1/currentConditions:lookup?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        location: { latitude: lat, longitude: lon },
-        extraComputations: ['LOCAL_AQI', 'POLLUTANT_CONCENTRATION'],
-        languageCode: 'en',
-      }),
+  if (apiKey) {
+    try {
+      const r = await withTimeout(fetch(
+        `https://airquality.googleapis.com/v1/currentConditions:lookup?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            location: { latitude: lat, longitude: lon },
+            extraComputations: ['LOCAL_AQI', 'POLLUTANT_CONCENTRATION'],
+            languageCode: 'en',
+          }),
+        }
+      ), 8000);
+      if (r.ok) {
+        const json = await r.json();
+        if (!json.error) {
+          const idx = json.indexes?.find((i) => i.code === 'uaqi') || json.indexes?.[0];
+          const pm25 = json.pollutants?.find((p) => p.code === 'pm25');
+          return { aqi: idx?.aqi ?? null, pm25: pm25?.concentration?.value ?? null, source: 'Google Air Quality' };
+        }
+      }
+    } catch {
+      // Fall through to Open-Meteo AQI below.
     }
-  ), 8000);
-  if (!r.ok) return null;
-  const json = await r.json();
-  const idx = json.indexes?.find((i) => i.code === 'uaqi') || json.indexes?.[0];
-  const pm25 = json.pollutants?.find((p) => p.code === 'pm25');
-  return { aqi: idx?.aqi ?? null, pm25: pm25?.concentration?.value ?? null };
+  }
+  return fetchOpenMeteoAqi(lat, lon);
+}
+
+async function fetchOpenMeteoAqi(lat, lon) {
+  try {
+    const url = new URL('https://air-quality-api.open-meteo.com/v1/air-quality');
+    url.searchParams.set('latitude', String(lat));
+    url.searchParams.set('longitude', String(lon));
+    url.searchParams.set('current', 'us_aqi,pm10,pm2_5');
+    url.searchParams.set('timezone', 'auto');
+    const response = await withTimeout(fetch(url), 8000);
+    const json = await response.json();
+    if (!response.ok || json.error || !json.current) return null;
+    return {
+      aqi: json.current.us_aqi ?? null,
+      pm25: json.current.pm2_5 ?? null,
+      pm10: json.current.pm10 ?? null,
+      source: 'Open-Meteo Air Quality',
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function fetchSynthesisData(lat, lon, googleApiKey) {

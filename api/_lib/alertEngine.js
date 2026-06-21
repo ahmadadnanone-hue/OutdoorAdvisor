@@ -1135,28 +1135,52 @@ async function fetchNhmpAdvisories() {
 // ─── AQI ─────────────────────────────────────────────────────────────────────
 async function fetchAqi(lat, lon) {
   const key = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY;
-  if (!key) return null;
 
+  if (key) {
+    try {
+      const response = await fetch(`https://airquality.googleapis.com/v1/currentConditions:lookup?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: { latitude: Number(lat), longitude: Number(lon) },
+          extraComputations: ['LOCAL_AQI', 'POLLUTANT_CONCENTRATION'],
+          languageCode: 'en',
+        }),
+      });
+      const json = await response.json();
+      if (response.ok && !json.error) {
+        const indexes = json.indexes || [];
+        const primary = indexes.find((item) => item.code === 'usa_epa') || indexes.find((item) => item.code === 'uaqi') || indexes[0];
+        const pollutants = json.pollutants || [];
+        const pm25 = getPollutantValue(pollutants, 'pm25');
+        return {
+          aqi: primary?.aqi ?? null,
+          category: primary?.category ?? null,
+          pm25,
+        };
+      }
+    } catch {
+      // Fall through to Open-Meteo air quality below.
+    }
+  }
+
+  return fetchOpenMeteoAqi(lat, lon);
+}
+
+async function fetchOpenMeteoAqi(lat, lon) {
   try {
-    const response = await fetch(`https://airquality.googleapis.com/v1/currentConditions:lookup?key=${key}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        location: { latitude: Number(lat), longitude: Number(lon) },
-        extraComputations: ['LOCAL_AQI', 'POLLUTANT_CONCENTRATION'],
-        languageCode: 'en',
-      }),
-    });
+    const url = new URL('https://air-quality-api.open-meteo.com/v1/air-quality');
+    url.searchParams.set('latitude', String(lat));
+    url.searchParams.set('longitude', String(lon));
+    url.searchParams.set('current', 'us_aqi,pm10,pm2_5');
+    url.searchParams.set('timezone', 'auto');
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
     const json = await response.json();
-    if (!response.ok || json.error) return null;
-    const indexes = json.indexes || [];
-    const primary = indexes.find((item) => item.code === 'usa_epa') || indexes.find((item) => item.code === 'uaqi') || indexes[0];
-    const pollutants = json.pollutants || [];
-    const pm25 = getPollutantValue(pollutants, 'pm25');
+    if (!response.ok || json.error || !json.current) return null;
     return {
-      aqi: primary?.aqi ?? null,
-      category: primary?.category ?? null,
-      pm25,
+      aqi: json.current.us_aqi ?? null,
+      category: getAqiBand(json.current.us_aqi ?? null),
+      pm25: json.current.pm2_5 ?? null,
     };
   } catch {
     return null;

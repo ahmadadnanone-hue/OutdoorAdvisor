@@ -63,6 +63,40 @@ const ROUTE_EDGES = [
   ['islamabad', 'murree', 'N75', 60],
 ];
 
+const KNOWN_DESTINATION_ALIASES = [
+  ['nathia gali', 'Nathia Gali'],
+  ['nathiagali', 'Nathia Gali'],
+  ['rahim yar khan', 'Rahim Yar Khan'],
+  ['dera ismail khan', 'Dera Ismail Khan'],
+  ['di khan', 'Dera Ismail Khan'],
+  ['d.i khan', 'Dera Ismail Khan'],
+  ['muzaffarabad', 'Muzaffarabad'],
+  ['rawalpindi', 'Rawalpindi'],
+  ['islamabad', 'Islamabad'],
+  ['abbottabad', 'Abbottabad'],
+  ['faisalabad', 'Faisalabad'],
+  ['bahawalpur', 'Bahawalpur'],
+  ['hyderabad', 'Hyderabad'],
+  ['peshawar', 'Peshawar'],
+  ['gujranwala', 'Gujranwala'],
+  ['sheikhupura', 'Sheikhupura'],
+  ['mansehra', 'Mansehra'],
+  ['karachi', 'Karachi'],
+  ['lahore', 'Lahore'],
+  ['multan', 'Multan'],
+  ['murree', 'Murree'],
+  ['muree', 'Murree'],
+  ['skardu', 'Skardu'],
+  ['hunza', 'Hunza'],
+  ['gilgit', 'Gilgit'],
+  ['naran', 'Naran'],
+  ['kalam', 'Kalam'],
+  ['swat', 'Swat'],
+  ['sialkot', 'Sialkot'],
+  ['quetta', 'Quetta'],
+  ['sukkur', 'Sukkur'],
+].sort((a, b) => b[0].length - a[0].length);
+
 export function normalizeQuestion(value) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 500);
 }
@@ -228,6 +262,7 @@ export function extractDestination(question) {
   const text = normalizeQuestion(question);
   const patterns = [
     /(?:going|driving|travel(?:ling)?|go|drive|trip)\s+to\s+([a-z][a-z .'-]{2,40}?)(?=\s+(?:tomorrow|today|tonight|this|right|now|on|at|in|by|via|from|for|after|before)|[?.!,]|$)/i,
+    /(?:travel(?:ling)?|driving|drive|trip|route)\s+([a-z][a-z .'-]{2,40}?)(?=\s+(?:tomorrow|today|tonight|this|right|now|on|at|in|by|via|from|for|after|before)|[?.!,]|$)/i,
     /(?:midway|mid-way|halfway|half-way|on the way|along the way|en route|stopover|stop over|rest stop|eat|food|restaurant|lunch|dinner|breakfast|cafe|coffee|dhaba).*?\bto\s+([a-z][a-z .'-]{2,40}?)(?=\s+(?:tomorrow|today|tonight|this|right|now|on|at|in|by|via|from|for|after|before)|[?.!,]|$)/i,
     /(?:weather|forecast|rain|conditions?)\s+(?:for|in|at)\s+([a-z][a-z .'-]{2,40}?)(?=\s+(?:tomorrow|today|tonight|this|right|now|on|at|in|by|via|from|for|after|before)|[?.!,]|$)/i,
     /(?:visit|reach)\s+([a-z][a-z .'-]{2,40}?)(?=\s+(?:tomorrow|today|tonight|this|right|now|on|at|in|by|via|from|for|after|before)|[?.!,]|$)/i,
@@ -235,8 +270,17 @@ export function extractDestination(question) {
 
   for (const pattern of patterns) {
     const match = text.match(pattern);
-    if (match?.[1]) return normalizeDestinationAlias(match[1].trim());
+    if (match?.[1]) {
+      const candidate = normalizeDestinationAlias(match[1].trim());
+      if (!isDestinationTimeWord(candidate)) return candidate;
+    }
   }
+
+  if (/\b(?:travel|trip|route|road|motorway|drive|driving|weather|forecast|rain|conditions?|visit)\b/i.test(text)) {
+    const known = extractKnownDestination(text);
+    if (known) return known;
+  }
+
   return '';
 }
 
@@ -244,6 +288,16 @@ function normalizeDestinationAlias(value) {
   const cleaned = String(value || '').replace(/\s+/g, ' ').trim();
   if (/^muree$/i.test(cleaned)) return 'Murree';
   return cleaned;
+}
+
+function isDestinationTimeWord(value) {
+  return /^(tomorrow|today|tonight|now|morning|evening|night|weekend|week)$/i.test(String(value || '').trim());
+}
+
+function extractKnownDestination(text) {
+  const normalized = normalizeQuestion(text).toLowerCase();
+  const match = KNOWN_DESTINATION_ALIASES.find(([alias]) => containsTerm(normalized, alias));
+  return match?.[1] || '';
 }
 
 function containsHazard(text, pattern) {

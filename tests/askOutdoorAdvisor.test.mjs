@@ -32,6 +32,7 @@ test('classifies discovery, activity, trip, and forecast questions', () => {
   assert.equal(classifyAskIntent('Where to play tennis now?'), 'nearby_discovery');
   assert.equal(classifyAskIntent('Can I play football tonight?'), 'activity_advice');
   assert.equal(classifyAskIntent('Should I go to Skardu tomorrow?'), 'destination_trip');
+  assert.equal(classifyAskIntent('Islamabad travel'), 'destination_trip');
   assert.equal(classifyAskIntent('I want to go to Muree. Tell me best place to eat midway.'), 'route_stop');
   assert.equal(classifyAskIntent('Tell me best place to eat midway to Murree.'), 'route_stop');
   assert.equal(classifyAskIntent('What is the weather next week?'), 'simple_weather');
@@ -53,6 +54,10 @@ test('parses requested forecast windows', () => {
 
 test('extracts travel and forecast destinations', () => {
   assert.equal(extractDestination('Should I go to Murree tomorrow evening?'), 'Murree');
+  assert.equal(extractDestination('Islamabad travel'), 'Islamabad');
+  assert.equal(extractDestination('about Islamabad travel'), 'Islamabad');
+  assert.equal(extractDestination('I want to travel Islamabad'), 'Islamabad');
+  assert.equal(extractDestination('Islamabad trip tomorrow'), 'Islamabad');
   assert.equal(extractDestination('I want to go to Muree. Tell me best place to eat midway.'), 'Murree');
   assert.equal(extractDestination('Tell me best place to eat midway to Murree.'), 'Murree');
   assert.equal(extractDestination('What is the weather in Multan tomorrow?'), 'Multan');

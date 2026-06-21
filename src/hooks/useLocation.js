@@ -11,6 +11,7 @@ const DEFAULT_CITY = CITIES.find((c) => c.name === 'Lahore');
 const LOCATION_CACHE_NS = 'device_location';
 const LOCATION_CACHE_KEY = 'current';
 const LOCATION_CACHE_TTL = 10 * 60 * 1000;
+const LAST_KNOWN_LOCATION_MAX_AGE = 15 * 60 * 1000;
 
 function getDistance(lat1, lon1, lat2, lon2) {
   const dLat = lat2 - lat1;
@@ -31,6 +32,27 @@ function findNearestCity(lat, lon) {
   }
 
   return nearest;
+}
+
+async function getBestDevicePosition() {
+  try {
+    return await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.High,
+    });
+  } catch (highAccuracyError) {
+    try {
+      return await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+    } catch (balancedError) {
+      const lastKnown = await Location.getLastKnownPositionAsync({
+        maxAge: LAST_KNOWN_LOCATION_MAX_AGE,
+        requiredAccuracy: 1000,
+      });
+      if (lastKnown?.coords) return lastKnown;
+      throw balancedError || highAccuracyError;
+    }
+  }
 }
 
 export default function useLocation() {
@@ -77,9 +99,7 @@ export default function useLocation() {
         return fallback;
       }
 
-      const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
+      const position = await getBestDevicePosition();
 
       const { latitude, longitude } = position.coords;
 
