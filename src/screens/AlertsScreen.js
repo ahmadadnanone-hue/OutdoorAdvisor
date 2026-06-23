@@ -25,6 +25,7 @@ const ensureWebPush = () => Promise.resolve();
 const syncWebPushPreferences = () => Promise.resolve();
 import {
   DEFAULT_NOTIFICATIONS,
+  BRIEF_RESTORE_MARKER_KEY,
   DEFAULT_THRESHOLDS,
   MOTORWAY_ROUTES,
   loadStoredMotorwaySubscriptions,
@@ -192,6 +193,7 @@ export default function AlertsScreen() {
     let cancelled = false;
     const refresh = async () => {
       const enabledCount = Object.entries(notifications).filter(([key, value]) => {
+        if (key === BRIEF_RESTORE_MARKER_KEY || !(key in DEFAULT_NOTIFICATIONS)) return false;
         if (!value) return false;
         if (!isPremium && PREMIUM_NOTIFICATION_KEYS.has(key)) return false;
         return true;
@@ -353,6 +355,8 @@ export default function AlertsScreen() {
       { key: 'dark',  icon: '🌙', label: 'Dark',  desc: 'Always dark' },
     ];
     const items = [
+      { key: 'dailySummary',        label: 'Morning Brief',           desc: 'A daily morning summary of your local weather, AQI, and important PMD or NDMA warnings.' },
+      { key: 'eveningPlanner',      label: 'Evening Planner',         desc: 'A daily evening outlook for tomorrow so you can plan outdoor work, walks, and travel.' },
       { key: 'officialAdvisories',   label: 'Official PMD & NDMA Warnings', desc: 'Receive important official warnings matched to your area.' },
       { key: 'severeAqiWarnings',   label: 'Severe AQI Warnings',     desc: 'Important alerts when air quality becomes unhealthy enough to change outdoor plans.' },
       { key: 'smogAlerts',          label: 'Smog Season Alerts',       desc: 'Get notified when smog season conditions are detected.' },

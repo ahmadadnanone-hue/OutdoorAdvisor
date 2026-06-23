@@ -3,15 +3,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const INBOX_KEY = 'outdooradvisor_notification_inbox_v1';
 const MAX_ITEMS = 40;
 const CONTENT_DEDUPE_WINDOW_MS = 6 * 60 * 60 * 1000;
-const ROUTINE_CATEGORIES = new Set(['smart', 'summary']);
+const ROUTINE_CATEGORIES = new Set(['smart']);
 const ROUTINE_TITLE_PATTERNS = [
   /^avoid the hot window$/i,
   /^shift movement indoors$/i,
   /^good window for easy movement$/i,
   /^short walk window$/i,
   /^easy finish if you want it$/i,
-  /^tomorrow'?s outlook\b/i,
-  /^pakistan morning brief\b/i,
 ];
 
 function normalizeText(value) {

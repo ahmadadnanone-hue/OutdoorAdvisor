@@ -34,6 +34,7 @@ const SEND_LOG_LIMIT = 60;
 const DEFAULT_RAIN_PROBABILITY = 60;
 const DEFAULT_RAIN_JUMP = 25;
 const DEFAULT_RAIN_LEAD_HOURS = 3;
+const BRIEF_RESTORE_MARKER_KEY = '_briefsRestoredAt';
 
 const MORNING_BRIEF_WINDOW = { id: 'morning', start: 6, end: 10 };
 const EVENING_PLANNER_WINDOW = { id: 'evening', start: 19, end: 22 };
@@ -109,7 +110,12 @@ export async function runAlertEngine({ mode = 'scheduled' } = {}) {
 
 // ─── Shared feeds (fetched once per run) ─────────────────────────────────────
 async function loadSharedFeeds(devices, state, { mode, now }) {
-  const shared = { pmdAlerts: [], ndmaAdvisories: [], nhmpChanges: [], nationalOverview: null };
+  const shared = {
+    pmdAlerts: [],
+    ndmaAdvisories: (state.ndmaLatest || []).filter((advisory) => advisory.important),
+    nhmpChanges: [],
+    nationalOverview: null,
+  };
 
   // PMD CAP RSS is cheap; refresh every run so critical alerts go out fast.
   shared.pmdAlerts = await fetchCriticalPmdAlerts();
@@ -127,6 +133,17 @@ async function loadSharedFeeds(devices, state, { mode, now }) {
       shared.ndmaForced = forceNdma;
     } catch (error) {
       state.ndmaLastError = { message: error?.message || 'NDMA fetch failed', at: Date.now() };
+    }
+  }
+
+  if (devices.some((device) =>
+    briefPreferenceEnabled(device.preferences || {}, 'dailySummary') &&
+    isWindowDue(state, device, MORNING_BRIEF_WINDOW, now)
+  )) {
+    try {
+      shared.nationalOverview = await fetchPakistanMorningOverview();
+    } catch (error) {
+      state.morningOverviewLastError = { message: error?.message || 'morning overview failed', at: Date.now() };
     }
   }
 
@@ -171,10 +188,14 @@ async function buildDeviceContext(device, caches, shared, state, now) {
     prefs.windAlerts !== false || prefs.heatAlerts !== false ||
     prefs.fogWarnings !== false ||
     prefs.smogAlerts !== false ||
-    prefs.severeAqiWarnings !== false
+    prefs.severeAqiWarnings !== false ||
+    briefPreferenceEnabled(prefs, 'dailySummary') ||
+    briefPreferenceEnabled(prefs, 'eveningPlanner')
   );
   const needsAqi = hasLocation && (
-    prefs.severeAqiWarnings !== false || prefs.smogAlerts !== false
+    prefs.severeAqiWarnings !== false || prefs.smogAlerts !== false ||
+    briefPreferenceEnabled(prefs, 'dailySummary') ||
+    briefPreferenceEnabled(prefs, 'eveningPlanner')
   );
   const needsPollen = false;
 
@@ -484,6 +505,55 @@ function evaluateRules(device, ctx, shared, state, now) {
       cooldownKey: 'smog',
       cooldownMs: 8 * 60 * 60 * 1000,
     });
+  }
+
+  if (wx && briefPreferenceEnabled(prefs, 'dailySummary') && isWindowDue(state, device, MORNING_BRIEF_WINDOW, now)) {
+    const copy = buildOutdoorSummaryCopy({
+      city,
+      window: MORNING_BRIEF_WINDOW,
+      wx,
+      aqi,
+      nationalOverview: shared.nationalOverview,
+      officialContext: buildOfficialMorningContext({
+        pmdAlerts: shared.pmdAlerts,
+        ndmaAdvisories: shared.ndmaAdvisories,
+        device,
+      }),
+    });
+    candidates.push({
+      type: 'morning-brief',
+      severity: 'helpful',
+      decision: copy.decision,
+      title: copy.title,
+      body: copy.body,
+      category: 'Summary',
+      source: 'morning-brief',
+      url: 'https://outdooradvisor.app',
+      data: { window: MORNING_BRIEF_WINDOW.id },
+      cooldownKey: `brief:${MORNING_BRIEF_WINDOW.id}:${day}`,
+      cooldownMs: 20 * 60 * 60 * 1000,
+      brief: true,
+    });
+  }
+
+  if (wx && briefPreferenceEnabled(prefs, 'eveningPlanner') && isWindowDue(state, device, EVENING_PLANNER_WINDOW, now)) {
+    const copy = buildEveningPlannerCopy({ city, wx, aqi });
+    if (copy) {
+      candidates.push({
+        type: 'evening-planner',
+        severity: 'helpful',
+        decision: copy.decision,
+        title: copy.title,
+        body: copy.body,
+        category: 'Summary',
+        source: 'evening-planner',
+        url: 'https://outdooradvisor.app',
+        data: { window: EVENING_PLANNER_WINDOW.id },
+        cooldownKey: `brief:${EVENING_PLANNER_WINDOW.id}:${day}`,
+        cooldownMs: 20 * 60 * 60 * 1000,
+        brief: true,
+      });
+    }
   }
 
   // Track "bad day" so the good-window rule can detect recovery later.
@@ -1315,6 +1385,14 @@ function isWindowDue(state, device, window, now) {
   if (!isWindowHourMatch(hour, window)) return false;
   const key = `${device.expoPushToken}:brief:${window.id}:${pakistanDateKey(now)}`;
   return !(state.cooldowns?.[key]);
+}
+
+function briefPreferenceEnabled(prefs, key) {
+  if (prefs?.[key] !== false) return true;
+  // Devices that received the temporary "major warnings only" OTA may have
+  // false saved without user intent. Once the app saves the restore marker,
+  // an explicit false is respected again.
+  return !prefs?.[BRIEF_RESTORE_MARKER_KEY];
 }
 
 function hourInTimeZone(date, timeZone) {

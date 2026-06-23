@@ -4,6 +4,8 @@ export const THRESHOLDS_KEY = 'outdooradvisor_thresholds';
 export const NOTIFICATIONS_KEY = 'outdooradvisor_notifications';
 export const MOCK_ACCOUNT_KEY = 'outdooradvisor_mock_account';
 export const MOTORWAY_SUBSCRIPTIONS_KEY = 'outdooradvisor_motorway_subscriptions_v1';
+export const BRIEF_RESTORE_MARKER_KEY = '_briefsRestoredAt';
+const BRIEF_RESTORE_MARKER_VALUE = '2026-06-23';
 
 export const MOTORWAY_ROUTES = [
   { id: 'M1',  label: 'M-1',  desc: 'Islamabad – Peshawar' },
@@ -30,8 +32,8 @@ export const DEFAULT_THRESHOLDS = {
 export const DEFAULT_NOTIFICATIONS = {
   officialAdvisories: true,
   severeAqiWarnings: true,
-  dailySummary: false,
-  eveningPlanner: false,
+  dailySummary: true,
+  eveningPlanner: true,
   goodWindowAlerts: false,
   coldAlerts: false,
   smartWalkNudges: false,
@@ -46,6 +48,21 @@ export const DEFAULT_NOTIFICATIONS = {
   motorwayAlerts: false,
 };
 
+function normalizeStoredNotifications(parsed) {
+  const source = parsed && typeof parsed === 'object' ? parsed : {};
+  const merged = { ...DEFAULT_NOTIFICATIONS, ...source };
+
+  // Restore the daily brief toggles once after the temporary noise-reduction
+  // release. Future user opt-outs keep working because saves include a marker.
+  if (!source[BRIEF_RESTORE_MARKER_KEY]) {
+    merged.dailySummary = true;
+    merged.eveningPlanner = true;
+  }
+
+  merged[BRIEF_RESTORE_MARKER_KEY] = source[BRIEF_RESTORE_MARKER_KEY] || BRIEF_RESTORE_MARKER_VALUE;
+  return merged;
+}
+
 export async function loadStoredThresholds() {
   try {
     const raw = await AsyncStorage.getItem(THRESHOLDS_KEY);
@@ -58,9 +75,11 @@ export async function loadStoredThresholds() {
 export async function loadStoredNotifications() {
   try {
     const raw = await AsyncStorage.getItem(NOTIFICATIONS_KEY);
-    return raw ? { ...DEFAULT_NOTIFICATIONS, ...JSON.parse(raw) } : DEFAULT_NOTIFICATIONS;
+    return raw
+      ? normalizeStoredNotifications(JSON.parse(raw))
+      : { ...DEFAULT_NOTIFICATIONS, [BRIEF_RESTORE_MARKER_KEY]: BRIEF_RESTORE_MARKER_VALUE };
   } catch {
-    return DEFAULT_NOTIFICATIONS;
+    return { ...DEFAULT_NOTIFICATIONS, [BRIEF_RESTORE_MARKER_KEY]: BRIEF_RESTORE_MARKER_VALUE };
   }
 }
 
@@ -69,7 +88,10 @@ export async function saveStoredThresholds(thresholds) {
 }
 
 export async function saveStoredNotifications(notifications) {
-  await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications));
+  await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify({
+    ...notifications,
+    [BRIEF_RESTORE_MARKER_KEY]: notifications?.[BRIEF_RESTORE_MARKER_KEY] || BRIEF_RESTORE_MARKER_VALUE,
+  }));
 }
 
 export async function loadMockAccount() {
