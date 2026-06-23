@@ -48,7 +48,7 @@ import {
   getWindDirectionLabel, getGreeting, getUserGreetingName, getLocationDisplay,
   getActivityToneColor, buildAqiHistoryInsight, getWindInsight, getPollenInsight,
 } from '../components/home/homeUtils';
-import { loadNotificationInbox, markInboxSeen } from '../utils/notificationInbox';
+import { clearNotificationInbox, loadNotificationInbox } from '../utils/notificationInbox';
 
 const LIVE_REFRESH_WINDOW_MS   = 5 * 60 * 1000;
 const MAX_LIVE_REFRESHES       = 2;
@@ -236,8 +236,8 @@ export default function HomeScreen({ navigation, route }) {
     setNotificationCenterVisible(true);
   }, [refreshNotificationInbox]);
 
-  const markAllNotificationsRead = useCallback(async () => {
-    const next = await markInboxSeen();
+  const clearAllNotifications = useCallback(async () => {
+    const next = await clearNotificationInbox();
     setNotificationInbox(next);
   }, []);
 
@@ -460,8 +460,8 @@ export default function HomeScreen({ navigation, route }) {
             }]}>
               <View style={styles.notificationHeader}>
                 <Text style={styles.notificationTitle}>Notifications</Text>
-                <TouchableOpacity onPress={markAllNotificationsRead} activeOpacity={0.8}>
-                  <Text style={styles.notificationAction}>Mark all read</Text>
+                <TouchableOpacity onPress={clearAllNotifications} activeOpacity={0.8}>
+                  <Text style={styles.notificationAction}>Clear all</Text>
                 </TouchableOpacity>
               </View>
               <ScrollView
@@ -470,14 +470,14 @@ export default function HomeScreen({ navigation, route }) {
                 showsVerticalScrollIndicator={false}
               >
                 {notificationInbox.length === 0 ? (
-                  <GlassCard contentStyle={styles.notificationCardContent}>
+                  <GlassCard style={styles.notificationCardFlat} contentStyle={styles.notificationCardContent}>
                     <Text style={styles.notificationEmptyTitle}>No alerts saved yet</Text>
                     <Text style={styles.notificationEmptyBody}>
                       Weather, AQI, pollen, and travel alerts you receive will appear here with time and category.
                     </Text>
                   </GlassCard>
                 ) : notificationInbox.map((item) => (
-                  <GlassCard key={item.id} style={styles.notificationCard} contentStyle={styles.notificationCardContent}>
+                  <GlassCard key={item.id} style={[styles.notificationCard, styles.notificationCardFlat]} contentStyle={styles.notificationCardContent}>
                     <View style={styles.notificationRowTop}>
                       <View style={styles.notificationMetaGroup}>
                         {!item.seen ? <View style={styles.notificationDot} /> : null}
@@ -522,6 +522,12 @@ const styles = StyleSheet.create({
   notificationScroll: { flex: 1 },
   notificationList: { gap: 12, paddingTop: 4, paddingBottom: 20 },
   notificationCard: { marginBottom: 12 },
+  notificationCardFlat: {
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
+  },
   notificationCardContent: { padding: 16, gap: 8 },
   notificationRowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   notificationMetaGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },

@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const INBOX_KEY = 'outdooradvisor_notification_inbox_v1';
+const INBOX_RESET_KEY = 'outdooradvisor_notification_inbox_reset_v1';
+const INBOX_RESET_VERSION = '2026-06-23-clear-old-notifications';
 const MAX_ITEMS = 40;
 const CONTENT_DEDUPE_WINDOW_MS = 6 * 60 * 60 * 1000;
 const ROUTINE_CATEGORIES = new Set(['smart']);
@@ -66,6 +68,12 @@ function inferCategory(payload) {
 
 export async function loadNotificationInbox() {
   try {
+    const resetVersion = await AsyncStorage.getItem(INBOX_RESET_KEY);
+    if (resetVersion !== INBOX_RESET_VERSION) {
+      await AsyncStorage.setItem(INBOX_KEY, JSON.stringify([]));
+      await AsyncStorage.setItem(INBOX_RESET_KEY, INBOX_RESET_VERSION);
+      return [];
+    }
     const raw = await AsyncStorage.getItem(INBOX_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(parsed)) return [];
@@ -80,7 +88,14 @@ export async function loadNotificationInbox() {
 }
 
 export async function saveNotificationInbox(items) {
+  await AsyncStorage.setItem(INBOX_RESET_KEY, INBOX_RESET_VERSION);
   await AsyncStorage.setItem(INBOX_KEY, JSON.stringify(compactInboxItems(items)));
+}
+
+export async function clearNotificationInbox() {
+  await AsyncStorage.setItem(INBOX_RESET_KEY, INBOX_RESET_VERSION);
+  await AsyncStorage.setItem(INBOX_KEY, JSON.stringify([]));
+  return [];
 }
 
 export async function appendInboxNotification(payload) {
