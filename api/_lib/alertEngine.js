@@ -380,7 +380,13 @@ function evaluateRules(device, ctx, shared, state, now) {
     // 7. Heavy rain only. Light rain is visible in-app but no longer pushed.
     if (prefs.rainAlerts !== false && !storm && isHeavyRain(wx)) {
       const heavy = isHeavyRain(wx);
-      const copy = buildRainCopy(city, heavy, wx.precipitation ?? null);
+      const rainSignal = getRainSoonSignal(wx, {
+        now,
+        timeZone: device.timezone || 'Asia/Karachi',
+        probabilityThreshold: Math.min(Number(device.thresholds?.rainProbabilityAlert || DEFAULT_RAIN_PROBABILITY), 50),
+        leadHours: Number(device.thresholds?.rainLeadHours || DEFAULT_RAIN_LEAD_HOURS),
+      });
+      const copy = buildRainCopy(city, heavy, wx.precipitation ?? null, rainSignal);
       candidates.push({
         type: heavy ? 'heavy-rain' : 'rain',
         severity: heavy ? 'critical' : 'important',
@@ -390,7 +396,12 @@ function evaluateRules(device, ctx, shared, state, now) {
         category: 'Weather',
         source: 'weather-rain',
         url: 'https://outdooradvisor.app',
-        data: { weatherCode: wx.weatherCode, precipitation: wx.precipitation ?? null },
+        data: {
+          weatherCode: wx.weatherCode,
+          precipitation: wx.precipitation ?? null,
+          rainAt: rainSignal?.time || null,
+          rainProbability: rainSignal?.probability ?? null,
+        },
         cooldownKey: 'rain',
         cooldownMs: 4 * 60 * 60 * 1000,
       });
@@ -701,17 +712,20 @@ function buildStormCopy(city) {
   };
 }
 
-function buildRainCopy(city, isHeavy, precip) {
+function buildRainCopy(city, isHeavy, precip, rainSignal = null) {
+  const timingText = rainSignal?.arrivalSentence
+    ? `${rainSignal.arrivalSentence}. `
+    : 'Rain timing is not precise yet. ';
   if (isHeavy) {
     return {
       title: `Heavy rain advisory for ${city}`,
-      body: withDecision('avoid', `Heavy rain is active${precip != null ? ` (${precip} mm)` : ''}. Delay non-essential trips, slow down on wet roads, and avoid low-lying water.`),
+      body: withDecision('avoid', `Heavy rain is active now at your pin${precip != null ? ` (${precip} mm)` : ''}. ${timingText}Delay non-essential trips, slow down on wet roads, and avoid low-lying water.`),
     };
   }
   const lines = [
-    `Rain is active in ${city}. Keep outdoor plans short and take rain gear if you need to leave.`,
-    `Wet roads are likely around ${city}. Leave extra braking distance and avoid rushing errands.`,
-    `Light rain is around ${city}. Pick covered routes and keep a little extra travel time.`,
+    `${timingText}Keep outdoor plans short and take rain gear if you need to leave.`,
+    `${timingText}Leave extra braking distance and avoid rushing errands.`,
+    `${timingText}Pick covered routes and keep a little extra travel time.`,
   ];
   return {
     title: `Rain advisory for ${city}`,
@@ -912,6 +926,7 @@ export function getRainSoonSignal(wx, {
   now = new Date(),
   probabilityThreshold = DEFAULT_RAIN_PROBABILITY,
   leadHours = DEFAULT_RAIN_LEAD_HOURS,
+  timeZone = 'Asia/Karachi',
 } = {}) {
   const upcoming = getFutureHourly(wx, { now, leadHours });
   const rainy = upcoming.find((hour) => {
@@ -923,12 +938,54 @@ export function getRainSoonSignal(wx, {
   if (!rainy) return null;
   const probability = Number(rainy.precipProbability ?? 0);
   const nowMs = now instanceof Date ? now.getTime() : new Date(now).getTime();
-  const minutes = rainy.time ? Math.max(15, Math.round((new Date(rainy.time).getTime() - nowMs) / 60000)) : 60;
+  const rainAt = rainy.time ? new Date(rainy.time) : null;
+  const rainAtMs = rainAt ? rainAt.getTime() : NaN;
+  const minutes = Number.isFinite(rainAtMs)
+    ? Math.max(0, Math.round((rainAtMs - nowMs) / 60000))
+    : 60;
   const timing = minutes <= 30 ? '30 minutes' : minutes <= 90 ? '1-2 hours' : `${Math.ceil(minutes / 60)} hours`;
+  const timeLabel = Number.isFinite(rainAtMs) ? formatRainTime(rainAt, timeZone) : null;
+  const arrivalLabel = timeLabel
+    ? minutes <= 15
+      ? `now / around ${timeLabel}`
+      : `around ${timeLabel}`
+    : `within about ${timing}`;
+  const arrivalSentence = timeLabel
+    ? minutes <= 15
+      ? `Rain is at or very near your pin now`
+      : `Rain is estimated near your pin around ${timeLabel}`
+    : `Rain is estimated within about ${timing} at your pin`;
   const label = probability > 0
-    ? `${probability}% rain risk in about ${timing}`
-    : `rain signals in about ${timing}`;
-  return { probability, label, minutes, weatherCode: rainy.weatherCode ?? null };
+    ? `${probability}% rain risk ${arrivalLabel}`
+    : `rain signals ${arrivalLabel}`;
+  return {
+    probability,
+    label,
+    minutes,
+    time: Number.isFinite(rainAtMs) ? rainAt.toISOString() : null,
+    timeLabel,
+    arrivalLabel,
+    arrivalSentence,
+    weatherCode: rainy.weatherCode ?? null,
+  };
+}
+
+function formatRainTime(date, timeZone) {
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Karachi',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(date);
+  }
 }
 
 function getPeakRainProbability(wx, now, leadHours) {
@@ -953,16 +1010,31 @@ export function buildSuddenWeatherCandidates({ device, wx, aqi, previous, city, 
   const rainJump = rainProbability - Number(previous.rainProbability || 0);
 
   if (prefs.rainAlerts !== false && rainProbability >= rainThreshold && rainJump >= rainJumpThreshold) {
+    const rainSignal = getRainSoonSignal(wx, {
+      now,
+      probabilityThreshold: rainThreshold,
+      leadHours,
+      timeZone: device.timezone || 'Asia/Karachi',
+    });
+    const timingText = rainSignal?.arrivalSentence
+      ? `${rainSignal.arrivalSentence}.`
+      : `Rain is estimated within the next ${leadHours} hours at your pin.`;
     candidates.push({
       type: 'sudden-rain',
       severity: 'important',
       decision: 'plan',
-      title: `Rain risk rising near ${city}`,
-      body: withDecision('plan', `Rain chance jumped from ${Math.round(previous.rainProbability || 0)}% to ${Math.round(rainProbability)}% within the next ${leadHours} hours. Finish exposed plans early and take rain gear.`),
+      title: `Rain may reach ${city} soon`,
+      body: withDecision('plan', `Rain chance jumped from ${Math.round(previous.rainProbability || 0)}% to ${Math.round(rainProbability)}%. ${timingText} Finish exposed plans early and take rain gear.`),
       category: 'Weather',
       source: 'weather-change',
       url: 'https://outdooradvisor.app',
-      data: { fromProbability: previous.rainProbability || 0, toProbability: rainProbability, leadHours },
+      data: {
+        fromProbability: previous.rainProbability || 0,
+        toProbability: rainProbability,
+        leadHours,
+        rainAt: rainSignal?.time || null,
+        rainProbability: rainSignal?.probability ?? rainProbability,
+      },
       cooldownKey: 'sudden-rain',
       cooldownMs: 2 * 60 * 60 * 1000,
     });

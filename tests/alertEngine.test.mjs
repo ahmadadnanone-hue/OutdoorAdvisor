@@ -31,10 +31,13 @@ test('rain-soon signal reports the configured future probability', () => {
     now: NOW,
     probabilityThreshold: 70,
     leadHours: 3,
+    timeZone: 'Asia/Karachi',
   });
   assert.equal(signal.probability, 75);
   assert.equal(signal.minutes, 120);
   assert.match(signal.label, /75% rain risk/);
+  assert.equal(signal.timeLabel, '5:00 PM');
+  assert.match(signal.arrivalSentence, /around 5:00 PM/);
 });
 
 test('sudden rain candidate explains a sharp probability jump', () => {
@@ -53,6 +56,7 @@ test('sudden rain candidate explains a sharp probability jump', () => {
   assert.equal(candidates[0].type, 'sudden-rain');
   assert.equal(candidates[0].severity, 'important');
   assert.match(candidates[0].body, /20% to 75%/);
+  assert.match(candidates[0].body, /around 4:00 PM/);
 });
 
 test('temperature surge only notifies after crossing the heat threshold', () => {
