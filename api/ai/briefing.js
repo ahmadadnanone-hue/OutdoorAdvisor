@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { derivePremiumState } from '../../src/lib/premium.js';
 import {
@@ -12,6 +13,11 @@ import {
   matchOfficialItems,
   normalizeQuestion,
 } from '../_lib/askOutdoorAdvisor.js';
+import { kvCommand } from '../_lib/kv.js';
+
+const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-lite';
+const ASK_DAILY_LIMIT = 10;
+const ASK_TIME_ZONE = 'Asia/Karachi';
 
 function sendJson(res, status, payload) {
   res.status(status).json(payload);
@@ -54,28 +60,95 @@ async function getRequestPremiumState(req) {
   const allowlistedEmails = parsePremiumEmailAllowlist(process.env.PREMIUM_EMAILS);
 
   if (!token) {
-    return { isPremium: false, plan: 'free' };
+    return { isPremium: false, plan: 'free', userId: null, email: null };
   }
 
   const supabase = getSupabaseServerClient();
   if (!supabase) {
-    return { isPremium: false, plan: 'free' };
+    return { isPremium: false, plan: 'free', userId: null, email: null };
   }
 
   try {
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data?.user) {
-      return { isPremium: false, plan: 'free' };
+      return { isPremium: false, plan: 'free', userId: null, email: null };
     }
     const premiumState = derivePremiumState(data.user);
     const email = normalizeEmail(data.user.email);
+    const userId = data.user.id || null;
     if (email && allowlistedEmails.includes(email)) {
-      return { isPremium: true, plan: 'premium' };
+      return { isPremium: true, plan: 'premium', userId, email };
     }
-    return premiumState;
+    return { ...premiumState, userId, email };
   } catch {
-    return { isPremium: false, plan: 'free' };
+    return { isPremium: false, plan: 'free', userId: null, email: null };
   }
+}
+
+function getPakistanDayKey(date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: ASK_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+function getNextPakistanMidnightIso(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ASK_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date).reduce((acc, part) => {
+    if (part.type !== 'literal') acc[part.type] = part.value;
+    return acc;
+  }, {});
+  const nextNoonUtc = new Date(Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day) + 1,
+    12,
+    0,
+    0
+  ));
+  const nextParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ASK_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(nextNoonUtc).reduce((acc, part) => {
+    if (part.type !== 'literal') acc[part.type] = part.value;
+    return acc;
+  }, {});
+  return `${nextParts.year}-${nextParts.month}-${nextParts.day}T00:00:00+05:00`;
+}
+
+function getRequestIp(req) {
+  const forwarded = req.headers?.['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim()) return forwarded.split(',')[0].trim();
+  return req.headers?.['x-real-ip'] || req.socket?.remoteAddress || 'unknown';
+}
+
+function stableHash(value) {
+  return createHash('sha256').update(String(value || 'unknown')).digest('hex').slice(0, 24);
+}
+
+async function consumeAskQuota(req, premiumState) {
+  const subject = premiumState.userId || premiumState.email || `ip:${getRequestIp(req)}`;
+  const dayKey = getPakistanDayKey();
+  const key = `ask:quota:${dayKey}:${stableHash(subject)}`;
+  const count = Number(await kvCommand(['INCR', key]));
+  if (count === 1) {
+    await kvCommand(['EXPIRE', key, 60 * 60 * 48]).catch(() => null);
+  }
+  return {
+    limit: ASK_DAILY_LIMIT,
+    used: Number.isFinite(count) ? count : ASK_DAILY_LIMIT,
+    remaining: Math.max(0, ASK_DAILY_LIMIT - (Number.isFinite(count) ? count : ASK_DAILY_LIMIT)),
+    allowed: Number.isFinite(count) && count <= ASK_DAILY_LIMIT,
+    resetAt: getNextPakistanMidnightIso(),
+  };
 }
 
 function extractTextFromResponse(json) {
@@ -1166,7 +1239,7 @@ async function callGeminiAsk(model, apiKey, prompt) {
         generationConfig: {
           temperature: 0.35,
           topP: 0.85,
-          maxOutputTokens: 500,
+          maxOutputTokens: 800,
           responseMimeType: 'application/json',
         },
       }),
@@ -1179,14 +1252,113 @@ async function callGeminiAsk(model, apiKey, prompt) {
   if (!parsed?.headline || !parsed?.answer) throw new Error('Gemini returned an invalid Ask payload.');
   return {
     headline: String(parsed.headline).slice(0, 100),
-    answer: String(parsed.answer).slice(0, 800),
-    bullets: Array.isArray(parsed.bullets) ? parsed.bullets.map(String).slice(0, 4) : [],
+    answer: String(parsed.answer).slice(0, 1200),
+    bullets: Array.isArray(parsed.bullets) ? parsed.bullets.map(String).slice(0, 5) : [],
     sections: Array.isArray(parsed.sections)
       ? parsed.sections.slice(0, 4).map((section) => ({
           title: String(section?.title || '').slice(0, 50),
           items: Array.isArray(section?.items) ? section.items.map(String).slice(0, 4) : [],
         })).filter((section) => section.title && section.items.length)
       : [],
+  };
+}
+
+function buildAskScopePrompt(question, conversationContext = null) {
+  return `
+You are a strict scope classifier for Ask OutdoorAdvisor.
+Decide if the user's message belongs inside a Pakistan-focused outdoor decision app.
+
+IN SCOPE:
+- weather, rain, storm, heat, cold, fog, smog, AQI, UV, pollen, air quality
+- outdoor plans, sports, walking, running, camping, hiking, lunch/dining outdoors
+- nearby places for outdoor activities or route stops
+- travel timing, destination trips, road/motorway/NHMP/PMD/NDMA safety, route conditions
+- follow-up questions that rely on prior outdoor/travel/weather context
+
+OUT OF SCOPE:
+- general homework, coding, finance, politics, entertainment, relationships, medical/legal advice unrelated to outdoor conditions
+- messages with no actionable outdoor, weather, travel, route, or place intent
+
+Return strict JSON only:
+{"inScope":true,"intent":"weather|activity|nearby|travel|route_stop|official_alert|follow_up|out_of_scope","reason":"<=12 words"}
+
+PRIOR CONTEXT:
+${JSON.stringify(conversationContext || {}, null, 2)}
+
+USER MESSAGE:
+${question}
+`.trim();
+}
+
+async function classifyAskScope(model, apiKey, question, conversationContext = null) {
+  const hasPriorOutdoorContext = Boolean(conversationContext?.intent || conversationContext?.destinationQuery || conversationContext?.activity);
+  if (!apiKey) {
+    return {
+      provider: 'deterministic-scope',
+      inScope: isOutdoorQuestion(question) || hasPriorOutdoorContext,
+      intent: isOutdoorQuestion(question) ? 'weather' : hasPriorOutdoorContext ? 'follow_up' : 'out_of_scope',
+      reason: 'Gemini scope unavailable',
+    };
+  }
+
+  const response = await withTimeout(fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: buildAskScopePrompt(question, conversationContext) }] }],
+        generationConfig: {
+          temperature: 0.05,
+          topP: 0.7,
+          maxOutputTokens: 160,
+          responseMimeType: 'application/json',
+        },
+      }),
+    }
+  ), 10000);
+
+  const json = await response.json();
+  if (!response.ok) throw new Error(json?.error?.message || `Gemini scope failed (${response.status})`);
+  const parsed = tryParseJson(extractTextFromResponse(json));
+  if (typeof parsed?.inScope !== 'boolean') throw new Error('Gemini returned an invalid scope payload.');
+  return {
+    provider: 'gemini-scope',
+    inScope: Boolean(parsed.inScope),
+    intent: String(parsed.intent || (parsed.inScope ? 'weather' : 'out_of_scope')).slice(0, 40),
+    reason: String(parsed.reason || '').slice(0, 100),
+  };
+}
+
+function buildOutOfScopeAskResponse(scope, quota) {
+  return {
+    provider: 'scope-guard',
+    verdict: 'plan',
+    headline: 'Ask an outdoor question',
+    answer: 'I can help when your question is about weather, AQI, outdoor timing, nearby places, camping, travel routes, or official PMD/NDMA/NHMP alerts. This message looks outside that scope.',
+    bullets: [
+      'Try: “Should I go to Murree tomorrow evening?”',
+      'Try: “Where can I play tennis near me right now?”',
+      quota ? `${quota.remaining} Ask queries left today.` : null,
+    ].filter(Boolean),
+    sections: [],
+    scope,
+    quota,
+  };
+}
+
+function buildAskQuotaResponse(quota) {
+  return {
+    provider: 'quota-limit',
+    verdict: 'plan',
+    headline: 'Daily Ask limit reached',
+    answer: `You have used ${quota.limit} Ask OutdoorAdvisor queries today. Your limit resets at midnight Pakistan time.`,
+    bullets: [
+      'Core weather, AQI, travel advisories, and alerts still work normally.',
+      `Next reset: ${quota.resetAt}`,
+    ],
+    sections: [],
+    quota,
   };
 }
 
@@ -1223,7 +1395,7 @@ export default async function handler(req, res) {
 
   const geminiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '').trim();
   const googleKey = (process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
-  const model     = (process.env.GEMINI_MODEL || 'gemini-2.0-flash').trim();
+  const model     = (process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL).trim();
 
   // ── Ask OutdoorAdvisor: premium evidence-first conversational answers ────
   if (kind === 'ask') {
@@ -1233,11 +1405,6 @@ export default async function handler(req, res) {
     if (!question || !Number.isFinite(lat) || !Number.isFinite(lon)) {
       return sendJson(res, 400, { error: 'question, lat, and lon are required.' });
     }
-    if (!isOutdoorQuestion(question)) {
-      return sendJson(res, 400, {
-        error: 'Ask about weather, air quality, outdoor plans, nearby activities, or travel routes.',
-      });
-    }
 
     const premiumState = await getRequestPremiumState(req);
     if (!premiumState.isPremium) {
@@ -1245,6 +1412,42 @@ export default async function handler(req, res) {
     }
 
     res.setHeader('Cache-Control', 'no-store');
+    let quota;
+    try {
+      quota = await consumeAskQuota(req, premiumState);
+    } catch (error) {
+      return sendJson(res, 200, {
+        provider: 'quota-unavailable',
+        verdict: 'plan',
+        headline: 'Ask is busy',
+        answer: 'Ask OutdoorAdvisor could not verify the daily query limit right now. Please try again in a moment.',
+        bullets: [],
+        sections: [],
+        quota: { limit: ASK_DAILY_LIMIT, remaining: 0, allowed: false },
+        _debug: error?.message,
+      });
+    }
+    if (!quota.allowed) {
+      return sendJson(res, 200, buildAskQuotaResponse(quota));
+    }
+
+    let scope;
+    try {
+      scope = await classifyAskScope(model, geminiKey, question, body.conversationContext || null);
+    } catch (error) {
+      const priorContext = body.conversationContext || {};
+      const hasPriorOutdoorContext = Boolean(priorContext.intent || priorContext.destinationQuery || priorContext.activity);
+      scope = {
+        provider: 'deterministic-scope',
+        inScope: isOutdoorQuestion(question) || hasPriorOutdoorContext,
+        intent: isOutdoorQuestion(question) ? 'weather' : hasPriorOutdoorContext ? 'follow_up' : 'out_of_scope',
+        reason: error?.message || 'Gemini scope failed',
+      };
+    }
+    if (!scope.inScope) {
+      return sendJson(res, 200, buildOutOfScopeAskResponse(scope, quota));
+    }
+
     const evidence = await buildAskEvidence(req, body, googleKey);
     const fallback = buildAskFallback({
       context: evidence.context,
@@ -1263,13 +1466,13 @@ export default async function handler(req, res) {
       routeStopPoint: evidence.routeStopPoint,
     });
 
-    if (!geminiKey) return sendJson(res, 200, { ...fallback, evidence });
+    if (!geminiKey) return sendJson(res, 200, { ...fallback, evidence, scope, quota });
 
     try {
       const prompt = buildAskPrompt({ question, evidence, fallback });
       const result = await callGeminiAsk(model, geminiKey, prompt);
       if (!isSpecificAskResult(result, evidence)) {
-        return sendJson(res, 200, { ...fallback, evidence, provider: 'fallback-specificity-guard' });
+        return sendJson(res, 200, { ...fallback, evidence, scope, quota, provider: 'fallback-specificity-guard' });
       }
       return sendJson(res, 200, {
         provider: 'gemini',
@@ -1279,9 +1482,11 @@ export default async function handler(req, res) {
         bullets: result.bullets,
         sections: result.sections.length ? result.sections : fallback.sections,
         evidence,
+        scope,
+        quota,
       });
     } catch (error) {
-      return sendJson(res, 200, { ...fallback, evidence, _debug: error?.message });
+      return sendJson(res, 200, { ...fallback, evidence, scope, quota, _debug: error?.message });
     }
   }
 
