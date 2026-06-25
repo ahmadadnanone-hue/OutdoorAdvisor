@@ -86,6 +86,12 @@ export default function AskOutdoorAdvisor({
   const [error, setError] = useState('');
   const prompts = context === 'travel' ? TRAVEL_PROMPTS : HOME_PROMPTS;
 
+  const handleQuestionChange = (value) => {
+    setQuestion(value);
+    if (result) setResult(null);
+    if (error) setError('');
+  };
+
   const sourceRows = useMemo(() => {
     const status = result?.evidence?.sourceStatus || {};
     const labels = { forecast: 'Forecast', airQuality: 'Air quality', PMD: 'PMD', NDMA: 'NDMA', NHMP: 'NHMP', GoogleRoute: 'Google route', places: 'Places' };
@@ -236,7 +242,7 @@ export default function AskOutdoorAdvisor({
             <View style={styles.composer}>
               <TextInput
                 value={question}
-                onChangeText={setQuestion}
+                onChangeText={handleQuestionChange}
                 placeholder="Ask about an outdoor plan or route…"
                 placeholderTextColor={dc.textMuted}
                 style={styles.input}

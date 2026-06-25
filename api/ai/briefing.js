@@ -1274,10 +1274,12 @@ IN SCOPE:
 - nearby places for outdoor activities or route stops
 - travel timing, destination trips, road/motorway/NHMP/PMD/NDMA safety, route conditions
 - follow-up questions that rely on prior outdoor/travel/weather context
+- short follow-ups like "what about tomorrow", "and rain?", "route?", "nearby?", or "best time?" when PRIOR CONTEXT is outdoor/travel/weather
 
 OUT OF SCOPE:
 - general homework, coding, finance, politics, entertainment, relationships, medical/legal advice unrelated to outdoor conditions
 - messages with no actionable outdoor, weather, travel, route, or place intent
+- math or factual trivia like "what is 2+2" even when PRIOR CONTEXT exists
 
 Return strict JSON only:
 {"inScope":true,"intent":"weather|activity|nearby|travel|route_stop|official_alert|follow_up|out_of_scope","reason":"<=12 words"}
@@ -1290,15 +1292,42 @@ ${question}
 `.trim();
 }
 
-async function classifyAskScope(model, apiKey, question, conversationContext = null) {
+function isLikelyAskFollowUp(question) {
+  const text = normalizeQuestion(question).toLowerCase();
+  if (!text || text.length > 120) return false;
+  return (
+    /^(what about|how about|and|also|then|tomorrow|today|tonight|now|later|route|road|rain|weather|aqi|there|nearby|best time|is it safe|should i)$/i.test(text) ||
+    /^(what about|how about|and|also)\b/.test(text) ||
+    /\b(tomorrow|tonight|later|now|rain|route|road|aqi|weather|nearby|best time|safe|there)\??$/.test(text)
+  );
+}
+
+function isClearlyOutOfScopeQuestion(question) {
+  const text = normalizeQuestion(question).toLowerCase();
+  if (!text) return true;
+  if (isOutdoorQuestion(text)) return false;
+  return (
+    /\b(what\s+is|calculate|solve|math|equation|poem|joke|story|essay|code|javascript|python|translate|capital of|president|prime minister|stock|crypto)\b/.test(text) ||
+    /^\s*\d+\s*[-+*/x÷]\s*\d+\s*\??\s*$/.test(text) ||
+    /\b\d+\s*[-+*/x÷]\s*\d+\b/.test(text)
+  );
+}
+
+function buildDeterministicScope(question, conversationContext = {}, reason = 'Gemini scope unavailable') {
   const hasPriorOutdoorContext = Boolean(conversationContext?.intent || conversationContext?.destinationQuery || conversationContext?.activity);
+  const outdoor = isOutdoorQuestion(question);
+  const followUp = hasPriorOutdoorContext && isLikelyAskFollowUp(question) && !isClearlyOutOfScopeQuestion(question);
+  return {
+    provider: 'deterministic-scope',
+    inScope: outdoor || followUp,
+    intent: outdoor ? 'weather' : followUp ? 'follow_up' : 'out_of_scope',
+    reason,
+  };
+}
+
+async function classifyAskScope(model, apiKey, question, conversationContext = null) {
   if (!apiKey) {
-    return {
-      provider: 'deterministic-scope',
-      inScope: isOutdoorQuestion(question) || hasPriorOutdoorContext,
-      intent: isOutdoorQuestion(question) ? 'weather' : hasPriorOutdoorContext ? 'follow_up' : 'out_of_scope',
-      reason: 'Gemini scope unavailable',
-    };
+    return buildDeterministicScope(question, conversationContext, 'Gemini scope unavailable');
   }
 
   const response = await withTimeout(fetch(
@@ -1322,11 +1351,12 @@ async function classifyAskScope(model, apiKey, question, conversationContext = n
   if (!response.ok) throw new Error(json?.error?.message || `Gemini scope failed (${response.status})`);
   const parsed = tryParseJson(extractTextFromResponse(json));
   if (typeof parsed?.inScope !== 'boolean') throw new Error('Gemini returned an invalid scope payload.');
+  const clearlyOutOfScope = isClearlyOutOfScopeQuestion(question);
   return {
     provider: 'gemini-scope',
-    inScope: Boolean(parsed.inScope),
-    intent: String(parsed.intent || (parsed.inScope ? 'weather' : 'out_of_scope')).slice(0, 40),
-    reason: String(parsed.reason || '').slice(0, 100),
+    inScope: clearlyOutOfScope ? false : Boolean(parsed.inScope),
+    intent: clearlyOutOfScope ? 'out_of_scope' : String(parsed.intent || (parsed.inScope ? 'weather' : 'out_of_scope')).slice(0, 40),
+    reason: clearlyOutOfScope ? 'Clearly outside outdoor scope' : String(parsed.reason || '').slice(0, 100),
   };
 }
 
@@ -1435,14 +1465,7 @@ export default async function handler(req, res) {
     try {
       scope = await classifyAskScope(model, geminiKey, question, body.conversationContext || null);
     } catch (error) {
-      const priorContext = body.conversationContext || {};
-      const hasPriorOutdoorContext = Boolean(priorContext.intent || priorContext.destinationQuery || priorContext.activity);
-      scope = {
-        provider: 'deterministic-scope',
-        inScope: isOutdoorQuestion(question) || hasPriorOutdoorContext,
-        intent: isOutdoorQuestion(question) ? 'weather' : hasPriorOutdoorContext ? 'follow_up' : 'out_of_scope',
-        reason: error?.message || 'Gemini scope failed',
-      };
+      scope = buildDeterministicScope(question, body.conversationContext || {}, error?.message || 'Gemini scope failed');
     }
     if (!scope.inScope) {
       return sendJson(res, 200, buildOutOfScopeAskResponse(scope, quota));
