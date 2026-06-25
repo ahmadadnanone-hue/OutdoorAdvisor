@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors as dc } from '../design';
 
 const STORAGE_KEY = 'outdooradvisor_theme_mode';
+const DEFAULT_THEME_MODE = 'dark';
 
 const ThemeContext = createContext();
 
@@ -12,7 +13,7 @@ const ThemeContext = createContext();
  * iOS to resolve DynamicColorIOS design tokens against that choice.
  */
 export function ThemeProvider({ children }) {
-  const [mode, setMode] = useState('auto'); // 'auto' | 'dark' | 'light'
+  const [mode, setMode] = useState(DEFAULT_THEME_MODE); // 'auto' | 'dark' | 'light'
   const [systemScheme, setSystemScheme] = useState(() => Appearance.getColorScheme() || 'light');
   const [isReady, setIsReady] = useState(Platform.OS === 'web');
 
@@ -25,7 +26,7 @@ export function ThemeProvider({ children }) {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((saved) => {
         if (!mounted) return;
-        const savedMode = saved === 'auto' || saved === 'dark' || saved === 'light' ? saved : 'auto';
+        const savedMode = saved === 'auto' || saved === 'dark' || saved === 'light' ? saved : DEFAULT_THEME_MODE;
         if (Platform.OS !== 'web' && typeof Appearance.setColorScheme === 'function') {
           Appearance.setColorScheme(savedMode === 'auto' ? null : savedMode);
         }
