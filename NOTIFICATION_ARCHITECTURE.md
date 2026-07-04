@@ -63,7 +63,7 @@ The production path is:
 5. Cloudflare Worker `outdooradvisor-notification-cron` triggers `/api/push?action=cron` every five minutes using a matching `CRON_SECRET`. GitHub Actions remains an active 15-minute fallback because its scheduled jobs can sometimes be delayed.
 6. Server sends pushes through Expo Push Service.
 7. Server stores Expo receipt IDs and later checks receipts to clean up delivery failures.
-8. Build 20 client code saves received/tapped remote pushes into the local in-app Notification Center.
+8. Client code saves received/tapped remote pushes into the local in-app Notification Center.
 
 This is the only path that can reliably notify users when the app is closed.
 
@@ -186,8 +186,7 @@ Do not manually trigger the production cron merely to test summary copy: it can 
 
 1. Improve NDMA attachment parsing so PDF/DOCX advisory bodies can enrich district targeting beyond title-based/default hazard regions.
 2. Monitor the five-minute Cloudflare Worker schedule and GitHub fallback for delivery gaps.
-3. ~~Delivery dashboard~~ — done: `/api/push?action=status` (test-secret protected).
-4. Add server-side notification inbox events for cross-device history.
-5. ~~Receipt-based automatic token cleanup~~ — done: `DeviceNotRegistered` receipts now remove the device record.
-6. Decide whether critical travel alerts should be free while premium keeps advanced/custom alerts.
-7. Consider the iOS Time Sensitive Notifications capability (`com.apple.developer.usernotifications.time-sensitive`) on the next native build so the `time-sensitive` interruption level actually breaks through Focus; without it APNs downgrades it to `active` (current pushes still deliver normally).
+3. Add server-side notification inbox events for cross-device history.
+4. Decide whether critical travel alerts should be free while premium keeps advanced/custom alerts.
+5. Consider the iOS Time Sensitive Notifications capability (`com.apple.developer.usernotifications.time-sensitive`) on the next native build so the `time-sensitive` interruption level actually breaks through Focus; without it APNs downgrades it to `active` (current pushes still deliver normally).
+6. Watch `AI_NOTIFY_DAILY_CALL_CAP` usage via `/api/push?action=status` as the device count grows; raise it (or `AI_NOTIFY_TIMES_PER_DAY`) if the cap starts being hit on active-weather days.

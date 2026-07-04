@@ -59,7 +59,7 @@ A **premium iOS-only app** that gives people in Pakistan a calm, practical read 
 | AI briefing | Gemini via Vercel proxy `/api/ai-briefing` |
 | Road data | NHMP direct fetch (iOS) + Vercel proxy (fallback) |
 | Health | @kingstinct/react-native-healthkit (steps, distance, energy) |
-| Notifications | Server-sent native push (Expo Push via `/api/push`, decision-first engine — see `NOTIFICATION_ARCHITECTURE.md`) + expo-notifications local fallback |
+| Notifications | Server-sent native push (Expo Push via `/api/push`, decision-first engine, Gemini-written copy with rule-copy fallback — see `NOTIFICATION_ARCHITECTURE.md`) + expo-notifications local fallback |
 | Background | expo-background-task + expo-task-manager |
 | Storage | AsyncStorage (preferences) + in-memory cache (weather/AQI) |
 | Maps | react-native-maps (TravelScreen) |
