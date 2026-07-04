@@ -19,6 +19,11 @@ import {
   fetchNdmaAdvisories,
   ndmaAdvisoryMatchesDevice,
 } from './ndmaAdvisories.js';
+import {
+  applyAiNotificationCopy,
+  getAiWriterStatus,
+  pruneAiWriterState,
+} from './aiNotificationWriter.js';
 
 const ALERT_STATE_KEY = 'push:alert-engine:state';
 const PMD_RSS_URL = 'https://cap-sources.s3.amazonaws.com/pk-pmd-en/rss.xml';
@@ -86,7 +91,7 @@ export async function runAlertEngine({ mode = 'scheduled' } = {}) {
       const ctx = await buildDeviceContext(device, caches, shared, state, now);
       const candidates = evaluateRules(device, ctx, shared, state, now);
       updateDeviceSnapshot(state, device, ctx, now);
-      const sent = await dispatchCandidates(device, ctx, candidates, state, now);
+      const sent = await dispatchCandidates(device, ctx, candidates, state, now, shared);
       for (const item of sent) {
         sentByType[item.type] = (sentByType[item.type] || 0) + 1;
         totalSent += 1;
@@ -577,7 +582,7 @@ function evaluateRules(device, ctx, shared, state, now) {
 }
 
 // ─── Dispatcher ──────────────────────────────────────────────────────────────
-async function dispatchCandidates(device, ctx, candidates, state, now) {
+async function dispatchCandidates(device, ctx, candidates, state, now, shared) {
   if (!candidates.length) return [];
 
   const token = device.expoPushToken;
@@ -587,6 +592,22 @@ async function dispatchCandidates(device, ctx, candidates, state, now) {
 
   state.cooldowns = state.cooldowns || {};
   const sent = [];
+
+  // Evidence shared by every AI-written push for this device this run.
+  const city = getDeviceLocationLabel(device);
+  const officialItems = buildDeviceOfficialItems(device, shared);
+
+  // AI-first copy: Gemini rewrites the push from the full evidence bundle;
+  // any failure ships the deterministic rule copy unchanged.
+  const withAiCopy = async (candidate) => {
+    try {
+      return await applyAiNotificationCopy({
+        device, ctx, candidate, officialItems, city, state, now, day,
+      });
+    } catch {
+      return candidate;
+    }
+  };
 
   const passesCooldown = (candidate) => {
     if (candidate.bypassCooldown) return true;
@@ -614,7 +635,7 @@ async function dispatchCandidates(device, ctx, candidates, state, now) {
   // each deduped by its own cooldown, capped per run to avoid floods.
   const criticals = ordered.filter((c) => c.severity === 'critical' && passesCooldown(c));
   for (const candidate of criticals.slice(0, MAX_CRITICALS_PER_RUN)) {
-    await sendCandidate(device, candidate, state);
+    await sendCandidate(device, await withAiCopy(candidate), state);
     markCooldown(candidate);
     sent.push(candidate);
   }
@@ -625,7 +646,7 @@ async function dispatchCandidates(device, ctx, candidates, state, now) {
   // Briefs are cap-exempt (their once-per-day cooldown is the limiter).
   const briefs = ordered.filter((c) => c.brief && passesCooldown(c));
   for (const candidate of briefs) {
-    await sendCandidate(device, candidate, state);
+    await sendCandidate(device, await withAiCopy(candidate), state);
     markCooldown(candidate);
     sent.push(candidate);
   }
@@ -634,7 +655,7 @@ async function dispatchCandidates(device, ctx, candidates, state, now) {
   if (!canSendNonCriticalToday(state, token, day)) return sent;
   const best = ordered.find((c) => c.severity !== 'critical' && !c.brief && passesCooldown(c));
   if (best) {
-    await sendCandidate(device, best, state);
+    await sendCandidate(device, await withAiCopy(best), state);
     markCooldown(best);
     incrementNonCritical(state, token, day);
     sent.push(best);
@@ -664,10 +685,40 @@ async function sendCandidate(device, candidate, state) {
   });
 
   state.sendLog = state.sendLog || [];
-  state.sendLog.unshift({ at: Date.now(), type: candidate.type, severity: candidate.severity });
+  state.sendLog.unshift({ at: Date.now(), type: candidate.type, severity: candidate.severity, ai: candidate.data?.ai === true });
   if (state.sendLog.length > SEND_LOG_LIMIT) state.sendLog.length = SEND_LOG_LIMIT;
 
   return response;
+}
+
+// Official advisories relevant to this device, passed to the AI writer as
+// grounded evidence (same sources the Ask feature checks).
+function buildDeviceOfficialItems(device, shared) {
+  if (!shared) return [];
+  const items = [];
+  for (const alert of shared.pmdAlerts || []) {
+    if (!regionMatchesDevice(alert, device)) continue;
+    items.push({
+      source: 'PMD',
+      key: alert.key,
+      severity: alert.severity,
+      title: alert.title,
+      issued: alert.pubDate || null,
+    });
+  }
+  for (const advisory of shared.ndmaAdvisories || []) {
+    if (!ndmaAdvisoryMatchesDevice(advisory, device)) continue;
+    items.push({
+      source: 'NDMA',
+      key: advisory.key,
+      severity: advisory.level || null,
+      hazard: advisory.hazard || null,
+      title: advisory.title,
+      issued: advisory.date || null,
+      validUntil: advisory.expires || advisory.validUntil || null,
+    });
+  }
+  return items.slice(0, 4);
 }
 
 // ─── Decision helpers ────────────────────────────────────────────────────────
@@ -1733,6 +1784,7 @@ function pruneState(state, now) {
       delete state.weatherSnapshots[token];
     }
   }
+  pruneAiWriterState(state, now);
 }
 
 async function saveState(state) {
@@ -1750,6 +1802,7 @@ export async function getAlertEngineStatus() {
     nhmpLastCheckedAt: state.nhmpLastCheckedAt || null,
     activePmdAlerts: (state.pmdLatest || []).length,
     recentSends: (state.sendLog || []).slice(0, 25),
+    ai: getAiWriterStatus(state),
   };
 }
 

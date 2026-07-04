@@ -1,6 +1,6 @@
 # OutdoorAdvisor Notification Architecture
 
-Last updated: 2026-06-13
+Last updated: 2026-07-04
 
 ## Goal
 
@@ -15,6 +15,19 @@ Every server push is built for decision-making, not just information:
 - Non-critical pushes use the actionable category `oa-alert`, giving a long-press **"Mute alerts today"** button. The mute is stored on-device, synced to the server (`muteUntil` on the device record), and the engine skips non-critical sends until it expires. Criticals always break through.
 - **Quiet hours (22:00–06:00 device-local)** suppress all non-critical pushes; criticals bypass.
 - The dispatcher sends at most **one non-critical alert per cron run** per device (briefs exempt) so users never get stacked pushes from a single check.
+
+## AI-Written Notifications (2026-07 overhaul)
+
+Every push the dispatcher approves — morning brief, evening planner, and all weather/AQI/official/route alerts — now gets its title and body written by Gemini in `api/_lib/aiNotificationWriter.js`, using the same grounded-evidence approach as Ask OutdoorAdvisor:
+
+- **Evidence bundle per push**: current conditions, next-12h hourly outlook, today/tomorrow daily, AQI/PM2.5, device-matched PMD + NDMA advisories (with issue date and validity), the triggering rule's data (e.g. rain arrival time, route closure), and the rule engine's own copy as grounding.
+- **The rule engine stays in charge of safety.** It still decides *when* to alert; the AI only writes the copy. The decision verdict (`avoid`/`caution`/`go`/`plan`) and severity are fixed by the deterministic engine — the AI is instructed not to state them and the server prepends the verdict prefix itself.
+- **N analyses per day, previous analysis reused between them.** AI copy is cached in engine state per rounded location + alert type, valid for `24h / AI_NOTIFY_TIMES_PER_DAY` (default 6 → refresh roughly every 4 hours). Time-bound evidence shortens the window (e.g. copy citing a rain arrival hour expires at that hour); static official advisories (PMD/NDMA text never changes once issued) stay valid at least 12h — so an NDMA "monsoon system entering Lahore until Jul 7" analysis keeps being used until it lapses. A coarse evidence hash (temp ±2°, AQI ±25, rain% ±20, advisory keys) forces an early refresh only when the situation changes materially.
+- **Budget**: a global daily Gemini call cap (`AI_NOTIFY_DAILY_CALL_CAP`, default 80). Criticals bypass the cap. When the cap is hit, the most recent matching analysis is reused; otherwise rule copy ships.
+- **Fallback = the previous system, unchanged.** No `GEMINI_API_KEY`, `AI_NOTIFY_DISABLED=1`, Gemini timeout (12s), or invalid JSON → the deterministic rule copy is sent exactly as before. Nothing about delivery, cooldowns, quiet hours, caps, or dedupe depends on the AI path.
+- Sends are tagged `ai: true/false` in `data` and in the send log; `/api/push?action=status` now includes an `ai` block (enabled, refresh interval, today's calls, cache size, last error).
+
+Env vars (Vercel): `GEMINI_API_KEY` (already set for `/api/ai/briefing`), optional `AI_NOTIFY_MODEL` (default `gemini-2.5-flash-lite`), `AI_NOTIFY_TIMES_PER_DAY` (default 6), `AI_NOTIFY_DAILY_CALL_CAP` (default 80), `AI_NOTIFY_DISABLED=1` kill switch.
 
 ## Current Notification Types
 
