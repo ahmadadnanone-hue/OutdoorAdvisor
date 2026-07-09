@@ -1063,6 +1063,7 @@ Severity rules (pick worst that applies):
 - "caution": AQI 81-170, UV 6-10, active rain, feels 35-41°C, High pollen
 - "go": everything else
 Mention the 2 most impactful risks in summary. Tailor actions to the time of day.
+When temperature is the headline risk, phrase it as "today's high of X°C" (e.g. "Dangerous heat — today's high of 42°C"). Never just say "at 42°C" — always qualify with "today's high of".
 
 CRITICAL CONSISTENCY RULES — your summary, actions, and window MUST agree with severity:
 - danger severity → summary, actions, headline must all be cautionary / restrictive. Never write "good for outdoor activities" or suggest "go for a walk" in a danger brief.
@@ -1088,9 +1089,9 @@ function synthesisFallback(signals, locationName, pollenLabel) {
     : 'go';
 
   const headline = isExtremeHeat
-    ? `Dangerous heat at ${Math.round(heatVal)}°C — stay indoors if possible.`
+    ? `Dangerous heat — today's high of ${Math.round(heatVal)}°C, stay indoors if possible.`
     : isHot && severity !== 'go'
-    ? `Warm at ${Math.round(heatVal)}°C — avoid midday and stay hydrated.`
+    ? `Warm today — high of ${Math.round(heatVal)}°C, avoid midday and stay hydrated.`
     : severity === 'danger'
     ? 'Conditions are difficult — plan outdoor exposure carefully.'
     : severity === 'caution'
