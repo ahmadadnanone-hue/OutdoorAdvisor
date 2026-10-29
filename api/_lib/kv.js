@@ -28,12 +28,13 @@ export async function kvCommand(command) {
   return json.result;
 }
 
-export async function kvSetJson(key, value) {
-  await kvCommand(['SET', key, JSON.stringify(value)]);
+export async function kvSetJson(key, value, { ttlSeconds } = {}) {
+  const command = ['SET', key, JSON.stringify(value)];
+  if (ttlSeconds) command.push('EX', String(ttlSeconds));
+  await kvCommand(command);
 }
 
-export async function kvGetJson(key) {
-  const value = await kvCommand(['GET', key]);
+function parseJson(value) {
   if (!value) return null;
 
   try {
@@ -43,8 +44,21 @@ export async function kvGetJson(key) {
   }
 }
 
-export async function kvDel(key) {
-  return kvCommand(['DEL', key]);
+export async function kvGetJson(key) {
+  return parseJson(await kvCommand(['GET', key]));
+}
+
+// One MGET instead of N GETs — Upstash bills per command, so reading every
+// device/receipt record individually on each cron run burns the quota.
+export async function kvMGetJson(keys) {
+  if (!keys?.length) return [];
+  const values = (await kvCommand(['MGET', ...keys])) || [];
+  return keys.map((_, index) => parseJson(values[index]));
+}
+
+export async function kvDel(...keys) {
+  if (!keys.length) return 0;
+  return kvCommand(['DEL', ...keys]);
 }
 
 export async function kvKeys(pattern) {
