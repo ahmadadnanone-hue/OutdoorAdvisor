@@ -1,9 +1,13 @@
 import crypto from 'crypto';
-import { kvDel, kvGetJson, kvKeys, kvSetJson } from './kv.js';
+import { kvDel, kvGetJson, kvKeys, kvMGetJson, kvSetJson } from './kv.js';
 
 const EXPO_PUSH_SEND_URL = 'https://exp.host/--/api/v2/push/send';
 const EXPO_PUSH_RECEIPTS_URL = 'https://exp.host/--/api/v2/push/getReceipts';
 const MAX_CHUNK_SIZE = 100;
+// Expo only serves receipts for ~24h. Anything older will never resolve, so
+// drop it instead of re-reading it every cron run; the TTL is a backstop.
+const RECEIPT_STALE_MS = 24 * 60 * 60 * 1000;
+const RECEIPT_TTL_SECONDS = 2 * 24 * 60 * 60;
 
 function hash(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -62,7 +66,7 @@ export async function removeNativeDevice(token) {
 export async function listNativeDevices() {
   const keys = (await kvKeys('push:native:*')) || [];
   if (!Array.isArray(keys) || keys.length === 0) return [];
-  const records = await Promise.all(keys.map((key) => kvGetJson(key)));
+  const records = await kvMGetJson(keys);
   return records.filter((record) => record && isExpoPushToken(record.expoPushToken));
 }
 
@@ -135,9 +139,23 @@ export async function checkStoredReceipts(limit = 300) {
   const keys = ((await kvKeys('push:receipt:*')) || []).slice(0, limit);
   if (!keys.length) return { checked: 0, ok: 0, errors: 0 };
 
-  const records = (await Promise.all(keys.map((key) => kvGetJson(key)))).filter(Boolean);
-  const ids = records.map((record) => record.id).filter(Boolean);
-  if (!ids.length) return { checked: 0, ok: 0, errors: 0 };
+  const now = Date.now();
+  const values = await kvMGetJson(keys);
+  const records = [];
+  const staleKeys = [];
+  keys.forEach((key, index) => {
+    const record = values[index];
+    if (!record?.id || !(now - Number(record.createdAt) < RECEIPT_STALE_MS)) {
+      staleKeys.push(key);
+    } else {
+      records.push(record);
+    }
+  });
+  const ids = records.map((record) => record.id);
+  if (!ids.length) {
+    await kvDel(...staleKeys);
+    return { checked: 0, ok: 0, errors: 0, expired: staleKeys.length };
+  }
 
   const response = await fetch(EXPO_PUSH_RECEIPTS_URL, {
     method: 'POST',
@@ -155,27 +173,31 @@ export async function checkStoredReceipts(limit = 300) {
 
   let ok = 0;
   let errors = 0;
-  let removed = 0;
-  const recordById = new Map(records.map((record) => [record.id, record]));
-  await Promise.all(keys.map(async (key) => {
-    const id = key.replace('push:receipt:', '');
-    const receipt = json.data?.[id];
-    if (!receipt) return;
-    await kvDel(key);
+  const doneKeys = [];
+  const deadDeviceKeys = new Set();
+  for (const record of records) {
+    const receipt = json.data?.[record.id];
+    if (!receipt) continue;
+    doneKeys.push(getReceiptKey(record.id));
     if (receipt.status === 'ok') ok += 1;
     if (receipt.status === 'error') {
       errors += 1;
       // APNs says this token is permanently gone — drop the device record so
       // the engine stops fetching weather/AQI for it on every cron run.
-      const token = recordById.get(id)?.token;
-      if (token && receipt.details?.error === 'DeviceNotRegistered') {
-        await removeNativeDevice(token);
-        removed += 1;
+      if (record.token && receipt.details?.error === 'DeviceNotRegistered') {
+        deadDeviceKeys.add(getNativePushKey(record.token));
       }
     }
-  }));
+  }
+  await kvDel(...staleKeys, ...doneKeys, ...deadDeviceKeys);
 
-  return { checked: ids.length, ok, errors, removed };
+  return {
+    checked: ids.length,
+    ok,
+    errors,
+    removed: deadDeviceKeys.size,
+    expired: staleKeys.length,
+  };
 }
 
 async function storeReceiptIds(tickets, ticketTokens = []) {
@@ -183,7 +205,11 @@ async function storeReceiptIds(tickets, ticketTokens = []) {
   const writes = tickets
     .map((ticket, index) => ({ ticket, token: ticketTokens[index] || null }))
     .filter(({ ticket }) => ticket?.status === 'ok' && ticket.id)
-    .map(({ ticket, token }) => kvSetJson(getReceiptKey(ticket.id), { id: ticket.id, token, createdAt: now }));
+    .map(({ ticket, token }) => kvSetJson(
+      getReceiptKey(ticket.id),
+      { id: ticket.id, token, createdAt: now },
+      { ttlSeconds: RECEIPT_TTL_SECONDS },
+    ));
   await Promise.all(writes);
 }
 
