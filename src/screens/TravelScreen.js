@@ -85,7 +85,26 @@ const NHMP_ROUTE_ALIASES = {
   M9: ['m9','karachi-hyderabad','karachi to hyderabad','hyderabad to karachi'],
 };
 
-function getTravelRiskSummary({ nhmpData, pmdAlerts }) {
+function formatNhmpTime(time) {
+  const date = new Date(time);
+  return `${date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}, ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+}
+
+function getTravelRiskSummary({ nhmpData, pmdAlerts, nhmpUnavailable = false, nhmpStaleLabel = null }) {
+  // Never summarise roads as clear when NHMP couldn't be reached — "no alerts"
+  // from a dead feed is not the same as clear roads.
+  if (nhmpUnavailable) {
+    return {
+      level: 'elevated',
+      label: 'Road status unavailable',
+      body: 'The NHMP live feed is not responding right now. Call the NHMP helpline 130 before motorway travel.',
+      stats: [
+        { label: 'NHMP', value: 'Offline' },
+        { label: 'PMD Alerts', value: pmdAlerts.length },
+      ],
+    };
+  }
+
   const closures = nhmpData.filter((item) => item.severity === 'closed');
   const fog = nhmpData.filter((item) => item.severity === 'fog');
   const warnings = nhmpData.filter((item) => item.severity === 'warning' || item.severity === 'rain');
@@ -120,6 +139,18 @@ function getTravelRiskSummary({ nhmpData, pmdAlerts }) {
         warnings.length ? { label: 'Advisories', value: warnings.length } : null,
         northernAlerts.length ? { label: 'PMD Alerts', value: northernAlerts.length } : null,
       ].filter(Boolean),
+    };
+  }
+
+  if (nhmpStaleLabel) {
+    return {
+      level: 'elevated',
+      label: 'No recent closures reported',
+      body: `NHMP's live feed is not responding. Its last reading (${nhmpStaleLabel}) showed no major closure or fog. Recheck or call 130 before you leave.`,
+      stats: [
+        { label: 'NHMP', value: 'Last known' },
+        { label: 'PMD Alerts', value: pmdAlerts.length },
+      ],
     };
   }
 
@@ -1005,7 +1036,12 @@ export default function TravelScreen({ route }) {
   const importantNdma = ndmaAdvisories.filter((item) => isNdmaImportant(item) && isRecentNdmaAdvisory(item));
   const localNdma = importantNdma.filter((item) => advisoryMatchesPinnedArea(item, pinnedCity, pinnedRegion));
   const nationalNdma = importantNdma.filter((item) => !localNdma.some((local) => local.key === item.key));
-  const travelSummary = getTravelRiskSummary({ nhmpData, pmdAlerts });
+  const travelSummary = getTravelRiskSummary({
+    nhmpData,
+    pmdAlerts,
+    nhmpUnavailable: !nhmpLoading && nhmpError,
+    nhmpStaleLabel: nhmpStale && nhmpTime ? formatNhmpTime(nhmpTime) : null,
+  });
 
   const focusRoute =
     expandedMotorway != null
@@ -1070,6 +1106,7 @@ export default function TravelScreen({ route }) {
     nhmpLoading ? 'unknown'
     : nhmpError ? 'unknown'
     : activeAlerts.length > 0 ? (activeAlerts.some((a) => a.severity === 'closed') ? 'danger' : 'caution')
+    : nhmpStale ? 'unknown'
     : 'ok';
 
   const pmdStatus =
@@ -1087,7 +1124,7 @@ export default function TravelScreen({ route }) {
 
   const nhmpTimestamp = nhmpTime
     ? nhmpStale
-      ? `Last known: ${new Date(nhmpTime).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}, ${new Date(nhmpTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
+      ? `Last known: ${formatNhmpTime(nhmpTime)}`
       : `Updated ${new Date(nhmpTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
     : null;
 
@@ -1113,10 +1150,12 @@ export default function TravelScreen({ route }) {
               <Text style={styles.officialSourceName}>NHMP</Text>
               <Text style={styles.officialSourceDetail}>
                 {nhmpLoading ? 'Loading…'
-                  : nhmpError ? 'Check NHMP directly'
+                  : nhmpError ? 'Live status unavailable · call 130'
                   : activeAlerts.length > 0
                     ? `${activeAlerts.length} route${activeAlerts.length > 1 ? 's' : ''} to review · ${clearRoutes.length} clear`
-                    : `All routes clear${nhmpTimestamp ? ` · ${nhmpTimestamp}` : ''}`}
+                    : nhmpStale
+                      ? `No closures in last reading${nhmpTime ? ` · ${formatNhmpTime(nhmpTime)}` : ''}`
+                      : `All routes clear${nhmpTimestamp ? ` · ${nhmpTimestamp}` : ''}`}
               </Text>
             </View>
             <View style={styles.officialSourceLink}>
@@ -1320,7 +1359,7 @@ export default function TravelScreen({ route }) {
               <Text style={styles.loadingText}>Loading NHMP data...</Text>
             </View>
           ) : nhmpError ? (
-            <Text style={styles.errorText}>Could not load NHMP data. Tap "View Full" to check directly.</Text>
+            <Text style={styles.errorText}>NHMP's live feed is not responding. Tap "View Full" to check directly, or call the NHMP helpline 130.</Text>
           ) : (
             <>
               {activeAlerts.length > 0 ? (

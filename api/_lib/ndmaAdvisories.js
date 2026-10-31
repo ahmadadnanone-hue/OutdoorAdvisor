@@ -59,13 +59,21 @@ const HAZARD_RULES = [
 ];
 
 export async function fetchNdmaAdvisories({ limit = 10 } = {}) {
-  const response = await fetch(NDMA_ADVISORIES_URL, {
-    headers: {
-      Accept: 'text/html,application/xhtml+xml',
-      'User-Agent': 'OutdoorAdvisor/1.0 NDMA advisory monitor',
-    },
-    signal: AbortSignal.timeout(12000),
-  });
+  let response;
+  try {
+    response = await fetch(NDMA_ADVISORIES_URL, {
+      headers: {
+        Accept: 'text/html,application/xhtml+xml',
+        'User-Agent': 'OutdoorAdvisor/1.0 NDMA advisory monitor',
+      },
+      signal: AbortSignal.timeout(12000),
+    });
+  } catch (error) {
+    // undici reports every network failure as "fetch failed"; the cause
+    // (timeout, refused, TLS chain) is what tells us why NDMA is unreachable.
+    const cause = error?.cause?.code || error?.cause?.message || error?.name;
+    throw new Error(`NDMA advisories fetch failed${cause ? ` (${cause})` : ''}`);
+  }
   if (!response.ok) {
     throw new Error(`NDMA advisories fetch failed (${response.status})`);
   }
