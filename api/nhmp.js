@@ -1,11 +1,12 @@
 import https from 'https';
 import http from 'http';
 import { kvGetJson, kvSetJson } from './_lib/kv.js';
-import { NHMP_FALLBACK_SNAPSHOT } from './_data/nhmpFallback.js';
 
 const NHMP_CACHE_KEY = 'travel:nhmp:latest';
 const LIVE_CACHE_MAX_AGE_MS = 15 * 60 * 1000;
-const SNAPSHOT_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+// Road status goes out of date fast (fog, closures). Past this age a last-known
+// reading is no longer shown as road status; the app is told NHMP is unavailable.
+const STALE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const NHMP_PAGE_URLS = [
   'https://beta.nhmp.gov.pk/TA/Public/ViewTravel.aspx',
   'http://cpo.nhmp.gov.pk:7892/TA/public/viewtravel.aspx',
@@ -21,8 +22,9 @@ export default async function handler(req, res) {
 
   try {
     cached = await kvGetJson(NHMP_CACHE_KEY);
-    if (isCacheFresh(cached)) {
-      sendPayload(res, cached, { stale: cached.source !== 'live' });
+    if (cached?.source !== 'live') cached = null;
+    if (isCacheWithin(cached, LIVE_CACHE_MAX_AGE_MS)) {
+      sendPayload(res, cached);
       return;
     }
   } catch {}
@@ -41,7 +43,7 @@ export default async function handler(req, res) {
 
     sendPayload(res, payload);
   } catch (err) {
-    if (cached?.advisories?.length) {
+    if (isCacheWithin(cached, STALE_MAX_AGE_MS)) {
       sendPayload(res, cached, {
         stale: true,
         error: err.message,
@@ -49,18 +51,12 @@ export default async function handler(req, res) {
       return;
     }
 
-    const snapshotPayload = {
-      ...NHMP_FALLBACK_SNAPSHOT,
-      count: NHMP_FALLBACK_SNAPSHOT.advisories.length,
-      source: 'snapshot',
-    };
-
-    try {
-      await kvSetJson(NHMP_CACHE_KEY, snapshotPayload);
-    } catch {}
-
-    sendPayload(res, snapshotPayload, {
-      stale: true,
+    res.status(200).json({
+      success: false,
+      source: 'unavailable',
+      sourceLabel: 'NHMP feed unavailable',
+      lastKnownAt: cached?.timestamp || null,
+      helpline: '130',
       error: err.message,
     });
   }
@@ -130,14 +126,13 @@ function fetchPage(url) {
   });
 }
 
-function isCacheFresh(cached) {
+function isCacheWithin(cached, maxAgeMs) {
   if (!cached?.timestamp || !cached?.advisories?.length) return false;
 
   const ageMs = Date.now() - new Date(cached.timestamp).getTime();
   if (!Number.isFinite(ageMs) || ageMs < 0) return false;
 
-  const maxAge = cached.source === 'snapshot' ? SNAPSHOT_CACHE_MAX_AGE_MS : LIVE_CACHE_MAX_AGE_MS;
-  return ageMs <= maxAge;
+  return ageMs <= maxAgeMs;
 }
 
 function isNhmpErrorPage(html) {
@@ -152,7 +147,7 @@ function sendPayload(res, payload, extra = {}) {
     advisories: payload.advisories,
     source: payload.source || 'live',
     sourceLabel: payload.sourceLabel || 'Official NHMP feed',
-    stale: extra.stale ?? payload.source !== 'live',
+    stale: Boolean(extra.stale),
     error: extra.error,
   });
 }
